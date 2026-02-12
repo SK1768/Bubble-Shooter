@@ -1397,9 +1397,17 @@ if (inner) {
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "16px Storopia";
         ctx.fillText("Click to continue", canvas.width / 2, 420); // lol
-
-        
+        if (gameWin) {
+    ctx.save();
+    confetti.forEach(c => {
+        ctx.globalAlpha = c.life;
+        ctx.fillStyle = c.color;
+        ctx.fillRect(c.x, c.y, 5, 5);
+    });
+    ctx.restore();
     }
+        
+   }
 
 }
 
