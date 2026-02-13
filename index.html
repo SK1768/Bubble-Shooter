@@ -2051,7 +2051,9 @@ function findMatches(s) {
     return m;
 }
 function dropFloatingBubbles() {
-    let c = new Set(); let q = bubbles.filter(b => b.row === 0); q.forEach(b => c.add(`${b.row},${b.col}`));
+    stats.bubblesDropped++
+	saveStats();
+	let c = new Set(); let q = bubbles.filter(b => b.row === 0); q.forEach(b => c.add(`${b.row},${b.col}`));
     let i = 0; while(i < q.length) {
         let curr = q[i++];
         let ds = (curr.row % 2 === 0) ? [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]] : [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
@@ -2062,8 +2064,6 @@ function dropFloatingBubbles() {
     }
     bubbles.forEach(b => { if (!c.has(`${b.row},${b.col}`)) { fallingBubbles.push({...b}); sounds.play('fall'); } });
     bubbles = bubbles.filter(b => c.has(`${b.row},${b.col}`));
-	stats.bubblesDropped++
-	saveStats();
 }
 
 function updateAmmo(rollNext = false) {
@@ -2541,5 +2541,6 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
