@@ -389,6 +389,7 @@
 
 const DEFAULT_STATS = {
     levelsCompleted: 0,
+	levelsCompletedPerfectly: 0,
     levelsFailed: 0,
     campaignWins: 0,
 
@@ -478,6 +479,7 @@ let campaignFinished = false;
 let lastShotWasMatch = false;
 let lastShotUsedFinalAmmo = false;
 let lastClearWasPerfect = false;
+let visualiseBubbleColour = false;
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 function setBrowserTitle(text) {
@@ -498,6 +500,7 @@ function clearMenuDesc() {
 
     el.innerHTML = `
     Levels Completed: <b>${fmt(stats.levelsCompleted)}</b><br>
+	Levels Completed Perfectly: <b>${fmt(stats.levelsCompletedPerfectly)}</b><br>
     Levels Failed: <b>${fmt(stats.levelsFailed)}</b><br>
     Campaign Wins: <b>${fmt(stats.campaignWins)}</b><br><br>
 
@@ -833,10 +836,12 @@ document.getElementById('debugInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') {
 	stats.debugCommandsUsed++;
     saveStats();
-        const input = e.target.value.trim().toLowerCase();
-        const args = input.split(' ');
-        const cmd = args[0];
-        const val = parseInt(args[1]);
+        const rawInput = e.target.value.trim();
+        const args = rawInput.split(' ');
+        const cmd = args[0].toLowerCase();
+        const arg = args[1];
+		const val = Number(arg);
+
 
         if (cmd === '!completelevel') { 
             bubbles = []; 
@@ -890,7 +895,7 @@ document.getElementById('debugInput').addEventListener('keydown', e => {
             const target = Math.max(1, Math.min(CAMPAIGN_TOTAL_LEVELS, val));
 
             // 🎁 Reward ammo like normal campaign clear
-            ammo += 20;
+            ammo += 50;
 
             campaignLevel = target;
             campaignTimer = CAMPAIGN_TIME_LIMIT;
@@ -923,13 +928,104 @@ else if (cmd === '!addcampaigntime' && !isNaN(val)) {
     lastTickSecond = null;
 
     console.log(`Campaign time adjusted by ${val}s. New time: ${Math.ceil(campaignTimer)}s`);
+	
+}
+else if (cmd === '!setcurrentbubble') {
+
+    if (!arg || !isValidHexColor(arg) || !colorExists(arg)) {
+        alert("Invalid colour.");
+        return;
+    }
+
+    currentBall = arg.toUpperCase();
+    refreshFavicon();
+}
+
+else if (cmd === '!setnextbubble') {
+
+    if (!arg || !isValidHexColor(arg) || !colorExists(arg)) {
+        alert("Invalid colour.");
+        return;
+    }
+
+    nextBall = arg.toUpperCase();
+}
+else if (cmd === '!showcoloursashex') {
+
+    const list = ALL_COLORS.join('\n');
+
+    alert(
+        "Available Colours (Hex):\n\n" + list
+    );
+}
+else if (cmd === '!visualisebubblecolour') {
+
+    if (arg !== 'true' && arg !== 'false') {
+        alert("Usage: !visualisebubblecolour true/false");
+        return;
+    }
+
+    visualiseBubbleColour = (arg === 'true');
+
+    alert(
+        `Bubble colour visualisation ` +
+        (visualiseBubbleColour ? "ENABLED" : "DISABLED")
+    );
 }
 
         e.target.value = '';
         document.getElementById('debugConsole').style.display = 'none';
         setPause(false);
     }
+
 });
+function isValidHexColor(hex) {
+    return /^#[0-9A-Fa-f]{6}$/.test(hex);
+}
+
+function colorExists(hex) {
+    return ALL_COLORS.includes(hex.toUpperCase());
+}
+function getHoveredBubble() {
+    for (let b of bubbles) {
+        if (Math.hypot(mouseX - b.x, mouseY - b.y) <= RADIUS) {
+            return b;
+        }
+    }
+    return null;
+}
+function drawBubbleHexLabel(text, color, x, y) {
+    ctx.save();
+
+    ctx.font = "14px Storopia";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+
+    const padding = 6;
+    const width = ctx.measureText(text).width + padding * 2;
+
+    // background
+    ctx.fillStyle = "rgba(0,0,0,0.75)";
+    ctx.fillRect(x, y, width, 22);
+
+    // text colour = bubble colour
+    ctx.fillStyle = color || "#ffffff";
+    ctx.fillText(text, x + padding, y + 4);
+
+    ctx.restore();
+}
+function isHoveringCurrentBubble() {
+    const cx = canvas.width / 2;
+    const cy = canvas.height - 80;
+    return Math.hypot(mouseX - cx, mouseY - cy) <= RADIUS;
+}
+
+function isHoveringNextBubble() {
+    if (ammo <= 1) return false;
+    const nx = canvas.width / 2 + 60;
+    const ny = canvas.height - 80;
+    return Math.hypot(mouseX - nx, mouseY - ny) <= RADIUS * 0.7;
+}
 
 window.addEventListener('mousemove', e => {
     const rect = canvas.getBoundingClientRect();
@@ -1238,9 +1334,9 @@ function triggerWin() {
                 triggerConfetti();
                 sounds.play('win');
                 refreshFavicon();
-							if (score > stats.highScore) {
-    stats.highScore = score;
-}
+				if (score > stats.highScore) {
+                stats.highScore = score;
+                }
                 return;
             }
 
@@ -1268,7 +1364,8 @@ if (
     !isPlaytesting
 ) {
     perfectStreak++;
-
+    stats.levelsCompletedPerfectly++;
+	saveStats();
     const bonusScore = PERFECT_BASE_SCORE * perfectStreak;
     score += bonusScore;
     ammo += PERFECT_AMMO_BONUS;
@@ -1278,6 +1375,11 @@ if (
     stats.levelsCompleted++;
 stats.totalStreak = Math.max(stats.totalStreak, streakCount);
 stats.perfectStreak = Math.max(stats.perfectStreak, perfectStreak);
+
+// 🎁 Reward bubbles on level completion
+ammo += 50;
+updateAmmo();
+
 	if (score > stats.highScore) {
     stats.highScore = score;
 }
@@ -1526,7 +1628,7 @@ if (inner) {
         ctx.shadowBlur = 0;
 
         ctx.font = "bold 20px Storopia";
-        ctx.fillText("+1,000 SCORE  +100 BUBBLES", canvas.width / 2, 295);
+        ctx.fillText("+1,000 SCORE  +150 BUBBLES", canvas.width / 2, 295);
 
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "16px Storopia";
@@ -1538,6 +1640,12 @@ if (inner) {
         ctx.fillStyle = gameOver ? "#ff5555" : "#00ffcc";
         ctx.font = "bold 34px Storopia";
         ctx.fillText(gameOver ? "LEVEL FAILED!" : "LEVEL COMPLETE!", canvas.width / 2, 280);
+		    // 🎁 Show bubble reward ONLY on win
+    if (gameWin && !gameOver) {
+        ctx.fillStyle = "#ffcc00";
+        ctx.font = "bold 22px Storopia";
+        ctx.fillText("+50 BUBBLES!", canvas.width / 2, 315);
+    }
         if (gameOver && gameOverReason) {
             ctx.fillStyle = "#FF0000"
 			ctx.font = "20px Storopia";
@@ -1607,6 +1715,35 @@ else levelText = level;
 document.getElementById('levelDisplay').innerText = `Level: ${levelText}`;
 document.getElementById('streakDisplay').innerText =
     `Streak: x${fmt(streakCount)} | Perfect streak: x${fmt(perfectStreak)}`;
+	
+	// 🧪 Bubble colour visualiser (DEBUG)
+// 🧪 Bubble colour visualiser (DEBUG)
+if (visualiseBubbleColour && !isPaused && !gameOver && !gameWin) {
+
+    // 1️⃣ Grid bubbles
+    const hovered = getHoveredBubble();
+    if (hovered) {
+        const text = hovered.color ? hovered.color : "COLORLESS";
+        drawBubbleHexLabel(text, hovered.color, mouseX + 12, mouseY + 12);
+        return; // priority over current/next
+    }
+
+    // 2️⃣ Current bubble
+    if (isHoveringCurrentBubble()) {
+        const text = currentBall || "COLORLESS";
+        drawBubbleHexLabel(text, currentBall, mouseX + 12, mouseY + 12);
+        return;
+    }
+
+    // 3️⃣ Next bubble
+    if (isHoveringNextBubble()) {
+        const text = nextBall || "COLORLESS";
+        drawBubbleHexLabel(text, nextBall, mouseX + 12, mouseY + 12);
+        return;
+    }
+}
+
+
 
 }}
 function gameLoop() { if (gameRunning) { update(); draw(); animationId = requestAnimationFrame(gameLoop); } }
@@ -2588,6 +2725,5 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
-
 
 
