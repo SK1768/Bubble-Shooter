@@ -2340,8 +2340,18 @@ function openSfxMenu() {
 function closeSfxMenu() {
     document.getElementById('sfxMenu').style.display = 'none';
 }
+	function resetProgressBar() {
+    loadedProgressOverride = null;
+    initialBubbleCount = 0;
+
+    document.getElementById('progressBar').style.width = "0%";
+    document.getElementById('percentText').innerText = "0.0%";
+
+    document.getElementById('progressContainer').style.display = "none";
+    document.getElementById('percentText').style.display = "none";
+}
 function clearEditor() { if(confirm("Clear level?")) bubbles = []; }
-function exitToMenu() { setBrowserTitle("⭐ SK's Bubble Shooter"); gameRunning = false; document.getElementById('mainMenu').style.display = 'block';  document.getElementById('gameUI').style.display = 'none'; document.getElementById('customUI').style.display = 'none'; document.getElementById('mobileControls').style.display = 'none'; canvas.style.display = 'none'; perfectStreak = 0; updateFavicon(); addSfxButtonToMenu();}
+function exitToMenu() { setBrowserTitle("⭐ SK's Bubble Shooter"); gameRunning = false; document.getElementById('mainMenu').style.display = 'block';  document.getElementById('gameUI').style.display = 'none'; document.getElementById('customUI').style.display = 'none'; document.getElementById('mobileControls').style.display = 'none'; canvas.style.display = 'none'; perfectStreak = 0; updateFavicon(); resetProgressBar(); addSfxButtonToMenu();}
 updateFavicon();
 addSfxButtonToMenu();
 </script>
@@ -2401,8 +2411,3 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
-
-
-
-
-
