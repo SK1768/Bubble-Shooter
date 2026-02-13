@@ -283,22 +283,6 @@
     <div class="menu" id="mainMenu">
         <h1>SK's Bubble Shooter</h1>
         <p>Made by SK1768 :)</p>
-		<h3 style="margin-top:0;text-align:center;">📊 Player Stats</h3>
-		<div id="statsBoard" style="
-    margin:15px auto;
-    padding:15px;
-    background:#111;
-    border:2px solid #00ffcc;
-    border-radius:10px;
-    color:#00ffcc;
-    font-size:14px;
-    max-width:360px;
-    box-shadow:0 0 20px rgba(0,255,204,0.15);
-">
-    </div>
-
-    <div id="statsContent"></div>
-</div>
         <button onclick="startPuzzleMode()" style="font-size: 1.5em; background: #00ffcc; color: #000;" onmouseenter="setMenuDesc('Puzzle Mode: Clear all bubbles using limited ammo.')" onmouseleave="clearMenuDesc()">PUZZLE MODE</button>
         <br>
         <button onclick="enterCustomEditor()" style="background: #a155ff;"onmouseenter="setMenuDesc('Custom Mode: Create and test your own bubble layouts.')" onmouseleave="clearMenuDesc()">CUSTOM MODE</button>
@@ -318,6 +302,22 @@
     🗑️ RESET STATS
 </button>
 		<div id="menuDescription" class="menuDescription">
+</div>
+		<h3 style="margin-top:0;text-align:center;">📊 Player Stats</h3>
+		<div id="statsBoard" style="
+    margin:15px auto;
+    padding:15px;
+    background:#111;
+    border:2px solid #00ffcc;
+    border-radius:10px;
+    color:#00ffcc;
+    font-size:14px;
+    max-width:360px;
+    box-shadow:0 0 20px rgba(0,255,204,0.15);
+">
+    </div>
+
+    <div id="statsContent"></div>
 </div>
 <br>
     <div id="customUI">
@@ -402,9 +402,9 @@ const DEFAULT_STATS = {
     campaignPlays: 0,
     customPlays: 0,
 
-    debugCommandsUsed: 0
+    debugCommandsUsed: 0,
 	
-    totalScore: 0
+    totalScore: 0,
 };
 
 function loadStats() {
@@ -2582,6 +2582,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
