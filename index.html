@@ -406,7 +406,7 @@ const DEFAULT_STATS = {
 
     debugCommandsUsed: 0,
 	
-    totalScore: 0,
+    highScore: 0,
 };
 
 function loadStats() {
@@ -515,7 +515,7 @@ function clearMenuDesc() {
 
     Debug Commands Used: <b>${fmt(stats.debugCommandsUsed)}</b><br><br>
 	
-    Total Score: <b>${fmt(stats.totalScore)}</b>
+    High Score: <b>${fmt(stats.highScore)}</b>
     `;
 }
 function updateSoundButton() {
@@ -1238,8 +1238,8 @@ function triggerWin() {
                 triggerConfetti();
                 sounds.play('win');
                 refreshFavicon();
-							if (score > stats.totalScore) {
-    stats.totalScore = score;
+							if (score > stats.highScore) {
+    stats.highScore = score;
 }
                 return;
             }
@@ -1250,8 +1250,8 @@ function triggerWin() {
             triggerConfetti();
             refreshFavicon();
             return;
-			if (score > stats.totalScore) {
-    stats.totalScore = score;
+			if (score > stats.highScore) {
+    stats.highScore = score;
 }
         }
 
@@ -1278,8 +1278,8 @@ if (
     stats.levelsCompleted++;
 stats.totalStreak = Math.max(stats.totalStreak, streakCount);
 stats.perfectStreak = Math.max(stats.perfectStreak, perfectStreak);
-	if (score > stats.totalScore) {
-    stats.totalScore = score;
+	if (score > stats.highScore) {
+    stats.highScore = score;
 }
 saveStats();
         gameWin = true;
