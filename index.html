@@ -182,6 +182,20 @@
                 overflow: hidden;
                 border: 1px solid #444;
             }
+            #bubbleHexOverlay {
+            position: fixed;
+            pointer-events: none;
+            z-index: 9999;
+
+            font-family: Storopia, sans-serif;
+            font-size: 14px;
+            padding: 6px 8px;
+
+            background: rgba(0,0,0,0.75);
+            border-radius: 4px;
+
+            display: none;
+            }
 
             #progressBar {
                 height: 100%;
@@ -370,6 +384,7 @@
 
     <div class="game-container">
         <canvas id="gameCanvas" width="440" height="640"></canvas>
+		<div id="bubbleHexOverlay"></div>
         <div id="mobileControls">
     <button class="mobile-btn" onclick="swapBubbles()">SWAP</button>
     <button class="mobile-btn" id="debugBtn" onclick="openDebug()">DEBUG</button>
@@ -409,6 +424,19 @@ const DEFAULT_STATS = {
 	
     highScore: 0,
 };
+const bubbleHexOverlay = document.getElementById('bubbleHexOverlay');
+
+function showHexOverlay(text, color, x, y) {
+    bubbleHexOverlay.textContent = text;
+    bubbleHexOverlay.style.color = color || "#ffffff";
+    bubbleHexOverlay.style.left = `${x + 12}px`;
+    bubbleHexOverlay.style.top = `${y + 12}px`;
+    bubbleHexOverlay.style.display = 'block';
+}
+
+function hideHexOverlay() {
+    bubbleHexOverlay.style.display = 'none';
+}
 
 function loadStats() {
     const saved = localStorage.getItem("bubbleShooterStats");
@@ -1716,34 +1744,41 @@ document.getElementById('levelDisplay').innerText = `Level: ${levelText}`;
 document.getElementById('streakDisplay').innerText =
     `Streak: x${fmt(streakCount)} | Perfect streak: x${fmt(perfectStreak)}`;
 	
-	// 🧪 Bubble colour visualiser (DEBUG)
-// 🧪 Bubble colour visualiser (DEBUG)
-if (visualiseBubbleColour) {
+	if (visualiseBubbleColour) {
 
-    // 1️⃣ Grid bubbles
     const hovered = getHoveredBubble();
     if (hovered) {
-        const text = hovered.color ? hovered.color : "COLORLESS";
-        drawBubbleHexLabel(text, hovered.color, mouseX + 12, mouseY + 12);
-        return; // priority over current/next
+        showHexOverlay(
+            hovered.color || "COLORLESS",
+            hovered.color,
+            mouseX + canvas.getBoundingClientRect().left,
+            mouseY + canvas.getBoundingClientRect().top
+        );
+        return;
     }
 
-    // 2️⃣ Current bubble
     if (isHoveringCurrentBubble()) {
-        const text = currentBall || "COLORLESS";
-        drawBubbleHexLabel(text, currentBall, mouseX + 12, mouseY + 12);
+        showHexOverlay(
+            currentBall || "COLORLESS",
+            currentBall,
+            mouseX + canvas.getBoundingClientRect().left,
+            mouseY + canvas.getBoundingClientRect().top
+        );
         return;
     }
 
-    // 3️⃣ Next bubble
     if (isHoveringNextBubble()) {
-        const text = nextBall || "COLORLESS";
-        drawBubbleHexLabel(text, nextBall, mouseX + 12, mouseY + 12);
+        showHexOverlay(
+            nextBall || "COLORLESS",
+            nextBall,
+            mouseX + canvas.getBoundingClientRect().left,
+            mouseY + canvas.getBoundingClientRect().top
+        );
         return;
     }
+
+    hideHexOverlay();
 }
-
-
 
 }}
 function gameLoop() { if (gameRunning) { update(); draw(); animationId = requestAnimationFrame(gameLoop); } }
@@ -2725,6 +2760,3 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
-
-
-
