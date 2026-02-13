@@ -1256,7 +1256,19 @@ function snapToGrid(p) {
 
     bubbles.push(nb);
 
-let m = findMatches(nb);
+// ✅ True ONLY when everything else on the board is colourless
+const onlyColourlessLeft =
+    bubbles.every(b => b === nb || !b.color);
+
+let m = findMatches(nb, onlyColourlessLeft);
+
+// Optional polish: if we are wildcard-matching, tint colourless bubbles
+// so particles/falling visuals inherit the shot color.
+if (onlyColourlessLeft && m.length >= 3) {
+    m.forEach(b => {
+        if (!b.color) b.color = nb.color;
+    });
+}
 
 if (m.length >= 3) {
     lastShotWasMatch = true; // ✅ mark match
@@ -2204,8 +2216,9 @@ function getGridCoords(r, c) {
     };
 }
 
-function findMatches(s) {
-    // Colorless bubbles never match
+function findMatches(s, allowColorlessWildcard = false) {
+
+    // If the shot bubble has no color, nothing can match
     if (!s || !s.color) return [s];
 
     let m = [s];
@@ -2221,18 +2234,26 @@ function findMatches(s) {
         ds.forEach(d => {
             let nb = bubbles.find(o => o.row === cur.row + d[0] && o.col === cur.col + d[1]);
             if (!nb) return;
-            if (!nb.color) return;                 // ignore colorless
+
             const key = `${nb.row},${nb.col}`;
             if (seen.has(key)) return;
-            if (nb.color !== s.color) return;
+
+            // ✅ Normal: must match exact color, ignore colourless
+            // ✅ Special case: if allowColorlessWildcard, colourless counts as matching too
+            const isColourless = !nb.color;
+            const isSameColor = nb.color === s.color;
+
+            if (!(isSameColor || (allowColorlessWildcard && isColourless))) return;
 
             seen.add(key);
             m.push(nb);
             q.push(nb);
         });
     }
+
     return m;
 }
+
 function dropFloatingBubbles() {
     const connected = new Set();
     const queue = bubbles.filter(b => b.row === 0);
@@ -2285,26 +2306,31 @@ function dropFloatingBubbles() {
 }
 	
 function updateAmmo(rollNext = false) {
+
     // Pool = colors that exist on board (ignore colorless)
-    const pool = bubbles.length > 0
+    let pool = bubbles.length > 0
         ? Array.from(new Set(bubbles.map(b => b.color).filter(c => c)))
         : ALL_COLORS;
-if (isLoadingSave) {
+
+    // ✅ If only colourless bubbles exist, fall back to all colors
+    if (pool.length === 0) pool = ALL_COLORS;
+
+    if (isLoadingSave) {
         refreshFavicon();
         return;
     }
-    // If current is missing/invalid, fix it
+
     if (!currentBall || !pool.includes(currentBall)) {
         currentBall = pool[Math.floor(Math.random() * pool.length)];
     }
 
-    // Only roll next when requested OR if next is invalid
     if (rollNext || !nextBall || !pool.includes(nextBall)) {
         nextBall = pool[Math.floor(Math.random() * pool.length)];
     }
 
     refreshFavicon();
 }
+
 
 function swapBubbles() { [currentBall, nextBall] = [nextBall, currentBall]; sounds.play('swap'); refreshFavicon(); stats.bubblesSwapped++; saveStats();}
 function triggerConfetti() { for(let i=0; i<50; i++) confetti.push({ x: 220, y: 300, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, color: ALL_COLORS[Math.floor(Math.random()*6)], life: 1.0 }); }
@@ -2760,3 +2786,4 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
