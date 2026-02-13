@@ -283,17 +283,6 @@
     <div class="menu" id="mainMenu">
         <h1>SK's Bubble Shooter</h1>
         <p>Made by SK1768 :)</p>
-<div id="statsBoard" style="
-    margin:15px auto;
-    padding:15px;
-    background:#111;
-    border:2px solid #00ffcc;
-    border-radius:10px;
-    color:#00ffcc;
-    font-size:14px;
-    max-width:360px;
-    box-shadow:0 0 20px rgba(0,255,204,0.15);
-">
     <h3 style="margin-top:0;text-align:center;">📊 Player Stats</h3>
     <div id="statsContent"></div>
 </div>
@@ -317,6 +306,17 @@
 </button>
 		<div id="menuDescription" class="menuDescription">
 </div>
+	<div id="statsBoard" style="
+    margin:15px auto;
+    padding:15px;
+    background:#111;
+    border:2px solid #00ffcc;
+    border-radius:10px;
+    color:#00ffcc;
+    font-size:14px;
+    max-width:360px;
+    box-shadow:0 0 20px rgba(0,255,204,0.15);
+">
     </div>
 
 <br>
@@ -401,6 +401,8 @@ const DEFAULT_STATS = {
     puzzlePlays: 0,
     campaignPlays: 0,
     customPlays: 0,
+
+    debugCommandsUsed: 0
 	
     totalScore: 0
 };
@@ -507,6 +509,8 @@ function clearMenuDesc() {
     Puzzle Mode Played: <b>${fmt(stats.puzzlePlays)}</b><br>
     Campaign Mode Played: <b>${fmt(stats.campaignPlays)}</b><br>
     Custom Mode Played: <b>${fmt(stats.customPlays)}</b><br><br>
+
+    Debug Commands Used: <b>${fmt(stats.debugCommandsUsed)}</b><br><br>
 	
     Total Score: <b>${fmt(stats.totalScore)}</b>
     `;
@@ -822,6 +826,8 @@ window.addEventListener('keydown', e => {
 
 document.getElementById('debugInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') {
+	stats.debugCommandsUsed++;
+    saveStats();
         const input = e.target.value.trim().toLowerCase();
         const args = input.split(' ');
         const cmd = args[0];
@@ -2576,6 +2582,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
