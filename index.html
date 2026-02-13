@@ -304,7 +304,7 @@
             <span style="color:#a155ff; font-weight:bold; margin: 0 15px;">LEVEL CREATOR</span>
             <button onclick="clearEditor()" style="background:#cc3300;">CLEAR ALL</button>
             <button onclick="document.getElementById('fileInput').click()" style="background:#2196F3;">LOAD FILE</button>
-            <button onclick="saveGame()" style="background:#4CAF50;">SAVE FILE</button>
+            <button onclick="onCustomSavePopup()" style="background:#4CAF50;">SAVE FILE</button>
         </div>
         <div style="background: #333; padding: 10px; border-radius: 5px; display: inline-block;">
             <label>Set Ammo: </label>
@@ -2116,6 +2116,47 @@ function updatePaletteUI() {
         epoch: Math.floor(d.getTime() / 1000)
     };
 }
+	function openCustomSavePopup() {
+    
+        if (bubbles.length === 0) {
+        alert("Add some bubbles in the canvas first!");
+        return;
+    }
+
+    if (bubbles.length < 3) {
+        alert("Add at least 3 bubbles on to the canvas.");
+        return;
+    }
+
+    // 🚫 NEW CHECK — colorless on top row
+    const hasColorlessTopRow = bubbles.some(b => b.row === 0 && !b.color);
+    if (hasColorlessTopRow) {
+        alert("Don't put the colourless bubbles on the top row.");
+        return;
+    }
+
+    // 🚨 existing floating-bubble check
+    const hasFloating = bubbles.some(b => !hasAtLeastOneConnection(b));
+    if (hasFloating) {
+        alert("Connect one of the floating bubbles to another bubble.");
+        return;
+    }
+        // 🚫 Block inaccessible layouts (sealed by colourless bubbles)
+if (!hasReachableColoredBubble()) {
+    alert("This level has no reachable bubbles. Remove or reposition colourless bubbles.");
+    return;
+}
+        if (!isCustomMode) {
+        saveGame(); // normal save outside editor
+        return;
+    }
+
+    document.getElementById('customSavePopup').style.display = 'flex';
+
+    // optional: prefill last values
+    document.getElementById('levelNameInput').value = customLevelName || "";
+    document.getElementById('authorNameInput').value = customAuthorName || "";
+}
 function confirmCustomSave() {
     customLevelName = (document.getElementById('levelNameInput')?.value || "").trim();
     customAuthorName = (document.getElementById('authorNameInput')?.value || "").trim();
@@ -2360,6 +2401,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
