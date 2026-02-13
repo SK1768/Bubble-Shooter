@@ -415,6 +415,7 @@ function saveStats() {
 }
 
 let stats = loadStats();
+	window.addEventListener("DOMContentLoaded", updateStatsBoard);
     window.addEventListener('DOMContentLoaded', () => {
         console.log(
             "%cWelcome to SK's Bubble Shooter HTML game!",
@@ -2520,9 +2521,10 @@ function closeSfxMenu() {
 }
 function clearEditor() { if(confirm("Clear level?")) bubbles = []; }
 function exitToMenu() { setBrowserTitle("⭐ SK's Bubble Shooter"); gameRunning = false; document.getElementById('mainMenu').style.display = 'block';  document.getElementById('gameUI').style.display = 'none'; document.getElementById('customUI').style.display = 'none'; document.getElementById('mobileControls').style.display = 'none'; canvas.style.display = 'none'; perfectStreak = 0; updateStatsBoard(); updateFavicon(); resetProgressBar(); addSfxButtonToMenu();}
-updateFavicon();
-addSfxButtonToMenu();
 updateStatsBoard();
+	updateFavicon();
+addSfxButtonToMenu();
+
 </script>
     <div id="customSavePopup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;">
   <div style="background:#222;padding:25px;border-radius:12px;border:2px solid #00ffcc;text-align:center;">
@@ -2580,6 +2582,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
