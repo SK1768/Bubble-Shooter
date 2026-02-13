@@ -283,6 +283,20 @@
     <div class="menu" id="mainMenu">
         <h1>SK's Bubble Shooter</h1>
         <p>Made by SK1768 :)</p>
+<div id="statsBoard" style="
+    margin:15px auto;
+    padding:15px;
+    background:#111;
+    border:2px solid #00ffcc;
+    border-radius:10px;
+    color:#00ffcc;
+    font-size:14px;
+    max-width:360px;
+    box-shadow:0 0 20px rgba(0,255,204,0.15);
+">
+    <h3 style="margin-top:0;text-align:center;">📊 Player Stats</h3>
+    <div id="statsContent"></div>
+</div>
         <button onclick="startPuzzleMode()" style="font-size: 1.5em; background: #00ffcc; color: #000;" onmouseenter="setMenuDesc('Puzzle Mode: Clear all bubbles using limited ammo.')" onmouseleave="clearMenuDesc()">PUZZLE MODE</button>
         <br>
         <button onclick="enterCustomEditor()" style="background: #a155ff;"onmouseenter="setMenuDesc('Custom Mode: Create and test your own bubble layouts.')" onmouseleave="clearMenuDesc()">CUSTOM MODE</button>
@@ -293,6 +307,14 @@
         <button onclick="startCampaign()" style="background:#ff9500; font-weight:bold;"onmouseenter="setMenuDesc('Campaign Mode: Beat 20 levels before the timer runs out.')" onmouseleave="clearMenuDesc()">
             🏆 CAMPAIGN MODE
         </button>
+        <button
+    onclick="resetStats()"
+    style="margin-top:10px; background:#ff5555; color:#000; font-weight:bold;"
+    onmouseenter="setMenuDesc('Resets ALL saved stats. This cannot be undone.')"
+    onmouseleave="clearMenuDesc()"
+>
+    🗑️ RESET STATS
+</button>
 		<div id="menuDescription" class="menuDescription">
 </div>
     </div>
@@ -359,6 +381,39 @@
     <input type="file" id="fileInput" accept=".bubblesav" onchange="loadGame(event)">
 
 <script>
+    // ======================
+// PLAYER STATS SYSTEM
+// ======================
+
+const DEFAULT_STATS = {
+    levelsCompleted: 0,
+    levelsFailed: 0,
+    campaignWins: 0,
+
+    bubblesShot: 0,
+    bubblesSwapped: 0,
+
+    totalStreak: 0,
+    perfectStreak: 0,
+
+    puzzlePlays: 0,
+    campaignPlays: 0,
+    customPlays: 0,
+
+    maxCampaignScore: 0,
+    maxPuzzleScore: 0
+};
+
+function loadStats() {
+    const saved = localStorage.getItem("bubbleShooterStats");
+    return saved ? JSON.parse(saved) : { ...DEFAULT_STATS };
+}
+
+function saveStats() {
+    localStorage.setItem("bubbleShooterStats", JSON.stringify(stats));
+}
+
+let stats = loadStats();
     window.addEventListener('DOMContentLoaded', () => {
         console.log(
             "%cWelcome to SK's Bubble Shooter HTML game!",
@@ -366,6 +421,24 @@
         );
     });
 
+function resetStats() {
+    const ok = confirm(
+        "Reset ALL player stats?\n\n" +
+        "This will erase:\n" +
+        "• Level completions & failures\n" +
+        "• Campaign wins\n" +
+        "• Scores & streaks\n\n" +
+        "This cannot be undone."
+    );
+
+    if (!ok) return;
+
+    stats = { ...DEFAULT_STATS };
+    saveStats();
+    updateStatsBoard();
+
+    console.log("Player stats reset.");
+}
     document.fonts.load("20px Storopia");
     // --- SETTINGS & AUDIO ---
 let soundEnabled = localStorage.getItem('bubbleSoundEnabled') !== 'false'; 
@@ -412,6 +485,29 @@ function setMenuDesc(text) {
 function clearMenuDesc() {
     document.getElementById('menuDescription').innerText =
         "";
+}
+    function updateStatsBoard() {
+    const el = document.getElementById("statsContent");
+    if (!el) return;
+
+    el.innerHTML = `
+    Levels Completed: <b>${fmt(stats.levelsCompleted)}</b><br>
+    Levels Failed: <b>${fmt(stats.levelsFailed)}</b><br>
+    Campaign Wins: <b>${fmt(stats.campaignWins)}</b><br><br>
+
+    Bubbles Shot: <b>${fmt(stats.bubblesShot)}</b><br>
+    Bubbles Swapped: <b>${fmt(stats.bubblesSwapped)}</b><br><br>
+
+    Max Streak: <b>${fmt(stats.totalStreak)}</b><br>
+    Max Perfect Streak: <b>${fmt(stats.perfectStreak)}</b><br><br>
+
+    Puzzle Mode Played: <b>${fmt(stats.puzzlePlays)}</b><br>
+    Campaign Mode Played: <b>${fmt(stats.campaignPlays)}</b><br>
+    Custom Mode Played: <b>${fmt(stats.customPlays)}</b><br><br>
+
+    Max Campaign Score: <b>${fmt(stats.maxCampaignScore)}</b><br>
+    Max Puzzle Score: <b>${fmt(stats.maxPuzzleScore)}</b>
+    `;
 }
 function updateSoundButton() {
     const btn = document.getElementById('soundToggle');
@@ -649,6 +745,8 @@ function updateFavicon(color) {
         '</svg>#' + Math.random(); // force refresh
 }
 function startCampaign() {
+        stats.campaignPlays++;
+        saveStats();
         setBrowserTitle("🏆 SK's Bubble Shooter — Campaign Mode");
         isCampaignMode = true;
         campaignLevel = 1;
@@ -792,6 +890,7 @@ else if (cmd === '!setperfectstreak' && !isNaN(val)) {
     perfectStreak = Math.max(0, val);
     console.log(`Perfect streak set to x${perfectStreak}`);
 }
+
 else if (cmd === '!addcampaigntime' && !isNaN(val)) {
 
     if (!isCampaignMode) {
@@ -984,6 +1083,8 @@ function shoot() {
 
     ammo--;
     currentBall = nextBall;
+    stats.bubblesShot++;
+saveStats();
     updateAmmo(true); // ✅ ONLY here do we reroll next
 }
 function snapToGrid(p) {
@@ -1131,6 +1232,15 @@ function triggerWin() {
             refreshFavicon();
             return;
         }
+    if (isCampaignMode && score > stats.maxCampaignScore) {
+    stats.maxCampaignScore = score;
+}
+
+if (!isCampaignMode && score > stats.maxPuzzleScore) {
+    stats.maxPuzzleScore = score;
+}
+
+saveStats();
 // 🎯 PERFECT = last ammo + match + clears board
 lastClearWasPerfect =
     lastShotUsedFinalAmmo &&
@@ -1150,6 +1260,10 @@ if (
 } else {
     perfectStreak = 0;
 }
+    stats.levelsCompleted++;
+stats.totalStreak = Math.max(stats.totalStreak, streakCount);
+stats.perfectStreak = Math.max(stats.perfectStreak, perfectStreak);
+saveStats();
         gameWin = true;
         sounds.play('win');
         triggerConfetti();
@@ -1161,9 +1275,11 @@ function triggerFail(reason) {
         gameOver = true;
         gameOverReason = reason;
         sounds.play('fail');
-		perfectStreak = 0;
+		       perfectStreak = 0;
         refreshFavicon();
         
+stats.levelsFailed++;
+saveStats();
 
         if (isCampaignMode) {
             hideCampaignTimer();
@@ -1378,6 +1494,8 @@ if (inner) {
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "16px Storopia";
         ctx.fillText("Click to continue", canvas.width / 2, 340);
+        stats.campaignWins++;
+saveStats();
     }
 
     // --- PERFECT WIN SCREEN ---
@@ -1501,6 +1619,8 @@ function initializeAmmo(type, savedAmmo = null) {
         updateAmmo();
     }
     function startPuzzleMode() {
+        stats.puzzlePlays++;
+        saveStats();
         setBrowserTitle("🧩 SK's Bubble Shooter — Puzzle Mode");
         isCampaignMode = false;   // ✅ force campaign off
         campaignLevel = 1;
@@ -1584,6 +1704,8 @@ mouseY = canvas.height - 200;
     refreshFavicon();
 
 function enterCustomEditor() {
+    stats.customPlays++;
+    saveStats();
     setBrowserTitle("🛠️ SK's Bubble Shooter — Level Editor");
     mode = 'custom'; isCustomMode = true; gameRunning = true; gameOver = false; gameWin = false; isPlaytesting = false; isCampaignMode = false;
     hideCampaignTimer();
@@ -1959,7 +2081,7 @@ if (isLoadingSave) {
     refreshFavicon();
 }
 
-function swapBubbles() { [currentBall, nextBall] = [nextBall, currentBall]; sounds.play('swap'); refreshFavicon(); }
+function swapBubbles() { [currentBall, nextBall] = [nextBall, currentBall]; sounds.play('swap'); refreshFavicon(); stats.bubblesSwapped++; saveStats();}
 function triggerConfetti() { for(let i=0; i<50; i++) confetti.push({ x: 220, y: 300, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, color: ALL_COLORS[Math.floor(Math.random()*6)], life: 1.0 }); }
 function updatePaletteUI() {
     const p = document.getElementById('colorPalette');
@@ -2116,7 +2238,7 @@ function updatePaletteUI() {
         epoch: Math.floor(d.getTime() / 1000)
     };
 }
-	function openCustomSavePopup() {
+    function openCustomSavePopup() {
     
         if (bubbles.length === 0) {
         alert("Add some bubbles in the canvas first!");
@@ -2340,7 +2462,7 @@ function openSfxMenu() {
 function closeSfxMenu() {
     document.getElementById('sfxMenu').style.display = 'none';
 }
-	function resetProgressBar() {
+    function resetProgressBar() {
     loadedProgressOverride = null;
     initialBubbleCount = 0;
 
@@ -2351,9 +2473,10 @@ function closeSfxMenu() {
     document.getElementById('percentText').style.display = "none";
 }
 function clearEditor() { if(confirm("Clear level?")) bubbles = []; }
-function exitToMenu() { setBrowserTitle("⭐ SK's Bubble Shooter"); gameRunning = false; document.getElementById('mainMenu').style.display = 'block';  document.getElementById('gameUI').style.display = 'none'; document.getElementById('customUI').style.display = 'none'; document.getElementById('mobileControls').style.display = 'none'; canvas.style.display = 'none'; perfectStreak = 0; updateFavicon(); resetProgressBar(); addSfxButtonToMenu();}
+function exitToMenu() { setBrowserTitle("⭐ SK's Bubble Shooter"); gameRunning = false; document.getElementById('mainMenu').style.display = 'block';  document.getElementById('gameUI').style.display = 'none'; document.getElementById('customUI').style.display = 'none'; document.getElementById('mobileControls').style.display = 'none'; canvas.style.display = 'none'; perfectStreak = 0; updateStatsBoard(); updateFavicon(); resetProgressBar(); addSfxButtonToMenu();}
 updateFavicon();
 addSfxButtonToMenu();
+updateStatsBoard();
 </script>
     <div id="customSavePopup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;">
   <div style="background:#222;padding:25px;border-radius:12px;border:2px solid #00ffcc;text-align:center;">
