@@ -1162,8 +1162,8 @@ function popBubbles(m) {
     const beforePct = calcProgressPercent(bubbles.length, initialBubbleCount);
 
     sounds.play('pop');
-	stats.bubblesPopped++
-	saveStats();
+	stats.bubblesPopped += m.length;
+    saveStats();
     let pts = m.length * 10 * streakCount;
     score += pts;
 
@@ -2075,21 +2075,32 @@ function dropFloatingBubbles() {
         });
     }
 
-    const before = bubbles.length;
+    const remaining = [];
+    let droppedCount = 0;
 
-    bubbles = bubbles.filter(b => connected.has(`${b.row},${b.col}`));
+    bubbles.forEach(b => {
+        if (connected.has(`${b.row},${b.col}`)) {
+            remaining.push(b);
+        } else {
+            // ✅ send to falling animation
+            fallingBubbles.push({
+                x: b.x,
+                y: b.y,
+                color: b.color
+            });
+            droppedCount++;
+        }
+    });
 
-    const dropped = before - bubbles.length;
-
-    if (dropped > 0) {
-        stats.bubblesDropped += dropped;
+    if (droppedCount > 0) {
+        sounds.play('fall');
+        stats.bubblesDropped += droppedCount;
         saveStats();
     }
 
-    return dropped;
+    bubbles = remaining;
 }
-
-
+	
 function updateAmmo(rollNext = false) {
     // Pool = colors that exist on board (ignore colorless)
     const pool = bubbles.length > 0
@@ -2565,6 +2576,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
