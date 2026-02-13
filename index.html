@@ -499,7 +499,7 @@ function clearMenuDesc() {
     Bubbles Shot: <b>${fmt(stats.bubblesShot)}</b><br>
     Bubbles Swapped: <b>${fmt(stats.bubblesSwapped)}</b><br>
 	Bubbles Popped: <b>${fmt(stats.bubblesPopped)}</b><br>
-	Bubbles Dropped: <b>${fmt(stats.bubblesDropped)}</b><br<br>
+	Bubbles Dropped: <b>${fmt(stats.bubblesDropped)}</b><br><br>
 
     Max Streak: <b>${fmt(stats.totalStreak)}</b><br>
     Max Perfect Streak: <b>${fmt(stats.perfectStreak)}</b><br><br>
@@ -2051,20 +2051,44 @@ function findMatches(s) {
     return m;
 }
 function dropFloatingBubbles() {
-    stats.bubblesDropped++
-	saveStats();
-	let c = new Set(); let q = bubbles.filter(b => b.row === 0); q.forEach(b => c.add(`${b.row},${b.col}`));
-    let i = 0; while(i < q.length) {
-        let curr = q[i++];
-        let ds = (curr.row % 2 === 0) ? [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]] : [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
-        ds.forEach(d => {
-            let nb = bubbles.find(o => o.row === curr.row + d[0] && o.col === curr.col + d[1]);
-            if (nb && !c.has(`${nb.row},${nb.col}`)) { c.add(`${nb.row},${nb.col}`); q.push(nb); }
+    const connected = new Set();
+    const queue = bubbles.filter(b => b.row === 0);
+
+    queue.forEach(b => connected.add(`${b.row},${b.col}`));
+
+    let i = 0;
+    while (i < queue.length) {
+        const curr = queue[i++];
+        const dirs = (curr.row % 2 === 0)
+            ? [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]]
+            : [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
+
+        dirs.forEach(([dr, dc]) => {
+            const nb = bubbles.find(b => b.row === curr.row + dr && b.col === curr.col + dc);
+            if (!nb) return;
+
+            const key = `${nb.row},${nb.col}`;
+            if (connected.has(key)) return;
+
+            connected.add(key);
+            queue.push(nb);
         });
     }
-    bubbles.forEach(b => { if (!c.has(`${b.row},${b.col}`)) { fallingBubbles.push({...b}); sounds.play('fall'); } });
-    bubbles = bubbles.filter(b => c.has(`${b.row},${b.col}`));
+
+    const before = bubbles.length;
+
+    bubbles = bubbles.filter(b => connected.has(`${b.row},${b.col}`));
+
+    const dropped = before - bubbles.length;
+
+    if (dropped > 0) {
+        stats.bubblesDropped += dropped;
+        saveStats();
+    }
+
+    return dropped;
 }
+
 
 function updateAmmo(rollNext = false) {
     // Pool = colors that exist on board (ignore colorless)
@@ -2541,6 +2565,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
