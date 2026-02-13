@@ -738,10 +738,10 @@ document.getElementById('debugInput').addEventListener('keydown', e => {
             streakCount = val; 
             streakTimer = STREAK_DURATION; 
         } 
-        else if (cmd === '!freezestreak') { 
+        else if (cmd === '!freezestreaktimer') { 
             streakFrozen = true; 
         }
-        else if (cmd === '!unfreezestreak') { 
+        else if (cmd === '!unfreezestreaktimer') { 
             streakFrozen = false; 
         }
         else if (cmd === '!faillevel') {
@@ -792,7 +792,26 @@ else if (cmd === '!setperfectstreak' && !isNaN(val)) {
     perfectStreak = Math.max(0, val);
     console.log(`Perfect streak set to x${perfectStreak}`);
 }
+else if (cmd === '!addcampaigntime' && !isNaN(val)) {
 
+    if (!isCampaignMode) {
+        alert("You must be in campaign mode to use this command.");
+        return;
+    }
+
+    // ⏱️ Add seconds (can be negative)
+    campaignTimer += val;
+
+    // 🔒 Clamp so it never goes below 0
+    if (campaignTimer < 0) {
+        campaignTimer = 0;
+    }
+
+    // 🔔 Reset tick state so warning sounds/glow resync properly
+    lastTickSecond = null;
+
+    console.log(`Campaign time adjusted by ${val}s. New time: ${Math.ceil(campaignTimer)}s`);
+}
 
         e.target.value = '';
         document.getElementById('debugConsole').style.display = 'none';
@@ -2341,5 +2360,6 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
