@@ -532,8 +532,6 @@ function updateAutosaveButton() {
 
 function addSfxButtonToMenu() {
     const menu = document.getElementById('mainMenu');
-
-    // prevent duplicates
     if (document.getElementById('sfxMenuBtn')) return;
 
     const btn = document.createElement('button');
@@ -542,12 +540,16 @@ function addSfxButtonToMenu() {
     btn.style.background = '#00e5ff';
     btn.style.color = '#000';
     btn.style.fontWeight = 'bold';
+
     btn.onclick = openSfxMenu;
-    onmouseenter="setMenuDesc('SFX Tester: Opens up a SFX Tester menu that allows you to play the in game\'s sound effects.')"
-    onmouseleave="clearMenuDesc()"
+    btn.onmouseenter = () =>
+        setMenuDesc("SFX Tester: Opens a menu to test in-game sound effects.");
+    btn.onmouseleave = clearMenuDesc;
+
     menu.appendChild(document.createElement('br'));
     menu.appendChild(btn);
 }
+
 function toggleSound() {
     soundEnabled = !soundEnabled;
     localStorage.setItem('bubbleSoundEnabled', soundEnabled);
@@ -2582,6 +2584,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
