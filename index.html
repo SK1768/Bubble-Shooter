@@ -392,6 +392,8 @@ const DEFAULT_STATS = {
 
     bubblesShot: 0,
     bubblesSwapped: 0,
+	bubblesPopped: 0,
+	bubblesDropped: 0,
 
     totalStreak: 0,
     perfectStreak: 0,
@@ -399,9 +401,8 @@ const DEFAULT_STATS = {
     puzzlePlays: 0,
     campaignPlays: 0,
     customPlays: 0,
-
-    maxCampaignScore: 0,
-    maxPuzzleScore: 0
+	
+    totalScore: 0
 };
 
 function loadStats() {
@@ -496,7 +497,9 @@ function clearMenuDesc() {
     Campaign Wins: <b>${fmt(stats.campaignWins)}</b><br><br>
 
     Bubbles Shot: <b>${fmt(stats.bubblesShot)}</b><br>
-    Bubbles Swapped: <b>${fmt(stats.bubblesSwapped)}</b><br><br>
+    Bubbles Swapped: <b>${fmt(stats.bubblesSwapped)}</b><br>
+	Bubbles Popped: <b>{fmt(stats.bubblesPopped)}</b><br>
+	Bubbles Dropped: <b>{fmt(stats.bubblesDropped)}</b><br<br>
 
     Max Streak: <b>${fmt(stats.totalStreak)}</b><br>
     Max Perfect Streak: <b>${fmt(stats.perfectStreak)}</b><br><br>
@@ -504,9 +507,8 @@ function clearMenuDesc() {
     Puzzle Mode Played: <b>${fmt(stats.puzzlePlays)}</b><br>
     Campaign Mode Played: <b>${fmt(stats.campaignPlays)}</b><br>
     Custom Mode Played: <b>${fmt(stats.customPlays)}</b><br><br>
-
-    Max Campaign Score: <b>${fmt(stats.maxCampaignScore)}</b><br>
-    Max Puzzle Score: <b>${fmt(stats.maxPuzzleScore)}</b>
+	
+    Total Score: <b>${fmt(stats.totalScore)}</b>
     `;
 }
 function updateSoundButton() {
@@ -1160,6 +1162,8 @@ function popBubbles(m) {
     const beforePct = calcProgressPercent(bubbles.length, initialBubbleCount);
 
     sounds.play('pop');
+	stats.bubblesPopped++
+	saveStats();
     let pts = m.length * 10 * streakCount;
     score += pts;
 
@@ -1216,12 +1220,16 @@ function triggerWin() {
 
                 campaignFinished = true;
                 gameWin = true;
-                isCampaignMode = false;
+     	        stats.campaignWins++;
+                saveStats();
 
                triggerConfetti();
                 triggerConfetti();
                 sounds.play('win');
                 refreshFavicon();
+							if (score > stats.totalScore) {
+    stats.totalScore = score;
+}
                 return;
             }
 
@@ -1231,14 +1239,10 @@ function triggerWin() {
             triggerConfetti();
             refreshFavicon();
             return;
+			if (score > stats.totalScore) {
+    stats.totalScore = score;
+}
         }
-    if (isCampaignMode && score > stats.maxCampaignScore) {
-    stats.maxCampaignScore = score;
-}
-
-if (!isCampaignMode && score > stats.maxPuzzleScore) {
-    stats.maxPuzzleScore = score;
-}
 
 saveStats();
 // 🎯 PERFECT = last ammo + match + clears board
@@ -1263,6 +1267,9 @@ if (
     stats.levelsCompleted++;
 stats.totalStreak = Math.max(stats.totalStreak, streakCount);
 stats.perfectStreak = Math.max(stats.perfectStreak, perfectStreak);
+	if (score > stats.totalScore) {
+    stats.totalScore = score;
+}
 saveStats();
         gameWin = true;
         sounds.play('win');
@@ -1494,8 +1501,6 @@ if (inner) {
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "16px Storopia";
         ctx.fillText("Click to continue", canvas.width / 2, 340);
-        stats.campaignWins++;
-saveStats();
     }
 
     // --- PERFECT WIN SCREEN ---
@@ -2057,6 +2062,8 @@ function dropFloatingBubbles() {
     }
     bubbles.forEach(b => { if (!c.has(`${b.row},${b.col}`)) { fallingBubbles.push({...b}); sounds.play('fall'); } });
     bubbles = bubbles.filter(b => c.has(`${b.row},${b.col}`));
+	stats.bubblesDropped++
+	saveStats();
 }
 
 function updateAmmo(rollNext = false) {
@@ -2534,3 +2541,4 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
