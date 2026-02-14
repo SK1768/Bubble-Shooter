@@ -1879,7 +1879,7 @@ if (panicMode) {
 
         drawAimVisualizer(); // ✅ TOP LAYER — now visible
 
-        if (!isPaused && ammo > 0) {
+        if (ammo > 0) {
 
             // ---- CURRENT BALL ----
             ctx.fillStyle = currentBall;
@@ -3078,3 +3078,4 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
