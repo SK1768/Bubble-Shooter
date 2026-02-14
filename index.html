@@ -555,7 +555,8 @@ let lives = 5;           // default
 let DEFAULT_LIVES = lives
 let suppressAutosaveOnce = false;
 let MAX_LIVES = 100;
-let lastLifePulseTime;
+let lastLifePulseSecond = null;
+let lastHeartbeatSecond = null;
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let panicPulseTime = 0;
 let panicFade = 0; // 0 = invisible, 1 = full panic
@@ -1642,9 +1643,28 @@ let glowColor = "rgba(0,0,0,0)";
 // ❤️ LOW LIVES PULSE (every second)
 const inner = document.getElementById('livesInner');
 
-// ❤️ LOW LIVES PULSE + 🫀 HEARTBEAT
 if (
     inner &&
+    !isPlaytesting &&
+    !gameOver &&
+    !gameWin &&
+    lives > 0 &&
+    lives < 4
+) {
+    const nowSec = Math.floor(performance.now() / 1000);
+
+    if (lastLifePulseSecond !== nowSec) {
+        inner.classList.remove('tick-pulse');
+        void inner.offsetWidth; // force reflow
+        inner.classList.add('tick-pulse');
+        lastLifePulseSecond = nowSec;
+    }
+} else {
+    lastLifePulseSecond = null;
+}
+
+// 🫀 HEARTBEAT SFX (sync with pulse)
+if (
     !isPlaytesting &&
     !isPaused &&
     !gameOver &&
@@ -1652,30 +1672,15 @@ if (
     lives > 0 &&
     lives < 4
 ) {
-    const now = performance.now();
+    const nowSec = Math.floor(performance.now() / 1000);
 
-    // ⏱️ Faster at 1 life
-    const interval =
-        lives === 1 ? 350 :   // 🔥 panic
-        lives === 2 ? 600 :
-        1000;                 // lives === 3
-
-    if (lastLifePulseTime === undefined || now - lastLifePulseTime >= interval) {
-
-        // 💓 visual pulse
-        inner.classList.remove('tick-pulse');
-        void inner.offsetWidth;
-        inner.classList.add('tick-pulse');
-
-        // 🫀 audio pulse
+    if (lastHeartbeatSecond !== nowSec) {
         sounds.play('heartbeat');
-
-        lastLifePulseTime = now;
+        lastHeartbeatSecond = nowSec;
     }
 } else {
-    lastLifePulseTime = undefined;
+    lastHeartbeatSecond = null;
 }
-
 
 
 // LEVEL FAILED → solid red glow
