@@ -2667,6 +2667,8 @@ function updatePaletteUI() {
     });
 }
     function saveGame(isAuto = false, forceSave = false) {
+    
+    if (gameOver) return;
 
     if (isCampaignMode) {
         alert("Cannot create a save file in campaign mode.");
@@ -2845,7 +2847,7 @@ function confirmCustomSave() {
     saveGame(false, true);
 }
 function handleLoadClick() {
-    
+    if (gameOver) return;
     if (isCampaignMode) {
     alert("Cannot load a save file in campaign mode.");
     return;
@@ -2862,6 +2864,7 @@ function handleLoadClick() {
 function loadGame(e) {
     const file = e.target.files[0];
     if (!file) return;
+    
 
     const reader = new FileReader();
     isLoadingSave = true;
@@ -3091,3 +3094,4 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
