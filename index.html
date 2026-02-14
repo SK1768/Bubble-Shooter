@@ -57,7 +57,7 @@
             }
 
             canvas {
-                background: #000;
+                background: #000000;
                 border: 4px solid #333;
                 box-shadow: 0 0 20px rgba(0,0,0,0.5);
                 display: none;
@@ -196,6 +196,17 @@
 
             display: none;
             }
+canvas {
+    background: #000;
+    border: 4px solid #333;
+
+    box-shadow:
+        0 0 var(--glow-size, 0px)
+        var(--glow-color, rgba(0,0,0,0));
+
+    transition: box-shadow 0.2s ease;
+}
+
 
             #progressBar {
                 height: 100%;
@@ -509,6 +520,13 @@ let lastShotUsedFinalAmmo = false;
 let lastClearWasPerfect = false;
 let visualiseBubbleColour = false;
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let panicPulseTime = 0;
+let panicFade = 0; // 0 = invisible, 1 = full panic
+
+function setCanvasGlow(size, color) {
+    canvas.style.setProperty("--glow-size", `${size}px`);
+    canvas.style.setProperty("--glow-color", color);
+}
 
 function setBrowserTitle(text) {
     document.title = text;
@@ -833,26 +851,32 @@ function updatePanicState() {
     const nearRedLine = bubbles.some(b => b.y > DEADLINE - 60);
     const lowAmmo = ammo < 10;
 
-    const shouldPanic = nearRedLine || lowAmmo;
+    // ⏱️ Campaign timer panic (20 seconds)
+    const timerPanic =
+        isCampaignMode && Math.ceil(campaignTimer) <= 20;
+
+    const shouldPanic =
+        nearRedLine || lowAmmo || timerPanic;
 
     if (shouldPanic && !panicMode) {
-        // entering panic
         panicMode = true;
+
         if (!panicTriggered) {
-            sounds.play('panic');   // plays once
+            sounds.play('panic'); // play once on entry
             panicTriggered = true;
         }
+
         refreshFavicon();
         return;
     }
 
     if (!shouldPanic && panicMode) {
-        // leaving panic
         panicMode = false;
         panicTriggered = false;
         refreshFavicon();
     }
 }
+
 function openDebug() { document.getElementById('debugConsole').style.display = 'block'; document.getElementById('debugInput').value = ''; document.getElementById('debugInput').focus(); setPause(true); }
 
 window.addEventListener('keydown', e => {
@@ -1256,19 +1280,7 @@ function snapToGrid(p) {
 
     bubbles.push(nb);
 
-// ✅ True ONLY when everything else on the board is colourless
-const onlyColourlessLeft =
-    bubbles.every(b => b === nb || !b.color);
-
-let m = findMatches(nb, onlyColourlessLeft);
-
-// Optional polish: if we are wildcard-matching, tint colourless bubbles
-// so particles/falling visuals inherit the shot color.
-if (onlyColourlessLeft && m.length >= 3) {
-    m.forEach(b => {
-        if (!b.color) b.color = nb.color;
-    });
-}
+let m = findMatches(nb);
 
 if (m.length >= 3) {
     lastShotWasMatch = true; // ✅ mark match
@@ -1471,6 +1483,41 @@ function update() {
 const nowMs = performance.now();
 const dt = (nowMs - lastTimeMs) / 1000;
 lastTimeMs = nowMs;
+panicPulseTime += 0.02; // speed of pulse (lower = slower)
+const FADE_SPEED = 3; // lower = slower fade
+const canvasEl = canvas; // already have it
+
+// ---- CANVAS OUTER GLOW STATE ----
+let glowSize = 0;
+let glowColor = "rgba(0,0,0,0)";
+
+// LEVEL FAILED → solid red glow
+if (gameOver) {
+    glowSize = 45;
+    glowColor = "rgba(255, 60, 60, 0.75)";
+}
+
+// LEVEL COMPLETE → cyan glow
+else if (gameWin) {
+    glowSize = 45;
+    glowColor = "rgba(0, 255, 204, 0.75)";
+}
+
+// PANIC MODE → pulsing red glow
+else if (panicFade > 0) {
+    const pulse = (Math.sin(panicPulseTime) + 1) / 2;
+    glowSize = 20 + pulse * 30;
+    glowColor = `rgba(255, 80, 80, ${(0.25 + pulse * 0.25) * panicFade})`;
+}
+
+// Apply glow (always)
+setCanvasGlow(glowSize, glowColor);
+
+if (panicMode) {
+    panicFade = Math.min(1, panicFade + FADE_SPEED);
+} else {
+    panicFade = Math.max(0, panicFade - FADE_SPEED);
+}
 
 if (isCampaignMode && !isPaused && !gameOver && !gameWin) {
 
@@ -1528,13 +1575,36 @@ if (inner) {
         bubbles.forEach(b => { if (b.y > DEADLINE) triggerFail("You hit the red line!"); });
     }
     particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.life -= 0.03; if (p.life <= 0) particles.splice(i, 1); });
-    fallingBubbles.forEach((fb, i) => { fb.y += 4; if (fb.y > canvas.height + 20) fallingBubbles.splice(i, 1); });
+    fallingBubbles.forEach((fb, i) => {
+    fb.vx *= 0.98;          // damping (keeps it subtle)
+    fb.x += fb.vx;
+    fb.y += fb.vy;
+    fb.rot += fb.rotSpeed;
+
+    if (fb.y > canvas.height + 30) {
+        fallingBubbles.splice(i, 1);
+    }
+});
+
     floatingScores.forEach((fs, i) => { fs.y -= 1; fs.life -= 0.01; if (fs.life <= 0) floatingScores.splice(i, 1); });
     confetti.forEach((c, i) => { c.x += c.vx; c.y += c.vy; c.vy += 0.2; c.life -= 0.01; if (c.life <= 0) confetti.splice(i, 1); });
 }
 
  function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // ---- BACKGROUND ----
+let bgColor = "#0b0b0b";
+
+if (panicFade > 0) {
+    const pulse = (Math.sin(panicPulseTime) + 1) / 2;
+    const intensity = Math.floor(10 + pulse * 25 * panicFade);
+
+    bgColor = `rgb(${intensity}, 0, 0)`;
+}
+
+ctx.fillStyle = bgColor;
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+
     ctx.strokeStyle = '#ff3333'; ctx.setLineDash([5, 5]);
     ctx.beginPath(); ctx.moveTo(0, DEADLINE); ctx.lineTo(canvas.width, DEADLINE); ctx.stroke(); ctx.setLineDash([]);
     bubbles.forEach(b => {
@@ -1547,6 +1617,25 @@ if (inner) {
         ctx.stroke();
         return;
     }
+// ---- CANVAS GLOW ----
+if (panicMode) {
+    const glow = (Math.sin(panicPulseTime) + 1) / 2;
+    const glowStrength = 6 + glow * 10;
+
+    ctx.save();
+    ctx.strokeStyle = `rgba(255, 80, 80, ${0.15 + glow * 0.2})`;
+    ctx.lineWidth = 6;
+    ctx.shadowBlur = glowStrength;
+    ctx.shadowColor = "#ff3333";
+
+    ctx.strokeRect(
+        3,
+        3,
+        canvas.width - 6,
+        canvas.height - 6
+    );
+    ctx.restore();
+}
 
     // Normal colored bubble
     ctx.fillStyle = b.color;
@@ -2216,10 +2305,9 @@ function getGridCoords(r, c) {
     };
 }
 
-function findMatches(s, allowColorlessWildcard = false) {
-
-    // If the shot bubble has no color, nothing can match
-    if (!s || !s.color) return [s];
+function findMatches(s) {
+    // Colorless bubbles never match
+    if (!s) return [s];
 
     let m = [s];
     let seen = new Set([`${s.row},${s.col}`]);
@@ -2234,26 +2322,17 @@ function findMatches(s, allowColorlessWildcard = false) {
         ds.forEach(d => {
             let nb = bubbles.find(o => o.row === cur.row + d[0] && o.col === cur.col + d[1]);
             if (!nb) return;
-
             const key = `${nb.row},${nb.col}`;
             if (seen.has(key)) return;
-
-            // ✅ Normal: must match exact color, ignore colourless
-            // ✅ Special case: if allowColorlessWildcard, colourless counts as matching too
-            const isColourless = !nb.color;
-            const isSameColor = nb.color === s.color;
-
-            if (!(isSameColor || (allowColorlessWildcard && isColourless))) return;
+            if (nb.color !== s.color) return;
 
             seen.add(key);
             m.push(nb);
             q.push(nb);
         });
     }
-
     return m;
 }
-
 function dropFloatingBubbles() {
     const connected = new Set();
     const queue = bubbles.filter(b => b.row === 0);
@@ -2288,10 +2367,15 @@ function dropFloatingBubbles() {
         } else {
             // ✅ send to falling animation
             fallingBubbles.push({
-                x: b.x,
-                y: b.y,
-                color: b.color
-            });
+    x: b.x,
+    y: b.y,
+    vx: (Math.random() - 0.5) * 2.5, // side wobble
+    vy: 3 + Math.random() * 2,
+    rot: Math.random() * Math.PI * 2,
+    rotSpeed: (Math.random() - 0.5) * 0.1,
+    color: b.color
+});
+
             droppedCount++;
         }
     });
@@ -2306,31 +2390,26 @@ function dropFloatingBubbles() {
 }
 	
 function updateAmmo(rollNext = false) {
-
     // Pool = colors that exist on board (ignore colorless)
-    let pool = bubbles.length > 0
+    const pool = bubbles.length > 0
         ? Array.from(new Set(bubbles.map(b => b.color).filter(c => c)))
         : ALL_COLORS;
-
-    // ✅ If only colourless bubbles exist, fall back to all colors
-    if (pool.length === 0) pool = ALL_COLORS;
-
-    if (isLoadingSave) {
+if (isLoadingSave) {
         refreshFavicon();
         return;
     }
-
+    // If current is missing/invalid, fix it
     if (!currentBall || !pool.includes(currentBall)) {
         currentBall = pool[Math.floor(Math.random() * pool.length)];
     }
 
+    // Only roll next when requested OR if next is invalid
     if (rollNext || !nextBall || !pool.includes(nextBall)) {
         nextBall = pool[Math.floor(Math.random() * pool.length)];
     }
 
     refreshFavicon();
 }
-
 
 function swapBubbles() { [currentBall, nextBall] = [nextBall, currentBall]; sounds.play('swap'); refreshFavicon(); stats.bubblesSwapped++; saveStats();}
 function triggerConfetti() { for(let i=0; i<50; i++) confetti.push({ x: 220, y: 300, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, color: ALL_COLORS[Math.floor(Math.random()*6)], life: 1.0 }); }
@@ -2786,4 +2865,5 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
