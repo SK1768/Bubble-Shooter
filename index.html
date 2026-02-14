@@ -14,18 +14,26 @@
         }
 @keyframes tickPulse {
     0% {
-        text-shadow: 0 0 0 rgba(255, 80, 80, 0);
+        text-shadow:
+            0 0 0 rgba(255, 80, 80, 0);
         transform: scale(1);
     }
-    50% {
-        text-shadow: 0 0 18px rgba(255, 80, 80, 0.9);
-        transform: scale(1.08);
+
+    40% {
+        text-shadow:
+            0 0 12px rgba(255, 80, 80, 0.8),
+            0 0 24px rgba(255, 80, 80, 0.6),
+            0 0 40px rgba(255, 80, 80, 0.4);
+        transform: scale(1.15);
     }
+
     100% {
-        text-shadow: 0 0 0 rgba(255, 80, 80, 0);
+        text-shadow:
+            0 0 0 rgba(255, 80, 80, 0);
         transform: scale(1);
     }
 }
+
 
 .tick-pulse {
     animation: tickPulse 0.25s ease-out;
@@ -301,6 +309,12 @@ canvas {
     pointer-events: none; /* clicks go through */
     display: none;
 }
+#livesInner {
+    display: inline-block;
+    transform-origin: center center;
+    will-change: transform;
+}
+
     </style>
 </head>
 <body oncontextmenu="return false;">
@@ -375,6 +389,22 @@ canvas {
             <span id="campaignTimerDisplay">
     <span id="campaignTimerInner">05:00</span>
 </span>
+<span id="livesDisplay"
+      style="
+        position: absolute;
+        top: -34px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 20px;
+        font-weight: bold;
+        pointer-events: none;
+        display: none;
+        z-index: 5;
+        min-width: 60px;
+        text-align: center;
+      ">
+    <span id="livesInner">❤️12</span>
+</span>
 
             </div>
                 <span id="percentText">0.0%</span>
@@ -430,6 +460,11 @@ const DEFAULT_STATS = {
     puzzlePlays: 0,
     campaignPlays: 0,
     customPlays: 0,
+    livesGained: 0,
+    livesLost: 0,
+    
+    livesGained: 0,
+    livesLost: 0,
 
     debugCommandsUsed: 0,
 	
@@ -489,6 +524,7 @@ let autosaveEnabled = localStorage.getItem('bubbleAutosaveEnabled') === 'true';
     let isLoadingSave = false;
 const PERFECT_BASE_SCORE = 1000;
 const PERFECT_AMMO_BONUS = 100;
+let absorbFallingBubbles = false;
 let customAuthorName = "";
 let isCampaignMode = false;
     let campaignLevel = 1;
@@ -515,6 +551,11 @@ let lastShotWasMatch = false;
 let lastShotUsedFinalAmmo = false;
 let lastClearWasPerfect = false;
 let visualiseBubbleColour = false;
+let lives = 5;           // default
+let DEFAULT_LIVES = lives
+let suppressAutosaveOnce = false;
+let MAX_LIVES = 100;
+let lastLifePulseTime;
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let panicPulseTime = 0;
 let panicFade = 0; // 0 = invisible, 1 = full panic
@@ -557,12 +598,45 @@ function clearMenuDesc() {
     Puzzle Mode Played: <b>${fmt(stats.puzzlePlays)}</b><br>
     Campaign Mode Played: <b>${fmt(stats.campaignPlays)}</b><br>
     Custom Mode Played: <b>${fmt(stats.customPlays)}</b><br><br>
+    Total Lives Gained: <b>${fmt(stats.livesGained)}</b><br>
+    Total Lives Lost: <b>${fmt(stats.livesLost)}</b><br><br>
 
     Debug Commands Used: <b>${fmt(stats.debugCommandsUsed)}</b><br><br>
 	
     High Score: <b>${fmt(stats.highScore)}</b>
     `;
 }
+function updateLivesUI() {
+    const outer = document.getElementById('livesDisplay');
+    const inner = document.getElementById('livesInner');
+    if (!outer || !inner) return;
+
+    outer.style.display = "inline";
+
+    if (isPlaytesting) {
+        inner.innerText = "❤️-";
+        inner.style.color = "#888";
+        outer.classList.remove('low-lives');
+        return;
+    }
+
+    inner.innerText = `❤️${lives}`;
+
+    if (lives <= 1) {
+        inner.style.color = "#8b0000";
+    } else if (lives < 4) {
+        inner.style.color = "#ff0000";
+    } else {
+        inner.style.color = "#00ff00";
+    }
+
+    if (lives < 4) {
+        outer.classList.add('low-lives');
+    } else {
+        outer.classList.remove('low-lives');
+    }
+}
+
 function updateSoundButton() {
     const btn = document.getElementById('soundToggle');
     if(btn) {
@@ -725,7 +799,21 @@ const sounds = {
         gain.gain.linearRampToValueAtTime(0, now + 0.08);
         osc.start();
         osc.stop(now + 0.08);
+        
     }
+else if (type === 'heartbeat') {
+    osc.type = 'triangle';                 // stronger body than sine
+    osc.frequency.setValueAtTime(90, now); // higher = more audible
+    osc.frequency.exponentialRampToValueAtTime(45, now + 0.2);
+
+    gain.gain.setValueAtTime(0.28, now);   // 🔥 louder
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+    osc.start();
+    osc.stop(now + 0.35);
+}
+
+
 
     }
 };
@@ -801,6 +889,8 @@ function updateFavicon(color) {
         '</svg>#' + Math.random(); // force refresh
 }
 function startCampaign() {
+        lives = DEFAULT_LIVES;
+        updateLivesUI();
         stats.campaignPlays++;
         saveStats();
         setBrowserTitle("🏆 SK's Bubble Shooter — Campaign Mode");
@@ -909,7 +999,7 @@ document.getElementById('debugInput').addEventListener('keydown', e => {
             streakFrozen = false; 
         }
         else if (cmd === '!faillevel') {
-            triggerFail("You used the !faillevel debug command.");
+            triggerFail("You used the !faillevel debug command.\n-1 LIFE");
         }
         else if (cmd === '!advancelevel' && !isNaN(val)) {
             level = val;
@@ -950,6 +1040,7 @@ document.getElementById('debugInput').addEventListener('keydown', e => {
             lastTickSecond = null;
 
             // Load that campaign stage
+            suppressAutosaveOnce = true;
             startMode('puzzle', false, true);
         }
 else if (cmd === '!setperfectstreak' && !isNaN(val)) {
@@ -1020,13 +1111,30 @@ else if (cmd === '!visualisebubblecolour') {
         (visualiseBubbleColour ? "ENABLED" : "DISABLED")
     );
 }
+    else if (cmd === '!setlives' && !isNaN(val)) {
+    lives = Math.max(0, Math.min(MAX_LIVES, val));
+    updateLivesUI();
+    console.log(`Lives set to ${lives}`);
+    }
 
-        e.target.value = '';
+    else if (cmd === '!absorbfallingbubbles') {
+    if (arg === 'true') {
+        absorbFallingBubbles = true;
+        console.log('Absorb falling bubbles: ENABLED');
+    } else if (arg === 'false') {
+        absorbFallingBubbles = false;
+        console.log('Absorb falling bubbles: DISABLED');
+    } else {
+        console.log('Usage: !absorbfallingbubbles true/false');
+    }
+}
+    e.target.value = '';
         document.getElementById('debugConsole').style.display = 'none';
         setPause(false);
     }
 
 });
+
 function isValidHexColor(hex) {
     return /^#[0-9A-Fa-f]{6}$/.test(hex);
 }
@@ -1176,7 +1284,7 @@ canvas.addEventListener('mousedown', e => {
 
                 campaignLevel++;
                 campaignTimer = 300;
-
+                suppressAutosaveOnce = true;
                 startMode('puzzle', false, true);
 
                 // reward ammo AFTER new level loads
@@ -1196,9 +1304,20 @@ canvas.addEventListener('mousedown', e => {
         {
             campaignTimer = CAMPAIGN_TIME_LIMIT;
         }
-            score = 0;
-            startMode('puzzle');
-            return;
+            
+    // 💀 True game over → back to menu
+    if (lives <= 0) {
+        exitToMenu();
+        return;
+    }
+
+    // 🔁 Retry same level
+    gameOver = false;
+    gameWin = false;
+    suppressAutosaveOnce = true;
+    startMode('puzzle', false, true);
+    initializeAmmo("puzzleNew");
+    return;
         }
     }
 
@@ -1287,7 +1406,7 @@ if (m.length >= 3) {
     lastShotWasMatch = false;
         sounds.play('place');
         if (ammo <= 0 && bubbles.length > 0)
-            triggerFail("You ran out of bubbles!");
+            triggerFail("You ran out of bubbles!\n-1 LIFE");
 
 const beforePct = calcProgressPercent(bubbles.length - 1, initialBubbleCount); 
 // bubbles.length already includes the newly placed bubble, so -1 = before placement
@@ -1357,7 +1476,7 @@ if (bubbles.length === 0) {
 }
 
 
- else if (ammo <= 0) triggerFail("You ran out of bubbles!");
+ else if (ammo <= 0) triggerFail("You ran out of bubbles!\n-1 LIFE");
  updateAmmo();
  lastShotWasMatch = false;
 }
@@ -1367,6 +1486,17 @@ function fmt(n) {
 }
 
 function triggerWin() {
+
+if (!isPlaytesting) {
+    const before = lives;
+    lives = Math.min(lives + 1, MAX_LIVES);
+    if (lives > before) {
+        stats.livesGained++;
+        saveStats();
+    }
+}
+updateLivesUI();
+
 
         if (isCampaignMode) {
 
@@ -1417,6 +1547,7 @@ if (
     const bonusScore = PERFECT_BASE_SCORE * perfectStreak;
     score += bonusScore;
     ammo += PERFECT_AMMO_BONUS;
+    lives += 10
 } else {
     perfectStreak = 0;
 }
@@ -1425,8 +1556,12 @@ stats.totalStreak = Math.max(stats.totalStreak, streakCount);
 stats.perfectStreak = Math.max(stats.perfectStreak, perfectStreak);
 
 // 🎁 Reward bubbles on level completion
+if(!isPlaytesting)
+{
 ammo += 50;
+updateLivesUI();
 updateAmmo();
+}
 
 	if (score > stats.highScore) {
     stats.highScore = score;
@@ -1440,14 +1575,32 @@ saveStats();
 
 function triggerFail(reason) {
 
+    if (!isPlaytesting) {
+    lives--;
+    stats.livesLost++
+    }
+    saveStats();
+    updateLivesUI();
+
+
+    // 💀 OUT OF LIVES → GAME OVER
+    if (lives <= 0) {
+        lives = 0;
         gameOver = true;
-        gameOverReason = reason;
+        gameOverReason = "GAME OVER! You lost all your lives!";
         sounds.play('fail');
-		       perfectStreak = 0;
         refreshFavicon();
-        
-stats.levelsFailed++;
-saveStats();
+        return;
+    }
+
+    // ❌ Normal fail (retry same level)
+    gameOver = true;
+    gameOverReason = reason;
+    sounds.play('fail');
+    refreshFavicon();
+
+    stats.levelsFailed++;
+    saveStats();
 
         if (isCampaignMode) {
             hideCampaignTimer();
@@ -1486,6 +1639,44 @@ const canvasEl = canvas; // already have it
 // ---- CANVAS OUTER GLOW STATE ----
 let glowSize = 0;
 let glowColor = "rgba(0,0,0,0)";
+// ❤️ LOW LIVES PULSE (every second)
+const inner = document.getElementById('livesInner');
+
+// ❤️ LOW LIVES PULSE + 🫀 HEARTBEAT
+if (
+    inner &&
+    !isPlaytesting &&
+    !isPaused &&
+    !gameOver &&
+    !gameWin &&
+    lives > 0 &&
+    lives < 4
+) {
+    const now = performance.now();
+
+    // ⏱️ Faster at 1 life
+    const interval =
+        lives === 1 ? 350 :   // 🔥 panic
+        lives === 2 ? 600 :
+        1000;                 // lives === 3
+
+    if (lastLifePulseTime === undefined || now - lastLifePulseTime >= interval) {
+
+        // 💓 visual pulse
+        inner.classList.remove('tick-pulse');
+        void inner.offsetWidth;
+        inner.classList.add('tick-pulse');
+
+        // 🫀 audio pulse
+        sounds.play('heartbeat');
+
+        lastLifePulseTime = now;
+    }
+} else {
+    lastLifePulseTime = undefined;
+}
+
+
 
 // LEVEL FAILED → solid red glow
 if (gameOver) {
@@ -1524,7 +1715,7 @@ if (isCampaignMode && !isPaused && !gameOver && !gameWin) {
 const secondsLeft = Math.ceil(campaignTimer);
 
 if (secondsLeft <= -1) {
-    triggerFail("You ran out of time!");
+    triggerFail("You ran out of time!\n-1 LIFE");
     campaignLevel = 1;
 }
 
@@ -1568,7 +1759,7 @@ if (inner) {
             if (p.y < RADIUS) { snapToGrid(p); projectiles.splice(i, 1); }
             else { for (let b of bubbles) { if (Math.hypot(p.x - b.x, p.y - b.y) < RADIUS * 1.5) { snapToGrid(p); projectiles.splice(i, 1); break; } } }
         });
-        bubbles.forEach(b => { if (b.y > DEADLINE) triggerFail("You hit the red line!"); });
+        bubbles.forEach(b => { if (b.y > DEADLINE) triggerFail("You hit the red line!\n-1 LIFE"); });
     }
     particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.life -= 0.03; if (p.life <= 0) particles.splice(i, 1); });
     fallingBubbles.forEach((fb, i) => {
@@ -1578,8 +1769,16 @@ if (inner) {
     fb.rot += fb.rotSpeed;
 
     if (fb.y > canvas.height + 30) {
-        fallingBubbles.splice(i, 1);
+
+    // 🧲 DEBUG: absorb falling bubbles into ammo
+    if (absorbFallingBubbles && !isPlaytesting) {
+        ammo++;
+        updateAmmo();
     }
+
+    fallingBubbles.splice(i, 1);
+}
+
 });
 
     floatingScores.forEach((fs, i) => { fs.y -= 1; fs.life -= 0.01; if (fs.life <= 0) floatingScores.splice(i, 1); });
@@ -1753,7 +1952,7 @@ if (panicMode) {
         ctx.shadowBlur = 0;
 
         ctx.font = "bold 20px Storopia";
-        ctx.fillText("+1,000 SCORE  +150 BUBBLES", canvas.width / 2, 295);
+        ctx.fillText(isPlaytesting ? "" : "+1,000 SCORE  +150 BUBBLES  +10 LIVES", canvas.width / 2, 295);
 
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "16px Storopia";
@@ -1769,7 +1968,7 @@ if (panicMode) {
     if (gameWin && !gameOver) {
         ctx.fillStyle = "#ffcc00";
         ctx.font = "bold 22px Storopia";
-        ctx.fillText("+50 BUBBLES!", canvas.width / 2, 315);
+        ctx.fillText(isPlaytesting ? "" : "+50 BUBBLES! +1 LIFE", canvas.width / 2, 315);
     }
         if (gameOver && gameOverReason) {
             ctx.fillStyle = "#FF0000"
@@ -1904,6 +2103,8 @@ function initializeAmmo(type, savedAmmo = null) {
         updateAmmo();
     }
     function startPuzzleMode() {
+        lives = DEFAULT_LIVES;
+        updateLivesUI();
         stats.puzzlePlays++;
         saveStats();
         setBrowserTitle("🧩 SK's Bubble Shooter — Puzzle Mode");
@@ -1975,12 +2176,15 @@ mouseY = canvas.height - 200;
     }
 
     initialBubbleCount = bubbles.length; 
-    updateProgressBar(); 
+    updateProgressBar();
+    updateLivesUI(); 
     updateAmmo();
     
-    if (isNextLevel && mode === 'puzzle' && autosaveEnabled && !isCampaignMode) {
-        saveGame(true);
-    }
+    if (isNextLevel && mode === 'puzzle' && autosaveEnabled && !isCampaignMode && !suppressAutosaveOnce) {
+    saveGame(true);
+}
+suppressAutosaveOnce = false; // always clear after startMode
+
 
 
     if (animationId) cancelAnimationFrame(animationId);
@@ -2100,6 +2304,7 @@ setBrowserTitle("▶️ SK's Bubble Shooter — Playtesting");
     customLevelSnapshot = JSON.parse(JSON.stringify(bubbles));
     isCustomMode = false;
     isPlaytesting = true;
+    updateLivesUI();
     gameOver = false;
     gameWin = false;
 
@@ -2476,6 +2681,7 @@ function updatePaletteUI() {
     // 📊 CORE STATS (ordered)
     score,
 	perfect_streak: perfectStreak,
+    lives: lives,
     ammo: (mode === 'custom' || isPlaytesting)
         ? parseInt(document.getElementById('customAmmoInput')?.value) || ammo
         : ammo,
@@ -2690,6 +2896,9 @@ function loadGame(e) {
         // Restore level & score FIRST
         level = s.level ?? 1;
         score = s.score ?? 0;
+        lives = s.lives ?? 5;
+updateLivesUI();
+
 
         // Capture saved progress AS-IS (string like "12.1%")
         if (typeof s.progress === "string") {
@@ -2749,7 +2958,8 @@ function closeCustomSavePopup() {
     'win',
     'fail',
    'panic',
-    'tick'
+    'tick',
+    'heartbeat'
 ];
 
 function openSfxMenu() {
@@ -2799,7 +3009,9 @@ function closeSfxMenu() {
     document.getElementById('percentText').style.display = "none";
 }
 function clearEditor() { if(confirm("Clear level?")) bubbles = []; }
-function exitToMenu() { setBrowserTitle("⭐ SK's Bubble Shooter"); gameRunning = false; document.getElementById('mainMenu').style.display = 'block';  document.getElementById('gameUI').style.display = 'none'; document.getElementById('customUI').style.display = 'none'; document.getElementById('mobileControls').style.display = 'none'; canvas.style.display = 'none'; perfectStreak = 0; updateStatsBoard(); updateFavicon(); resetProgressBar(); addSfxButtonToMenu();}
+function exitToMenu() { setBrowserTitle("⭐ SK's Bubble Shooter"); gameRunning = false; document.getElementById('mainMenu').style.display = 'block';  document.getElementById('gameUI').style.display = 'none'; document.getElementById('customUI').style.display = 'none'; document.getElementById('mobileControls').style.display = 'none'; canvas.style.display = 'none'; perfectStreak = 0;     // ✅ Reset run-state
+    lives = DEFAULT_LIVES;
+    updateLivesUI(); updateStatsBoard(); updateFavicon(); resetProgressBar(); addSfxButtonToMenu();}
 updateStatsBoard();
 	updateFavicon();
 addSfxButtonToMenu();
@@ -2861,6 +3073,3 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
-
-
-
