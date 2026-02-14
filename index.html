@@ -937,19 +937,19 @@ function updatePanicState() {
 
     const nearRedLine = bubbles.some(b => b.y > DEADLINE - 60);
     const lowAmmo = ammo < 10;
+    const lowLives = lives > 0 && lives <= 3;
 
-    // ⏱️ Campaign timer panic (20 seconds)
     const timerPanic =
         isCampaignMode && Math.ceil(campaignTimer) <= 20;
 
     const shouldPanic =
-        nearRedLine || lowAmmo || timerPanic;
+        nearRedLine || lowAmmo || timerPanic || lowLives;
 
     if (shouldPanic && !panicMode) {
         panicMode = true;
 
         if (!panicTriggered) {
-            sounds.play('panic'); // play once on entry
+            sounds.play('panic'); // plays ONCE
             panicTriggered = true;
         }
 
@@ -963,6 +963,7 @@ function updatePanicState() {
         refreshFavicon();
     }
 }
+
 
 function openDebug() { document.getElementById('debugConsole').style.display = 'block'; document.getElementById('debugInput').value = ''; document.getElementById('debugInput').focus(); setPause(true); }
 
@@ -1588,8 +1589,10 @@ function triggerFail(reason) {
     if (lives <= 0) {
         lives = 0;
         gameOver = true;
-        gameOverReason = "GAME OVER! You lost all your lives!";
+        gameOverReason = "You lost all your lives!";
         sounds.play('fail');
+        stats.levelsFailed++;
+        saveStats();
         refreshFavicon();
         return;
     }
@@ -1922,7 +1925,11 @@ if (panicMode) {
 
         if (isPaused) {
             ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = "#ffcc00"; ctx.textAlign = "center"; ctx.font = "bold 40px Storopia"; ctx.fillText("GAME PAUSED", 220, 320);
+            ctx.fillStyle = "#ffcc00"; ctx.textAlign = "center"; ctx.font = "bold 40px Storopia";
+            ctx.fillText("GAME PAUSED", 220, 310);
+
+            ctx.font = "16px Storopia";
+            ctx.fillText("Click \"RESUME\" to unpause the game", canvas.width / 2, 370);
         }
         if (gameOver || gameWin) {
     ctx.fillStyle = "rgba(0,0,0,0.85)";
@@ -1968,7 +1975,13 @@ if (panicMode) {
     else {
         ctx.fillStyle = gameOver ? "#ff5555" : "#00ffcc";
         ctx.font = "bold 34px Storopia";
-        ctx.fillText(gameOver ? "LEVEL FAILED!" : "LEVEL COMPLETE!", canvas.width / 2, 280);
+        const endText =
+    gameOver
+        ? (lives <= 0 ? "GAME OVER!" : "LEVEL FAILED!")
+        : "LEVEL COMPLETE!";
+
+ctx.fillText(endText, canvas.width / 2, 280);
+
 		    // 🎁 Show bubble reward ONLY on win
     if (gameWin && !gameOver) {
         ctx.fillStyle = "#ffcc00";
@@ -1983,7 +1996,7 @@ if (panicMode) {
 		
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "16px Storopia";
-        ctx.fillText("Click to continue", canvas.width / 2, 420); // lol
+        ctx.fillText(lives <= 0 ? "Click to exit to the main menu" : "Click to continue", canvas.width / 2, 420); // lol
         if (gameWin) {
     ctx.save();
     confetti.forEach(c => {
@@ -3078,4 +3091,3 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
-
