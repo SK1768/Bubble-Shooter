@@ -322,16 +322,18 @@ canvas {
     <div class="menu" id="mainMenu">
         <h1>SK's Bubble Shooter</h1>
         <p>Made by SK1768 :)</p>
-        <button onclick="startPuzzleMode()" style="font-size: 1.5em; background: #00ffcc; color: #000;" onmouseenter="setMenuDesc('Puzzle Mode: Clear all bubbles using limited ammo.')" onmouseleave="clearMenuDesc()">PUZZLE MODE</button>
+        <button onclick="startPuzzleMode()" style="font-size: 1.5em; background: #00ffcc; color: #000;" onmouseenter="setMenuDesc('Puzzle Mode: Clear all bubbles using limited ammo.')" onmouseleave="clearMenuDesc()">🧩 PUZZLE MODE</button>
         <br>
-        <button onclick="enterCustomEditor()" style="background: #a155ff;"onmouseenter="setMenuDesc('Custom Mode: Create and test your own bubble layouts.')" onmouseleave="clearMenuDesc()">CUSTOM MODE</button>
-        <br>
-        <button id="autosaveToggle" onclick="toggleAutosave()" onmouseenter="setMenuDesc('Autosave: Creates a save file every time you complete a level in Puzzle Mode.')" onmouseleave="clearMenuDesc()">💾 Autosave: OFF</button>
-        <button id="soundToggle" onclick="toggleSound()" onmouseenter="setMenuDesc('Sound: Toggles the in game\'s sound. Note: SFX Tester will not play any sound effects when the sound is off.')" onmouseleave="clearMenuDesc()">🔊 Sound: ON</button>
+        <button onclick="enterCustomEditor()" style="background: #a155ff;"onmouseenter="setMenuDesc('Custom Mode: Create and test your own bubble layouts.')" onmouseleave="clearMenuDesc()">🛠️ CUSTOM MODE</button>
         <br>
         <button onclick="startCampaign()" style="background:#ff9500; font-weight:bold;"onmouseenter="setMenuDesc('Campaign Mode: Beat 20 levels before the timer runs out.')" onmouseleave="clearMenuDesc()">
             🏆 CAMPAIGN MODE
         </button>
+        <br>
+        <button id="autosaveToggle" onclick="toggleAutosave()" onmouseenter="setMenuDesc('Autosave: Creates a save file every time you complete a level in Puzzle Mode.')" onmouseleave="clearMenuDesc()">💾 Autosave: OFF</button>
+        <button id="soundToggle" onclick="toggleSound()" onmouseenter="setMenuDesc('Sound: Toggles the in game\'s sound. Note: SFX Tester will not play any sound effects when the sound is off.')" onmouseleave="clearMenuDesc()">🔊 Sound: ON</button>
+        <br>
+        
         <button
     onclick="resetStats()"
     style="margin-top:10px; background:#ff5555; color:#000; font-weight:bold;"
@@ -362,12 +364,12 @@ canvas {
 
 <br>
     <div id="customUI">
+        <span style="color:#a155ff; font-weight:bold; margin: 100 100px;">🛠️ CUSTOM MODE</span>
         <div style="margin-bottom: 10px;">
             <button class="back-btn" onclick="exitToMenu()">← MENU</button>
-            <span style="color:#a155ff; font-weight:bold; margin: 0 15px;">LEVEL CREATOR</span>
-            <button onclick="clearEditor()" style="background:#cc3300;">CLEAR ALL</button>
-            <button onclick="document.getElementById('fileInput').click()" style="background:#2196F3;">LOAD FILE</button>
             <button onclick="openCustomSavePopup()" style="background:#4CAF50;">SAVE FILE</button>
+            <button onclick="document.getElementById('fileInput').click()" style="background:#2196F3;">LOAD FILE</button>
+            <button onclick="clearEditor()" style="background:#cc3300;">CLEAR ALL</button>
         </div>
         <div style="background: #333; padding: 10px; border-radius: 5px; display: inline-block;">
             <label>Set Ammo: </label>
@@ -403,7 +405,7 @@ canvas {
         min-width: 60px;
         text-align: center;
       ">
-    <span id="livesInner">❤️12</span>
+    <span id="livesInner">❤️5</span>
 </span>
 
             </div>
@@ -3150,4 +3152,3 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
-
