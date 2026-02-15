@@ -561,6 +561,7 @@ const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let panicPulseTime = 0;
 let panicFade = 0; // 0 = invisible, 1 = full panic
 let isAiming = false;
+let aimGlowPulse = 0;
 
 
 function setCanvasGlow(size, color) {
@@ -1660,6 +1661,11 @@ lastTimeMs = nowMs;
 panicPulseTime += 0.02; // speed of pulse (lower = slower)
 const FADE_SPEED = 3; // lower = slower fade
 const canvasEl = canvas; // already have it
+if (isAiming) {
+    aimGlowPulse += 0.15; // speed of glow pulse
+} else {
+    aimGlowPulse = 0;
+}
 
 // ---- CANVAS OUTER GLOW STATE ----
 let glowSize = 0;
@@ -1816,7 +1822,7 @@ if (inner) {
 
  function draw() {
     // ---- BACKGROUND ----
-let bgColor = "#0b0b0b";
+let bgColor = "#000000";
 
 if (panicFade > 0) {
     const pulse = (Math.sin(panicPulseTime) + 1) / 2;
@@ -1906,10 +1912,38 @@ if (panicMode) {
         if (ammo > 0) {
 
             // ---- CURRENT BALL ----
-            ctx.fillStyle = currentBall;
-            ctx.beginPath();
-            ctx.arc(canvas.width / 2, canvas.height - 80, RADIUS, 0, Math.PI * 2);
-            ctx.fill();
+const cx = canvas.width / 2;
+const cy = canvas.height - 80;
+
+// 🌟 Glow when aiming
+if (isAiming) {
+    const pulse = (Math.sin(aimGlowPulse) + 1) / 2;
+
+    ctx.save();
+    ctx.shadowBlur = 20 + pulse * 15;
+    ctx.shadowColor = currentBall || "#ffffff";
+    ctx.fillStyle = currentBall || "#ffffff";
+    ctx.beginPath();
+    ctx.arc(cx, cy, RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+} else {
+    ctx.fillStyle = currentBall;
+    ctx.beginPath();
+    ctx.arc(cx, cy, RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+}
+if (isAiming) {
+    ctx.save();
+    ctx.strokeStyle = currentBall || "#ffffff";
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.arc(cx, cy, RADIUS + 4, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+}
+
 
             if (colorblindMode) {
                 ctx.fillStyle = "black";
