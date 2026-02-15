@@ -560,6 +560,8 @@ let lastHeartbeatSecond = null;
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let panicPulseTime = 0;
 let panicFade = 0; // 0 = invisible, 1 = full panic
+let isAiming = false;
+
 
 function setCanvasGlow(size, color) {
     canvas.style.setProperty("--glow-size", `${size}px`);
@@ -1324,7 +1326,20 @@ canvas.addEventListener('mousedown', e => {
     }
 
     // only allow shooting when cursor is valid (same rule as aim visualiser)
+   if (e.button === 0) {
+    isAiming = true;
+}
+});
+canvas.addEventListener('mouseup', e => {
+    if (e.button !== 0) return;
+
     if (
+        isAiming &&
+        gameRunning &&
+        !isPaused &&
+        !gameOver &&
+        !gameWin &&
+        ammo > 0 &&
         mouseX >= 0 &&
         mouseX <= canvas.width &&
         mouseY >= 0 &&
@@ -1332,7 +1347,13 @@ canvas.addEventListener('mousedown', e => {
     ) {
         shoot();
     }
+
+    isAiming = false;
 });
+canvas.addEventListener('mouseleave', () => {
+    isAiming = false;
+});
+
 function setPause(state) {
     isPaused = state;
     document.getElementById('pauseBtn').innerText = isPaused ? "RESUME" : "PAUSE";
@@ -2964,7 +2985,7 @@ updateLivesUI();
     };
 
     reader.readAsText(file);
-	event.target.value = "";
+    event.target.value = "";
 }
 function closeCustomSavePopup() {
     const popup = document.getElementById('customSavePopup');
@@ -3095,5 +3116,3 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
-
-
