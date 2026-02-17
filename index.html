@@ -419,7 +419,6 @@ canvas {
 |
         <button id="pauseBtn" onclick="togglePause()" style="background:#ffcc00; color:#000;">PAUSE</button><br><br>
         <span id="levelDisplay">Level: 1</span> |
-        <span id="ammoDisplay" style="color:#ffcc00; font-weight:bold;">Bubbles: 0</span> |
         <span id="scoreDisplay">Score: 0</span> |
         <span id="streakDisplay" style="color:#00e5ff; font-weight:bold;">Streak: x1</span>
 
@@ -570,8 +569,7 @@ let snapIsValidMatch = false;
 let draggedBubble = null;   // reference or temp object
 let dragSource = null;      // 'grid' | 'current' | 'next'
 let snapWillFall = false;
-
-
+const DRAG_EMOJI = "🧲";
 
 function setCanvasGlow(size, color) {
     canvas.style.setProperty("--glow-size", `${size}px`);
@@ -1141,6 +1139,7 @@ else if (cmd === '!visualisebubblecolour') {
     alert(
         `Drag Bubbles: ${dragBubblesEnabled ? "ENABLED" : "DISABLED"}`
     );
+    canvas.style.cursor = dragBubblesEnabled ? "none" : "cell";
 }
 
     else if (cmd === '!absorbfallingbubbles') {
@@ -2167,7 +2166,26 @@ if (panicMode) {
             // ---- CURRENT BALL ----
 const cx = canvas.width / 2;
 const cy = canvas.height - 80;
+if (ammo => -1) {
+    ctx.save();
 
+    ctx.font = "bold 14px Storopia";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+
+    const counterX = canvas.width / 2 + 60;
+    const counterY = canvas.height - 80 + RADIUS + 8;
+
+     // 🔴 red under 10, 🟡 normal otherwise
+    ctx.fillStyle = ammo < 10 ? "#ff4444" : "#ffcc00";
+    if (ammo < 10) {
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = "#ff4444";
+}
+    ctx.fillText(ammo.toString(), counterX, counterY);
+
+    ctx.restore();
+}
 // 🌟 Glow when aiming
 if (isAiming) {
     const pulse = (Math.sin(aimGlowPulse) + 1) / 2;
@@ -2227,6 +2245,8 @@ if (isAiming) {
                         canvas.width / 2 + 60,
                         canvas.height - 80
                     );
+                    // ---- NEXT BUBBLE COUNTER ----
+
                 }
             }
         }
@@ -2339,9 +2359,6 @@ if (dragBubblesEnabled && draggedBubble) {
 document.getElementById('scoreDisplay').innerText =
     `Score: ${fmt(score)}`;
 
-document.getElementById('ammoDisplay').innerText =
-    `Bubbles: ${fmt(ammo)}`;
-
 const timerSpan = document.getElementById('campaignTimerDisplay');
 const inner = document.getElementById('campaignTimerInner');
 if (isCampaignMode) {
@@ -2416,6 +2433,27 @@ document.getElementById('streakDisplay').innerText =
     }
 
     hideHexOverlay();
+}
+// ===============================
+// 🧲 DRAG MODE CURSOR EMOJI (FIXED CENTERING)
+// ===============================
+if (dragBubblesEnabled) {
+    ctx.save();
+
+    const size = draggedBubble ? 28 : 22;
+    ctx.font = `${size}px Storopia`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.globalAlpha = draggedBubble ? 0.95 : 0.6;
+
+    ctx.fillText(
+        DRAG_EMOJI,
+        mouseX,
+        mouseY
+    );
+
+    ctx.restore();
 }
 
 }}
