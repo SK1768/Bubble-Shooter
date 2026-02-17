@@ -564,6 +564,13 @@ let panicPulseTime = 0;
 let panicFade = 0; // 0 = invisible, 1 = full panic
 let isAiming = false;
 let aimGlowPulse = 0;
+let dragBubblesEnabled = false;
+let snapPreview = null;
+let snapIsValidMatch = false;
+let draggedBubble = null;   // reference or temp object
+let dragSource = null;      // 'grid' | 'current' | 'next'
+let snapWillFall = false;
+
 
 
 function setCanvasGlow(size, color) {
@@ -1123,6 +1130,18 @@ else if (cmd === '!visualisebubblecolour') {
     updateLivesUI();
     console.log(`Lives set to ${lives}`);
     }
+    else if (cmd === '!dragbubbles') {
+    if (arg !== 'true' && arg !== 'false') {
+        alert("Usage: !dragbubbles true/false");
+        return;
+    }
+
+    dragBubblesEnabled = (arg === 'true');
+
+    alert(
+        `Drag Bubbles: ${dragBubblesEnabled ? "ENABLED" : "DISABLED"}`
+    );
+}
 
     else if (cmd === '!absorbfallingbubbles') {
     if (arg === 'true') {
@@ -1134,6 +1153,7 @@ else if (cmd === '!visualisebubblecolour') {
     } else {
         console.log('Usage: !absorbfallingbubbles true/false');
     }
+    
 }
     e.target.value = '';
         document.getElementById('debugConsole').style.display = 'none';
@@ -1199,7 +1219,36 @@ window.addEventListener('mousemove', e => {
         mouseY - (canvas.height - 80),
         mouseX - (canvas.width / 2)
     );
+
+    if (dragBubblesEnabled && draggedBubble) {
+        // snap preview
+        snapPreview = getSnapPreview(mouseX, mouseY);
+
+        // occupied check (ignore the bubble you're moving if it's a grid bubble)
+        const ignore = (dragSource === 'grid') ? draggedBubble : null;
+        const occupied = isCellOccupied(snapPreview.row, snapPreview.col, ignore);
+        snapPreview.occupied = occupied;
+
+        if (!snapPreview.occupied && draggedBubble.color) {
+    const testBubble = {
+        x: snapPreview.x,
+        y: snapPreview.y,
+        row: snapPreview.row,
+        col: snapPreview.col,
+        color: draggedBubble.color
+    };
+
+    snapIsValidMatch = findMatches(testBubble).length >= 3;
+
+    // 🧲 check support (will it fall?)
+    snapWillFall = !snapIsValidMatch && !isBubbleSupported(testBubble);
+} else {
+    snapIsValidMatch = false;
+    snapWillFall = false;
+}
+    }
 });
+
 
 
 let colorblindMode = localStorage.getItem('bubbleColorblind') === 'true';
@@ -1221,7 +1270,7 @@ function toggleColorblind() {
 updateColorblindButton();
 
 canvas.addEventListener('mousedown', e => {
-    // Right-click: swap
+    // Right-click: swap (keep)
     if (e.button === 2) {
         e.preventDefault();
         swapBubbles();
@@ -1229,6 +1278,36 @@ canvas.addEventListener('mousedown', e => {
     }
 
     const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    // ✅ DRAG MODE PICKUP
+    if (dragBubblesEnabled && !isPaused && !gameOver && !gameWin) {
+        // pick grid bubble
+        const gridBubble = bubbles.find(b => Math.hypot(mx - b.x, my - b.y) <= RADIUS);
+        if (gridBubble) {
+            draggedBubble = gridBubble;
+            dragSource = 'grid';
+            snapPreview = getSnapPreview(mx, my);
+            return; // IMPORTANT: don't shoot / editor place
+        }
+
+        // pick current bubble (drag copy)
+        if (isHoveringCurrentBubble()) {
+            draggedBubble = { color: currentBall };
+            dragSource = 'current';
+            snapPreview = getSnapPreview(mx, my);
+            return;
+        }
+
+        // pick next bubble (drag copy)
+        if (isHoveringNextBubble()) {
+            draggedBubble = { color: nextBall };
+            dragSource = 'next';
+            snapPreview = getSnapPreview(mx, my);
+            return;
+        }
+    }
 
     // -----------------------------
     // CUSTOM EDITOR CLICK BEHAVIOR
@@ -1333,9 +1412,115 @@ canvas.addEventListener('mousedown', e => {
     isAiming = true;
 }
 });
+function isBubbleSupported(bubble) {
+    // Top row is always supported
+    if (bubble.row === 0) return true;
+
+    // Adjacent positions (hex grid)
+    const neighbors = bubbles.filter(b =>
+        Math.abs(b.row - bubble.row) <= 1 &&
+        Math.abs(b.col - bubble.col) <= 1 &&
+        b !== bubble
+    );
+
+    return neighbors.length > 0;
+}
+
 canvas.addEventListener('mouseup', e => {
     if (e.button !== 0) return;
 
+    // ✅ If dragging, handle drop FIRST and exit (so no shooting happens)
+    if (dragBubblesEnabled && draggedBubble && snapPreview) {
+        const ignore = (dragSource === 'grid') ? draggedBubble : null;
+        const occupied = isCellOccupied(snapPreview.row, snapPreview.col, ignore);
+
+        if (!occupied) {
+            const placed = {
+                x: snapPreview.x,
+                y: snapPreview.y,
+                row: snapPreview.row,
+                col: snapPreview.col,
+                color: draggedBubble.color
+            };
+
+            // If match would happen, pop using existing logic
+            if (placed.color && findMatches(placed).length >= 3) {
+                if (placed.color) {
+    const matches = findMatches(placed);
+
+    if (matches.length >= 3) {
+
+        // 🧹 REMOVE ORIGINAL GRID BUBBLE
+        if (dragSource === 'grid') {
+            const idx = bubbles.indexOf(draggedBubble);
+            if (idx !== -1) bubbles.splice(idx, 1);
+        }
+
+        popBubbles(matches);
+    }
+}
+            } else {
+                // Otherwise snap/move
+                if (dragSource === 'grid') {
+    draggedBubble.x = placed.x;
+    draggedBubble.y = placed.y;
+    draggedBubble.row = placed.row;
+    draggedBubble.col = placed.col;
+
+    // ❌ Unsupported → fall (no points)
+    if (!isBubbleSupported(draggedBubble)) {
+        const idx = bubbles.indexOf(draggedBubble);
+        if (idx !== -1) bubbles.splice(idx, 1);
+
+        fallingBubbles.push({
+            x: placed.x,
+            y: placed.y,
+            vx: (Math.random() - 0.5) * 2,
+            vy: 2,
+            rot: 0,
+            rotSpeed: (Math.random() - 0.5) * 0.2,
+            color: draggedBubble.color
+        });
+
+        sounds.play('fall');
+    }
+}
+ else {
+    // Place bubble temporarily
+    bubbles.push(placed);
+
+    // ❌ Not supported → FALL (no points)
+    if (!isBubbleSupported(placed)) {
+        const idx = bubbles.indexOf(placed);
+        if (idx !== -1) bubbles.splice(idx, 1);
+
+        fallingBubbles.push({
+            x: placed.x,
+            y: placed.y,
+            vx: (Math.random() - 0.5) * 2,
+            vy: 2,
+            rot: 0,
+            rotSpeed: (Math.random() - 0.5) * 0.2,
+            color: placed.color
+        });
+
+        sounds.play('fall');
+    }
+}
+            }
+        }
+
+        // cleanup
+        draggedBubble = null;
+        dragSource = null;
+        snapPreview = null;
+        snapIsValidMatch = false;
+
+        isAiming = false;
+        return; // IMPORTANT: do not shoot
+    }
+
+    // ✅ Normal shooting (your existing logic)
     if (
         isAiming &&
         gameRunning &&
@@ -1797,6 +1982,9 @@ if (inner) {
             else { for (let b of bubbles) { if (Math.hypot(p.x - b.x, p.y - b.y) < RADIUS * 1.5) { snapToGrid(p); projectiles.splice(i, 1); break; } } }
         });
         bubbles.forEach(b => { if (b.y > DEADLINE) triggerFail("You hit the red line!\n-1❤️"); });
+        // 👻 Ghost snap outline
+
+
     }
     particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.life -= 0.03; if (p.life <= 0) particles.splice(i, 1); });
     fallingBubbles.forEach((fb, i) => {
@@ -1820,6 +2008,30 @@ if (inner) {
 
     floatingScores.forEach((fs, i) => { fs.y -= 1; fs.life -= 0.01; if (fs.life <= 0) floatingScores.splice(i, 1); });
     confetti.forEach((c, i) => { c.x += c.vx; c.y += c.vy; c.vy += 0.2; c.life -= 0.01; if (c.life <= 0) confetti.splice(i, 1); });
+}
+function isCellOccupied(row, col, ignoreBubble) {
+    return bubbles.some(b => b !== ignoreBubble && b.row === row && b.col === col);
+}
+
+function getSnapPreview(x, y) {
+    let row = Math.max(0, Math.round((y - RADIUS) / ROW_HEIGHT));
+    let offset = (row % 2 === 0) ? 0 : RADIUS;
+
+    let col = Math.round((x - RADIUS - offset) / (RADIUS * 2));
+
+    col = Math.max(0, Math.min(row % 2 === 0 ? 10 : 9, col));
+
+    const coords = getGridCoords(row, col);
+
+    const occupied = bubbles.some(b => b.row === row && b.col === col);
+
+    return {
+        row,
+        col,
+        x: coords.x,
+        y: coords.y,
+        occupied
+    };
 }
 
  function draw() {
@@ -1849,6 +2061,45 @@ ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.stroke();
         return;
     }
+    ctx.strokeStyle = '#ff3333';
+ctx.setLineDash([5, 5]);
+ctx.beginPath();
+ctx.moveTo(0, DEADLINE);
+ctx.lineTo(canvas.width, DEADLINE);
+ctx.stroke();
+ctx.setLineDash([]);
+
+// ===============================
+// 👻 SNAP GHOST (UNDER BUBBLES)
+// ===============================
+if (dragBubblesEnabled && draggedBubble && snapPreview) {
+    ctx.save();
+
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 6]);
+
+ctx.strokeStyle =
+    snapIsValidMatch
+        ? "rgba(0, 255, 120, 0.9)"          // 🟢 will pop
+        : snapWillFall
+            ? "rgba(160, 160, 160, 0.8)"   // 🩶 will fall
+            : snapPreview.occupied
+                ? "rgba(255, 80, 80, 0.9)" // 🔴 blocked
+                : "rgba(255, 255, 255, 0.7)"; // ⚪ normal
+
+    ctx.beginPath();
+    ctx.arc(snapPreview.x, snapPreview.y, RADIUS, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = draggedBubble.color || "#ffffff";
+    ctx.beginPath();
+    ctx.arc(snapPreview.x, snapPreview.y, RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+}
+
 // ---- CANVAS GLOW ----
 if (panicMode) {
     const glow = (Math.sin(panicPulseTime) + 1) / 2;
@@ -2063,10 +2314,26 @@ ctx.fillText(endText, canvas.width / 2, 280);
     });
     ctx.restore();
     }
-        
-   }
+    // ===============================
+// 🫧 DRAGGED BUBBLE (TOP LAYER)
+// ===============================
+if (dragBubblesEnabled && draggedBubble) {
+    ctx.save();
 
-}
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.fillStyle = draggedBubble.color || "#ffffff";
+
+    ctx.beginPath();
+    ctx.arc(mouseX, mouseY, RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.restore();
+    }      
+  }
+ }
 
 // ✅ Keep these UI updates OUTSIDE the win-screen branches (and outside draw braces issues)
 document.getElementById('scoreDisplay').innerText =
