@@ -137,6 +137,46 @@
                     background: #00ffcc;
                     color: #000;
                 }
+        #musicPanel {
+    position: absolute;
+    top: 140px;
+    left: 50%;
+    transform: translateX(340px);
+    width: 220px;
+    background: #111;
+    border: 2px solid #00ffcc;
+    border-radius: 10px;
+    padding: 10px;
+    color: #00ffcc;
+    font-family: Storopia;
+}
+
+.music-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin-bottom: 8px;
+}
+
+.music-buttons button {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #333;
+    border: none;
+    cursor: pointer;
+}
+
+#musicPanel input[type=range] {
+    width: 100%;
+}
+
+#playlist div {
+    font-size: 13px;
+    margin-top: 4px;
+    cursor: pointer;
+}
 
         #debugConsole {
             display: none;
@@ -435,9 +475,39 @@ canvas {
     <button class="mobile-btn" id="colorblindToggle" onclick="toggleColorblind()">👁️</button>
     <button class="mobile-btn" id="aimToggle" onclick="toggleAim()">🎯</button>
 </div>
+        <div id="musicPanel">
+    <input type="file" id="musicInput" accept=".mp3,.ogg,.wav">
+
+    <div class="music-buttons">
+        <button id="playBtn">▶️</button>
+        <button id="stopBtn">⏹️</button>
+    </div>
+
+    <label>Seek</label>
+    <input type="range" id="seekSlider" min="0" max="100" value="0">
+
+    <label>Transpose</label>
+    <input type="range" id="pitchSlider" min="-12" max="12" value="0">
+
+    <label>Tempo</label>
+    <input type="range" id="tempoSlider" min="50" max="150" value="100">
+
+    <div id="trackState">Stopped</div>
+    <div id="trackTime">0:00 / 0:00</div>
+</div>
     </div>
 
     <input type="file" id="fileInput" accept=".bubblesav" onchange="loadGame(event)">
+
+<script type="module">
+import { SoundTouch, SimpleFilter } from "./soundtouch.js";
+
+window.SoundTouch = SoundTouch;
+window.SimpleFilter = SimpleFilter;
+
+console.log("SoundTouch:", typeof window.SoundTouch);
+console.log("SimpleFilter:", typeof window.SimpleFilter);
+</script>
 
 <script>
     // ======================
@@ -470,6 +540,277 @@ const DEFAULT_STATS = {
     debugCommandsUsed: 0,
 	
     highScore: 0,
+};
+    
+// ======================
+// SOUNDTouch-ONLY MUSIC PLAYER (no <audio> element)
+// ======================
+
+// IMPORTANT: keep separate from your SFX `audioCtx`
+const MusicAudioCtx = window.AudioContext || window.webkitAudioContext;
+const musicCtx = new MusicAudioCtx();
+let musicBuffer = null;          // decoded AudioBuffer
+let soundTouch = null;           // SoundTouch instance
+let filter = null;               // SimpleFilter
+let processor = null;            // ScriptProcessor
+let isMusicPlaying = false;
+
+let rafId = null;
+
+// We track playback position in INPUT samples (source samples)
+let positionSamples = 0;
+let playStartCtxTime = 0;        // musicCtx.currentTime when we started outputting
+let lastUiUpdate = 0;
+
+// UI elements
+const musicInput  = document.getElementById("musicInput");
+const playBtn     = document.getElementById("playBtn");
+const stopBtn     = document.getElementById("stopBtn");
+const seekSlider  = document.getElementById("seekSlider");
+const pitchSlider = document.getElementById("pitchSlider");
+const tempoSlider = document.getElementById("tempoSlider");
+const trackState  = document.getElementById("trackState");
+const trackTime   = document.getElementById("trackTime");
+
+// ---------- helpers ----------
+function fmtTime(sec) {
+    sec = Math.max(0, sec);
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+}
+
+function setStateText(text) {
+    trackState.textContent = text;
+}
+
+function setTimeText(curSec, durSec) {
+    trackTime.textContent = `${fmtTime(curSec)} / ${fmtTime(durSec)}`;
+}
+
+function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+
+// ---------- SoundTouch buffer source adapter ----------
+// SoundTouch.js expects an object with `extract(target, numFrames, position)`
+// We feed it from an AudioBuffer.
+class BufferSource {
+    constructor(audioBuffer) {
+        this.buffer = audioBuffer;
+        this.channels = audioBuffer.numberOfChannels;
+        this.length = audioBuffer.length;
+    }
+
+    extract(target, numFrames, position) {
+        // position is in frames (samples per channel)
+        const available = this.length - position;
+        const frames = Math.max(0, Math.min(numFrames, available));
+
+        if (frames <= 0) return 0;
+
+        // target is interleaved stereo float array expected by SoundTouch
+        const ch0 = this.buffer.getChannelData(0);
+        const ch1 = this.channels > 1 ? this.buffer.getChannelData(1) : ch0;
+
+        let out = 0;
+        for (let i = 0; i < frames; i++) {
+            const idx = position + i;
+            target[out++] = ch0[idx];
+            target[out++] = ch1[idx];
+        }
+        return frames;
+    }
+}
+
+// ---------- build / rebuild processing graph ----------
+function buildGraphFromPosition() {
+    if (!musicBuffer) return;
+
+    // tear down existing
+    teardownGraph();
+
+    soundTouch = new SoundTouch(musicCtx.sampleRate);
+
+    // true controls:
+    soundTouch.pitchSemitones = Number(pitchSlider.value);
+    soundTouch.tempo = Number(tempoSlider.value) / 100;
+
+    const src = new BufferSource(musicBuffer);
+    filter = new SimpleFilter(src, soundTouch);
+
+    // Seek by setting sourcePosition (in samples/frames)
+    filter.sourcePosition = Math.floor(positionSamples);
+
+    processor = musicCtx.createScriptProcessor(4096, 0, 2);
+
+    processor.onaudioprocess = (e) => {
+        const outL = e.outputBuffer.getChannelData(0);
+        const outR = e.outputBuffer.getChannelData(1);
+
+        // SoundTouch outputs interleaved stereo samples internally
+        // We ask the filter to extract frames into its output buffer.
+        const framesNeeded = outL.length;
+        const framesExtracted = filter.extract(framesNeeded);
+
+        // If we hit end of file, fill remaining with silence & stop
+        if (framesExtracted === 0) {
+            for (let i = 0; i < outL.length; i++) { outL[i] = 0; outR[i] = 0; }
+            stopMusicHard();
+            return;
+        }
+
+        // Copy from filter output buffer (interleaved)
+        const ob = filter.outputBuffer;
+        for (let i = 0; i < framesNeeded; i++) {
+            const j = i * 2;
+            outL[i] = ob[j] ?? 0;
+            outR[i] = ob[j + 1] ?? 0;
+        }
+
+        // Update current position in INPUT samples (sourcePosition)
+        positionSamples = filter.sourcePosition;
+    };
+
+    processor.connect(musicCtx.destination);
+    playStartCtxTime = musicCtx.currentTime;
+}
+
+// ---------- UI update loop ----------
+function updateUI() {
+    if (!musicBuffer) return;
+
+    // Throttle UI a bit (smoother + less cost)
+    const now = performance.now();
+    if (now - lastUiUpdate > 60) {
+        const durSec = musicBuffer.duration;
+        const curSec = positionSamples / musicBuffer.sampleRate;
+
+        const pct = durSec > 0 ? (curSec / durSec) * 100 : 0;
+        seekSlider.value = clamp(pct, 0, 100);
+
+        setTimeText(curSec, durSec);
+        lastUiUpdate = now;
+    }
+
+    if (isMusicPlaying) {
+        rafId = requestAnimationFrame(updateUI);
+    }
+}
+
+// ---------- load file ----------
+musicInput.onchange = async () => {
+    const file = musicInput.files[0];
+    if (!file) return;
+
+    // Ensure context is ready (some browsers need user gesture; file pick counts)
+    if (musicCtx.state === "suspended") {
+        try { await musicCtx.resume(); } catch {}
+    }
+
+    // Stop any playback
+    stopMusicHard();
+
+    const arr = await file.arrayBuffer();
+    musicBuffer = await musicCtx.decodeAudioData(arr);
+
+    positionSamples = 0;
+    seekSlider.value = 0;
+
+    setStateText("Ready");
+    setTimeText(0, musicBuffer.duration);
+};
+
+// ---------- play / pause ----------
+playBtn.onclick = async () => {
+    if (!musicBuffer) return;
+
+    if (musicCtx.state === "suspended") {
+        try { await musicCtx.resume(); } catch {}
+    }
+
+    if (!isMusicPlaying) {
+        buildGraphFromPosition();
+        isMusicPlaying = true;
+        playBtn.textContent = "⏸️";
+        setStateText("Playing");
+        cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(updateUI);
+    } else {
+        // Pause = disconnect processor but keep positionSamples
+        isMusicPlaying = false;
+        playBtn.textContent = "▶️";
+        setStateText("Paused");
+        teardownGraph(); // stops processing immediately
+        cancelAnimationFrame(rafId);
+        rafId = null;
+        updateUI(); // one last update
+    }
+};
+
+// ---------- stop ----------
+stopBtn.onclick = () => {
+    stopMusicHard();
+};
+
+function stopMusicHard() {
+    isMusicPlaying = false;
+    playBtn.textContent = "▶️";
+    setStateText("Stopped");
+    teardownGraph();
+    cancelAnimationFrame(rafId);
+    rafId = null;
+
+    if (musicBuffer) {
+        positionSamples = 0;
+        seekSlider.value = 0;
+        setTimeText(0, musicBuffer.duration);
+    } else {
+        seekSlider.value = 0;
+        setTimeText(0, 0);
+    }
+}
+
+function teardownGraph() {
+    if (processor) {
+        try { processor.disconnect(); } catch {}
+        processor.onaudioprocess = null;
+        processor = null;
+    }
+    filter = null;
+    soundTouch = null;
+}
+
+// ---------- seeking ----------
+let isDraggingSeek = false;
+
+seekSlider.addEventListener("pointerdown", () => { isDraggingSeek = true; });
+seekSlider.addEventListener("pointerup", () => {
+    isDraggingSeek = false;
+});
+
+seekSlider.oninput = () => {
+    if (!musicBuffer) return;
+
+    // If user drags the seek bar, jump input position.
+    const dur = musicBuffer.duration;
+    const targetSec = (seekSlider.value / 100) * dur;
+    positionSamples = Math.floor(targetSec * musicBuffer.sampleRate);
+
+    // If currently playing, rebuild graph from new position
+    if (isMusicPlaying) {
+        buildGraphFromPosition();
+    } else {
+        // update timer immediately while paused/stopped
+        setTimeText(targetSec, dur);
+    }
+};
+
+// ---------- pitch / tempo (true SoundTouch controls) ----------
+pitchSlider.oninput = () => {
+    if (soundTouch) soundTouch.pitchSemitones = Number(pitchSlider.value);
+};
+
+tempoSlider.oninput = () => {
+    if (soundTouch) soundTouch.tempo = Number(tempoSlider.value) / 100;
 };
 const bubbleHexOverlay = document.getElementById('bubbleHexOverlay');
 
@@ -3526,4 +3867,5 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
