@@ -643,32 +643,32 @@ function buildGraphFromPosition() {
     processor = musicCtx.createScriptProcessor(4096, 0, 2);
 
     processor.onaudioprocess = (e) => {
-        const outL = e.outputBuffer.getChannelData(0);
-        const outR = e.outputBuffer.getChannelData(1);
+    const outL = e.outputBuffer.getChannelData(0);
+    const outR = e.outputBuffer.getChannelData(1);
 
-        // SoundTouch outputs interleaved stereo samples internally
-        // We ask the filter to extract frames into its output buffer.
-        const framesNeeded = outL.length;
-        const framesExtracted = filter.extract(framesNeeded);
+    const numFrames = outL.length;
 
-        // If we hit end of file, fill remaining with silence & stop
-        if (framesExtracted === 0) {
-            for (let i = 0; i < outL.length; i++) { outL[i] = 0; outR[i] = 0; }
-            stopMusicHard();
-            return;
-        }
+    // SoundTouch expects an interleaved Float32Array
+    const interleaved = new Float32Array(numFrames * 2);
 
-        // Copy from filter output buffer (interleaved)
-        const ob = filter.outputBuffer;
-        for (let i = 0; i < framesNeeded; i++) {
-            const j = i * 2;
-            outL[i] = ob[j] ?? 0;
-            outR[i] = ob[j + 1] ?? 0;
-        }
+    const frames = filter.extract(interleaved, numFrames);
 
-        // Update current position in INPUT samples (sourcePosition)
-        positionSamples = filter.sourcePosition;
-    };
+    if (frames === 0) {
+        outL.fill(0);
+        outR.fill(0);
+        stopMusicHard();
+        return;
+    }
+
+    // De-interleave
+    let j = 0;
+    for (let i = 0; i < numFrames; i++) {
+        outL[i] = interleaved[j++];
+        outR[i] = interleaved[j++];
+    }
+
+    positionSamples = filter.sourcePosition;
+};
 
     processor.connect(musicCtx.destination);
     playStartCtxTime = musicCtx.currentTime;
@@ -3867,5 +3867,6 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
