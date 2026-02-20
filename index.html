@@ -139,17 +139,9 @@
                 }
        #musicPanel {
     position: absolute;
-    top: 140px;
     left: 50%;
+    top: 140px;
     transform: translateX(-50%);
-    width: 220px;
-
-    background: #111;
-    border: 2px solid #00ffcc;
-    border-radius: 10px;
-    padding: 10px;
-    color: #00ffcc;
-    font-family: Storopia;
 }
 
 .music-buttons {
@@ -301,6 +293,16 @@ canvas {
                 border-radius: 10px;
                 border: 1px solid #444;
             }
+		#musicHeader {
+  cursor: grab;
+  font-weight: bold;
+  margin-bottom: 6px;
+  user-select: none;
+}
+
+#musicHeader:active {
+  cursor: grabbing;
+}
 		#chooseMusicBtn {
     width: 100%;
     padding: 10px;
@@ -492,7 +494,7 @@ canvas {
     <button class="mobile-btn" id="aimToggle" onclick="toggleAim()">🎯</button>
 </div>
         <div id="musicPanel">
-			<h3 style="margin-top:0;text-align:center;">🎵 Music Player</h3>
+  <div id="musicHeader">🎵 Music Player</div>
     <div id="trackState">Stopped</div>
     <div id="trackTime">0:00 / 0:00</div>
 	<div id="soundtouchWarning"
@@ -636,6 +638,76 @@ const transposeUpBtn   = document.getElementById("transposeUpBtn");
 const tempoDownBtn     = document.getElementById("tempoDownBtn");
 const tempoUpBtn       = document.getElementById("tempoUpBtn");
 	const seekPercent = document.getElementById("seekPercent");
+	const musicPanel = document.getElementById("musicPanel");
+const musicHeader = document.getElementById("musicHeader");
+
+let isDragging = false;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+
+// --- Mouse ---
+musicHeader.addEventListener("mousedown", (e) => {
+    isDragging = true;
+    dragOffsetX = e.clientX - musicPanel.offsetLeft;
+    dragOffsetY = e.clientY - musicPanel.offsetTop;
+    document.body.style.userSelect = "none";
+});
+
+document.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+
+    musicPanel.style.left = `${e.clientX - dragOffsetX}px`;
+    musicPanel.style.top  = `${e.clientY - dragOffsetY}px`;
+    musicPanel.style.transform = "none"; // IMPORTANT
+	const maxX = window.innerWidth - musicPanel.offsetWidth;
+const maxY = window.innerHeight - musicPanel.offsetHeight;
+
+musicPanel.style.left =
+  `${Math.max(0, Math.min(maxX, e.clientX - dragOffsetX))}px`;
+musicPanel.style.top =
+  `${Math.max(0, Math.min(maxY, e.clientY - dragOffsetY))}px`;
+});
+
+document.addEventListener("mouseup", () => {
+    isDragging = false;
+	localStorage.setItem("musicPanelPos", JSON.stringify({
+  left: musicPanel.style.left,
+  top: musicPanel.style.top
+}));
+    document.body.style.userSelect = "";
+});
+
+// --- Touch ---
+musicHeader.addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    isDragging = true;
+    dragOffsetX = t.clientX - musicPanel.offsetLeft;
+    dragOffsetY = t.clientY - musicPanel.offsetTop;
+});
+
+document.addEventListener("touchmove", (e) => {
+    if (!isDragging) return;
+    const t = e.touches[0];
+
+    musicPanel.style.left = `${t.clientX - dragOffsetX}px`;
+    musicPanel.style.top  = `${t.clientY - dragOffsetY}px`;
+    musicPanel.style.transform = "none";
+	const maxX = window.innerWidth - musicPanel.offsetWidth;
+const maxY = window.innerHeight - musicPanel.offsetHeight;
+
+musicPanel.style.left =
+  `${Math.max(0, Math.min(maxX, e.clientX - dragOffsetX))}px`;
+musicPanel.style.top =
+  `${Math.max(0, Math.min(maxY, e.clientY - dragOffsetY))}px`;
+});
+
+document.addEventListener("touchend", () => {
+    localStorage.setItem("musicPanelPos", JSON.stringify({
+  left: musicPanel.style.left,
+  top: musicPanel.style.top
+}));
+	isDragging = false;
+});
 
 function stepSlider(sliderEl, delta) {
   const min = Number(sliderEl.min);
@@ -692,6 +764,12 @@ repeatBtn.onclick = () => {
     checkSoundTouchPresence();
 		transposeValue.textContent = pitchSlider.value;
 tempoValue.textContent = `${tempoSlider.value}%`;
+		const savedPos = JSON.parse(localStorage.getItem("musicPanelPos"));
+if (savedPos) {
+  musicPanel.style.left = savedPos.left;
+  musicPanel.style.top = savedPos.top;
+  musicPanel.style.transform = "none";
+}
 });
 	
 function disableMusicPlayerUI(disabled) {
@@ -4038,6 +4116,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
