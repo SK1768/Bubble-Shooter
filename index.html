@@ -482,6 +482,8 @@ canvas {
     <button id="playBtn">▶️</button>
     <button id="stopBtn">⏹️</button>
     <button id="repeatBtn">🔁 OFF</button>
+		<button id="seekBackBtn">⏪ 5s</button>
+<button id="seekFwdBtn">⏩ 5s</button>
 </div>
     <label>Seek</label>
     <input type="range" id="seekSlider" min="0" max="100" value="0">
@@ -587,6 +589,39 @@ const trackTime   = document.getElementById("trackTime");
 const transposeValue = document.getElementById("transposeValue");
 const tempoValue = document.getElementById("tempoValue");
 	const repeatBtn = document.getElementById("repeatBtn");
+	const seekBackBtn = document.getElementById("seekBackBtn");
+const seekFwdBtn  = document.getElementById("seekFwdBtn");
+
+seekBackBtn.onclick = () => seekBySeconds(-5);
+seekFwdBtn.onclick  = () => seekBySeconds(5);
+	function seekBySeconds(deltaSec) {
+    if (!musicBuffer) return;
+
+    const duration = musicBuffer.duration;
+
+    // current position in seconds
+    let currentSec = positionSamples / musicBuffer.sampleRate;
+
+    // move by delta
+    currentSec += deltaSec;
+
+    // clamp
+    currentSec = Math.max(0, Math.min(duration, currentSec));
+
+    // convert back to samples
+    positionSamples = Math.floor(
+        currentSec * musicBuffer.sampleRate
+    );
+
+    // update UI immediately
+    setTimeText(currentSec, duration);
+    seekSlider.value = (currentSec / duration) * 100;
+
+    // if playing, rebuild graph at new position
+    if (isMusicPlaying) {
+        buildGraphFromPosition();
+    }
+}
 
 repeatBtn.onclick = () => {
     repeatEnabled = !repeatEnabled;
@@ -3929,6 +3964,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
