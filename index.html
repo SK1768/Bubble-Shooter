@@ -328,6 +328,12 @@ canvas {
 #musicHeader {
     cursor: grab;
     user-select: none;
+
+    font-size: 20px;        /* 🔼 bigger */
+    font-weight: bold;
+    text-align: center;    /* ✅ centered */
+
+    margin-bottom: 6px;
 }
 
 #musicHeader.drag-locked {
@@ -389,7 +395,10 @@ canvas {
                 border-radius: 4px;
                 font-weight: bold;
             }
-
+#trackTime {
+    text-align: center;   /* ✅ centered */
+    margin-bottom: 6px;
+}
             #soundToggle {
                 background: #555;
             }
@@ -410,6 +419,12 @@ canvas {
 
     pointer-events: none; /* clicks go through */
     display: none;
+}
+		#trackState {
+    text-align: center;    /* ✅ center */
+    font-weight: bold;
+    margin-top: 2px;
+    transition: color 0.2s ease;
 }
 #livesInner {
     display: inline-block;
@@ -875,6 +890,19 @@ function fmtTime(sec) {
 
 function setStateText(text) {
     trackState.textContent = text;
+
+    if (text === "Playing") {
+        trackState.style.color = "#00ff66"; // 🟢 green
+    } 
+    else if (text === "Paused") {
+        trackState.style.color = "#ffcc00"; // 🟡 yellow
+    } 
+    else if (text === "Stopped") {
+        trackState.style.color = "#ff4444"; // 🔴 red
+    } 
+    else {
+        trackState.style.color = "#00ffcc"; // fallback
+    }
 }
 
 function setTimeText(curSec, durSec) {
@@ -4186,6 +4214,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
