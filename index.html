@@ -96,7 +96,7 @@
 #dragLockBtn {
     grid-column: 1 / -1;
 }
-		
+
             .menu, .ui {
                 margin: 10px;
                 text-align: center;
@@ -456,7 +456,7 @@ canvas {
         <button id="autosaveToggle" onclick="toggleAutosave()" onmouseenter="setMenuDesc('Autosave: Creates a save file every time you complete a level in Puzzle Mode.')" onmouseleave="clearMenuDesc()">💾 Autosave: OFF</button>
         <button id="soundToggle" onclick="toggleSound()" onmouseenter="setMenuDesc('Sound: Toggles the in game\'s sound. Note: SFX Tester will not play any sound effects when the sound is off.')" onmouseleave="clearMenuDesc()">🔊 Sound: ON</button>
         <br>
-        
+
         <button
     onclick="resetStats()"
     style="margin-top:10px; background:#ff5555; color:#000; font-weight:bold;"
@@ -502,7 +502,7 @@ canvas {
         <div id="colorPalette" style="margin-top: 10px;"></div>
     </div>
 
-  
+
     <div id="debugConsole">
         <input type="text" id="debugInput" placeholder="Enter a command...">
     </div>
@@ -614,7 +614,7 @@ canvas {
     The music player only uses .mp3, .ogg and .wav audio files.
 </div>
 </div>
-		
+
     </div>
 
     <input type="file" id="fileInput" accept=".bubblesav" onchange="loadGame(event)">
@@ -653,15 +653,15 @@ const DEFAULT_STATS = {
     customPlays: 0,
     livesGained: 0,
     livesLost: 0,
-    
+
     livesGained: 0,
     livesLost: 0,
 
     debugCommandsUsed: 0,
-	
+
     highScore: 0,
 };
-    
+
 // ======================
 // SOUNDTouch-ONLY MUSIC PLAYER (no <audio> element)
 // ======================
@@ -669,6 +669,9 @@ const DEFAULT_STATS = {
 // IMPORTANT: keep separate from your SFX `audioCtx`
 const MusicAudioCtx = window.AudioContext || window.webkitAudioContext;
 const musicCtx = new MusicAudioCtx();
+	window.addEventListener("DOMContentLoaded", async () => {
+    await musicCtx.audioWorklet.addModule("soundtouch-worklet.js");
+});
 let musicBuffer = null;          // decoded AudioBuffer
 let soundTouch = null;           // SoundTouch instance
 let filter = null;               // SimpleFilter
@@ -690,7 +693,7 @@ const musicInput = document.getElementById("musicInput");
 chooseMusicBtn.onclick = () => {
     musicInput.click();
 };
-	
+
 const playBtn     = document.getElementById("playBtn");
 const stopBtn     = document.getElementById("stopBtn");
 const seekSlider  = document.getElementById("seekSlider");
@@ -862,7 +865,7 @@ if (savedPos) {
   musicPanel.style.transform = "none";
 }
 });
-	
+
 function disableMusicPlayerUI(disabled) {
     const controls = document.querySelectorAll(
         "#musicPanel button, #musicPanel input[type=range]"
@@ -873,7 +876,7 @@ function disableMusicPlayerUI(disabled) {
         el.style.opacity = disabled ? "0.5" : "1";
     });
 }
-	
+
 	function checkSoundTouchPresence() {
     const warning = document.getElementById("soundtouchWarning");
 
@@ -970,7 +973,14 @@ function buildGraphFromPosition() {
     // Seek by setting sourcePosition (in samples/frames)
     filter.sourcePosition = Math.floor(positionSamples);
 
-    processor = musicCtx.createScriptProcessor(4096, 0, 2);
+   processor = new AudioWorkletNode(
+    musicCtx,
+    "soundtouch-processor",
+    { outputChannelCount: [2] }
+);
+
+processor.port.postMessage({ filter });
+processor.connect(musicCtx.destination);
 
     processor.onaudioprocess = (e) => {
     const outL = e.outputBuffer.getChannelData(0);
@@ -1064,7 +1074,7 @@ musicInput.onchange = async () => {
     setStateText("Ready");
 	chooseMusicBtn.textContent = `🎵 Loaded: ${currentTrackName} (Choose Music)`;
     setTimeText(0, musicBuffer.duration);
-	
+
 };
 
 // ---------- play / pause ----------
@@ -1358,7 +1368,7 @@ function updateSoundButton() {
         btn.style.background = soundEnabled ? "#555" : "#333";
     }
 }
-    
+
 function updateAutosaveButton() {
     const btn = document.getElementById('autosaveToggle');
     if(btn) {
@@ -1513,7 +1523,7 @@ const sounds = {
         gain.gain.linearRampToValueAtTime(0, now + 0.08);
         osc.start();
         osc.stop(now + 0.08);
-        
+
     }
 else if (type === 'heartbeat') {
     osc.type = 'triangle';                 // stronger body than sine
@@ -1593,7 +1603,7 @@ function updateFavicon(color) {
 
     favicon.href = 'data:image/svg+xml,' + encodeURIComponent(svgIcon);
 }
-    
+
     function setFaviconEmoji(emoji) {
     const favicon = document.getElementById('dynamicFavicon');
     favicon.href =
@@ -1639,7 +1649,7 @@ function refreshFavicon() {
 
     updateFavicon(currentBall);
 }
-    
+
 function updatePanicState() {
     if (isPaused || isCustomMode || gameOver || gameWin) {
         panicMode = false;
@@ -1782,7 +1792,7 @@ else if (cmd === '!addcampaigntime' && !isNaN(val)) {
     lastTickSecond = null;
 
     console.log(`Campaign time adjusted by ${val}s. New time: ${Math.ceil(campaignTimer)}s`);
-	
+
 }
 else if (cmd === '!setcurrentbubble') {
 
@@ -1855,7 +1865,7 @@ else if (cmd === '!visualisebubblecolour') {
     } else {
         console.log('Usage: !absorbfallingbubbles true/false');
     }
-    
+
 }
     e.target.value = '';
         document.getElementById('debugConsole').style.display = 'none';
@@ -2092,7 +2102,7 @@ canvas.addEventListener('mousedown', e => {
         {
             campaignTimer = CAMPAIGN_TIME_LIMIT;
         }
-            
+
     // 💀 True game over → back to menu
     if (lives <= 0) {
         exitToMenu();
@@ -2381,7 +2391,7 @@ function popBubbles(m) {
         y: m[0]?.y || 320,
         text: `+${fmt(pts)} x${fmt(streakCount)}  (${diff > 0 ? '+' : ''}${diff.toFixed(1)}%)`,
         life: 1.0
-		
+
     });
 
 if (bubbles.length === 0) {
@@ -2937,7 +2947,7 @@ if (isAiming) {
                 ctx.beginPath();
                 ctx.arc(canvas.width / 2 + 60, canvas.height - 80, RADIUS * 0.7, 0, Math.PI * 2);
                 ctx.fill();
-		
+
                 if (colorblindMode) {
                     ctx.fillStyle = "black";
                     ctx.font = "16px Storopia";
@@ -3024,7 +3034,7 @@ ctx.fillText(endText, canvas.width / 2, 280);
 			ctx.font = "20px Storopia";
             ctx.fillText(gameOverReason, canvas.width / 2, 350);
         }
-		
+
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "16px Storopia";
         ctx.fillText(lives <= 0 ? "Click to exit to the main menu" : "Click to continue", canvas.width / 2, 420); // lol
@@ -3101,7 +3111,7 @@ else levelText = level;
 document.getElementById('levelDisplay').innerText = `Level: ${levelText}`;
 document.getElementById('streakDisplay').innerText =
     `Streak: x${fmt(streakCount)} | Perfect streak: x${fmt(perfectStreak)}`;
-	
+
 	if (visualiseBubbleColour) {
 
     const hovered = getHoveredBubble();
@@ -3246,7 +3256,7 @@ mouseY = canvas.height - 200;
     document.getElementById('streakContainer').style.display = 'block';
     document.getElementById('percentText').style.display = 'inline-block';
     canvas.style.display = 'block';
-    
+
     // Generate new level layout
     if (!isLoad) {
     levelPattern = Math.floor(Math.random() * 100);
@@ -3262,7 +3272,7 @@ mouseY = canvas.height - 200;
     updateProgressBar();
     updateLivesUI(); 
     updateAmmo();
-    
+
     if (isNextLevel && mode === 'puzzle' && autosaveEnabled && !isCampaignMode && !suppressAutosaveOnce) {
     saveGame(true);
 }
@@ -3409,7 +3419,7 @@ setBrowserTitle("▶️ SK's Bubble Shooter — Playtesting");
     updateProgressBar();
     updateAmmo();
 }
-    
+
 function hasParentAbove(r, c) {
 
     if (r === 0) return true;
@@ -3495,7 +3505,7 @@ function shouldPlaceBubble(r, c) {
 
     return Math.random() < density && centerBias;
 }
-    
+
 function createRow(r) {
     const patternType = levelPattern; // decided per level
 
@@ -3735,7 +3745,7 @@ function dropFloatingBubbles() {
 
     bubbles = remaining;
 }
-	
+
 function updateAmmo(rollNext = false) {
     // Pool = colors that exist on board (ignore colorless)
     const pool = bubbles.length > 0
@@ -3795,7 +3805,7 @@ function updatePaletteUI() {
     });
 }
     function saveGame(isAuto = false, forceSave = false) {
-    
+
     if (gameOver) return;
 
     if (isCampaignMode) {
@@ -3919,7 +3929,7 @@ function updatePaletteUI() {
     };
 }
     function openCustomSavePopup() {
-    
+
         if (bubbles.length === 0) {
         alert("Add some bubbles in the canvas first!");
         return;
@@ -3992,7 +4002,7 @@ function handleLoadClick() {
 function loadGame(e) {
     const file = e.target.files[0];
     if (!file) return;
-    
+
 
     const reader = new FileReader();
     isLoadingSave = true;
