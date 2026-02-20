@@ -50,7 +50,7 @@
         }
 
         body {
-            background: #1a1a1a;
+            background: #000000;
             color: white;
             display: flex;
             flex-direction: column;
@@ -631,8 +631,14 @@ function updateLivesUI() {
         return;
     }
 
+   else if (lives === 0)
+    {
+        inner.innerText = `💔${lives}`;
+    }
+    else
+    {
     inner.innerText = `❤️${lives}`;
-
+    }
     if (lives <= 1) {
         inner.style.color = "#8b0000";
     } else if (lives < 4) {
@@ -2048,7 +2054,7 @@ ctx.fillStyle = bgColor;
 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
 
-    ctx.strokeStyle = '#ff3333'; ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = '#ff3333'; ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(0, DEADLINE); ctx.lineTo(canvas.width, DEADLINE); ctx.stroke(); ctx.setLineDash([]);
     bubbles.forEach(b => {
     // COLORLESS bubble = outline only
@@ -2061,7 +2067,7 @@ ctx.fillRect(0, 0, canvas.width, canvas.height);
         return;
     }
     ctx.strokeStyle = '#ff3333';
-ctx.setLineDash([5, 5]);
+ctx.setLineDash([200, 200]);
 ctx.beginPath();
 ctx.moveTo(0, DEADLINE);
 ctx.lineTo(canvas.width, DEADLINE);
@@ -2546,7 +2552,7 @@ mouseY = canvas.height - 200;
     
     // Generate new level layout
     if (!isLoad) {
-    levelPattern = Math.floor(Math.random() * 50);
+    levelPattern = Math.floor(Math.random() * 100);
     for (let r = 0; r < Math.min(5 + Math.floor(level/2), 8); r++) {
         createRow(r);
     }
@@ -2864,6 +2870,69 @@ function createRow(r) {
                 case 47: color = ALL_COLORS[(Math.abs(5 - r) - Math.abs(5 - c) + 50) % ALL_COLORS.length]; break;
                 case 48: color = ALL_COLORS[(r * r - c * c + 100) % ALL_COLORS.length]; break;
                 case 49: color = ALL_COLORS[Math.floor(Math.random() * ALL_COLORS.length)]; break;
+                /* =====================
+   NEW PATTERNS 50–99
+   ===================== */
+
+case 50: color = ALL_COLORS[(r + c * 2) % ALL_COLORS.length]; break;
+case 51: color = ALL_COLORS[(c + r * 2) % ALL_COLORS.length]; break;
+case 52: color = ALL_COLORS[(r * 2 + c * 3) % ALL_COLORS.length]; break;
+case 53: color = ALL_COLORS[(r * 3 + c * 2) % ALL_COLORS.length]; break;
+case 54: color = ALL_COLORS[(r * 4 + c) % ALL_COLORS.length]; break;
+
+case 55: color = ALL_COLORS[(Math.floor(c / 3) + r) % ALL_COLORS.length]; break;
+case 56: color = ALL_COLORS[(Math.floor(r / 3) + c) % ALL_COLORS.length]; break;
+case 57: color = ALL_COLORS[(Math.floor((r + c) / 2)) % ALL_COLORS.length]; break;
+case 58: color = ALL_COLORS[(Math.floor((r * c) / 3)) % ALL_COLORS.length]; break;
+case 59: color = ALL_COLORS[(Math.floor((r * r + c) / 4)) % ALL_COLORS.length]; break;
+
+case 60: color = ALL_COLORS[(Math.abs((r % 6) - (c % 6))) % ALL_COLORS.length]; break;
+case 61: color = ALL_COLORS[(Math.abs((r % 4) - (c % 4))) % ALL_COLORS.length]; break;
+case 62: color = ALL_COLORS[(Math.abs((r % 8) - (c % 5))) % ALL_COLORS.length]; break;
+case 63: color = ALL_COLORS[(Math.abs(r - c) * 2) % ALL_COLORS.length]; break;
+case 64: color = ALL_COLORS[(Math.abs(r - c + 3)) % ALL_COLORS.length]; break;
+
+case 65: color = ALL_COLORS[((r + c) % 4 === 0 ? r : c) % ALL_COLORS.length]; break;
+case 66: color = ALL_COLORS[((r + c) % 3 === 0 ? r + c : r) % ALL_COLORS.length]; break;
+case 67: color = ALL_COLORS[((r * c) % 3 === 0 ? r : c) % ALL_COLORS.length]; break;
+case 68: color = ALL_COLORS[((r * c) % 5 === 0 ? r + c : c) % ALL_COLORS.length]; break;
+case 69: color = ALL_COLORS[((r + c) % 5 === 0 ? r * c : r) % ALL_COLORS.length]; break;
+
+case 70: color = ALL_COLORS[(Math.floor(Math.sin(r) * 10 + c)) % ALL_COLORS.length]; break;
+case 71: color = ALL_COLORS[(Math.floor(Math.cos(c) * 10 + r)) % ALL_COLORS.length]; break;
+case 72: color = ALL_COLORS[(Math.floor(Math.sin(r + c) * 8)) % ALL_COLORS.length]; break;
+case 73: color = ALL_COLORS[(Math.floor(Math.cos(r - c) * 8)) % ALL_COLORS.length]; break;
+case 74: color = ALL_COLORS[(Math.floor(Math.sin(r * c) * 6)) % ALL_COLORS.length]; break;
+
+case 75: color = ALL_COLORS[(r * r + c) % ALL_COLORS.length]; break;
+case 76: color = ALL_COLORS[(c * c + r) % ALL_COLORS.length]; break;
+case 77: color = ALL_COLORS[(r * r + c * c) % ALL_COLORS.length]; break;
+case 78: color = ALL_COLORS[(r * r - c * c + 200) % ALL_COLORS.length]; break;
+case 79: color = ALL_COLORS[(r * c + r + c) % ALL_COLORS.length]; break;
+
+case 80: color = ALL_COLORS[((r + 1) * (c + 1)) % ALL_COLORS.length]; break;
+case 81: color = ALL_COLORS[((r + 2) * (c + 3)) % ALL_COLORS.length]; break;
+case 82: color = ALL_COLORS[((r + 3) * (c + 5)) % ALL_COLORS.length]; break;
+case 83: color = ALL_COLORS[((r + 5) * (c + 2)) % ALL_COLORS.length]; break;
+case 84: color = ALL_COLORS[((r + 7) * (c + 3)) % ALL_COLORS.length]; break;
+
+case 85: color = ALL_COLORS[(Math.min(r, c)) % ALL_COLORS.length]; break;
+case 86: color = ALL_COLORS[(Math.max(r, c)) % ALL_COLORS.length]; break;
+case 87: color = ALL_COLORS[(Math.min(r + c, 10)) % ALL_COLORS.length]; break;
+case 88: color = ALL_COLORS[(Math.max(r - c + 10, 0)) % ALL_COLORS.length]; break;
+case 89: color = ALL_COLORS[(Math.abs(r * 2 - c)) % ALL_COLORS.length]; break;
+
+case 90: color = ALL_COLORS[(r % 2 === 0 ? c * 2 : c) % ALL_COLORS.length]; break;
+case 91: color = ALL_COLORS[(c % 2 === 0 ? r * 2 : r) % ALL_COLORS.length]; break;
+case 92: color = ALL_COLORS[((r % 3 === 0) ? r + c : c) % ALL_COLORS.length]; break;
+case 93: color = ALL_COLORS[((c % 3 === 0) ? r + c : r) % ALL_COLORS.length]; break;
+case 94: color = ALL_COLORS[((r + c) % 2 ? r * 2 : c * 2) % ALL_COLORS.length]; break;
+
+case 95: color = ALL_COLORS[(Math.floor((r + c) / 3) * 2) % ALL_COLORS.length]; break;
+case 96: color = ALL_COLORS[(Math.floor((r * c) / 4) * 3) % ALL_COLORS.length]; break;
+case 97: color = ALL_COLORS[(Math.floor((r * r + c) / 5)) % ALL_COLORS.length]; break;
+case 98: color = ALL_COLORS[(Math.floor((c * c + r) / 5)) % ALL_COLORS.length]; break;
+case 99: color = ALL_COLORS[(r + c + Math.floor(Math.random() * 3)) % ALL_COLORS.length]; break;
 
                 default: color = ALL_COLORS[Math.floor(Math.random() * ALL_COLORS.length)]; break;
             }
