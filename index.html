@@ -484,7 +484,11 @@ canvas {
     <button id="stopBtn">⏹️</button>
     <button id="repeatBtn">🔁 OFF</button><br>
 		<button id="seekBackBtn">⏪ 5s</button>
-<button id="seekFwdBtn">⏩ 5s</button>
+<button id="seekFwdBtn">⏩ 5s</button><br><br>
+		 <button id="transposeDownBtn">➖ Transpose</button>
+  <button id="transposeUpBtn">➕ Transpose</button>
+  <button id="tempoDownBtn">➖ Tempo</button>
+  <button id="tempoUpBtn">➕ Tempo</button>
 </div>
     <label>Seek</label>
     <input type="range" id="seekSlider" min="0" max="100" value="0">
@@ -592,6 +596,26 @@ const tempoValue = document.getElementById("tempoValue");
 	const repeatBtn = document.getElementById("repeatBtn");
 	const seekBackBtn = document.getElementById("seekBackBtn");
 const seekFwdBtn  = document.getElementById("seekFwdBtn");
+	const transposeDownBtn = document.getElementById("transposeDownBtn");
+const transposeUpBtn   = document.getElementById("transposeUpBtn");
+const tempoDownBtn     = document.getElementById("tempoDownBtn");
+const tempoUpBtn       = document.getElementById("tempoUpBtn");
+
+function stepSlider(sliderEl, delta) {
+  const min = Number(sliderEl.min);
+  const max = Number(sliderEl.max);
+  const cur = Number(sliderEl.value);
+  const next = Math.max(min, Math.min(max, cur + delta));
+  sliderEl.value = String(next);
+
+  // ✅ trigger your existing oninput handlers
+  sliderEl.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+transposeDownBtn.onclick = () => stepSlider(pitchSlider, -1);
+transposeUpBtn.onclick   = () => stepSlider(pitchSlider,  1);
+tempoDownBtn.onclick     = () => stepSlider(tempoSlider, -1);
+tempoUpBtn.onclick       = () => stepSlider(tempoSlider,  1);
 
 seekBackBtn.onclick = () => seekBySeconds(-5);
 seekFwdBtn.onclick  = () => seekBySeconds(5);
@@ -3969,6 +3993,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
