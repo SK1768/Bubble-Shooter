@@ -810,6 +810,8 @@ musicInput.onchange = async () => {
     seekSlider.value = 0;
     pitchSlider.value = 0;
     tempoSlider.value = 100;
+	transposeValue.textContent = pitchSlider.value;
+    tempoValue.textContent = `${tempoSlider.value}%`;
     setStateText("Ready");
     setTimeText(0, musicBuffer.duration);
 	
@@ -3967,6 +3969,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
