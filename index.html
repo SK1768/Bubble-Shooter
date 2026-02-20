@@ -79,7 +79,18 @@
     text-align: center;
     min-height: 32px; /* prevents layout jump */
 }
+.music-step-buttons {
+    display: flex;
+    flex-direction: column;   /* stack vertically */
+    align-items: center;      /* ✅ center horizontally */
+    gap: 8px;
+    margin-top: 10px;
+}
 
+.music-step-buttons button {
+    width: 85%;               /* uniform size */
+    max-width: 200px;
+}
             .menu, .ui {
                 margin: 10px;
                 text-align: center;
@@ -4162,6 +4173,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
