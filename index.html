@@ -669,6 +669,9 @@ const DEFAULT_STATS = {
 // IMPORTANT: keep separate from your SFX `audioCtx`
 const MusicAudioCtx = window.AudioContext || window.webkitAudioContext;
 const musicCtx = new MusicAudioCtx();
+	window.addEventListener("DOMContentLoaded", async () => {
+    await musicCtx.audioWorklet.addModule("soundtouch-worklet.js");
+});
 let musicBuffer = null;          // decoded AudioBuffer
 let soundTouch = null;           // SoundTouch instance
 let filter = null;               // SimpleFilter
@@ -970,7 +973,14 @@ function buildGraphFromPosition() {
     // Seek by setting sourcePosition (in samples/frames)
     filter.sourcePosition = Math.floor(positionSamples);
 
-    processor = musicCtx.createScriptProcessor(4096, 0, 2);
+   processor = new AudioWorkletNode(
+    musicCtx,
+    "soundtouch-processor",
+    { outputChannelCount: [2] }
+);
+
+processor.port.postMessage({ filter });
+processor.connect(musicCtx.destination);
 
     processor.onaudioprocess = (e) => {
     const outL = e.outputBuffer.getChannelData(0);
@@ -4223,6 +4233,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
