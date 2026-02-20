@@ -80,16 +80,21 @@
     min-height: 32px; /* prevents layout jump */
 }
 .music-step-buttons {
-    display: flex;
-    flex-direction: column;   /* stack vertically */
-    align-items: center;      /* ✅ center horizontally */
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
+    justify-items: center;
     margin-top: 10px;
 }
 
 .music-step-buttons button {
-    width: 85%;               /* uniform size */
-    max-width: 200px;
+    width: 100%;
+    max-width: 160px;
+}
+
+/* Make Drag button span both columns */
+#dragLockBtn {
+    grid-column: 1 / -1;
 }
             .menu, .ui {
                 margin: 10px;
@@ -4173,6 +4178,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
