@@ -484,20 +484,25 @@ canvas {
     <button id="stopBtn">⏹️</button>
     <button id="repeatBtn">🔁 OFF</button><br>
 		<button id="seekBackBtn">⏪ 5s</button>
-<button id="seekFwdBtn">⏩ 5s</button><br><br><br>
-  <button id="transposeUpBtn">➕ Transpose</button>
- <button id="transposeDownBtn">➖ Transpose</button>
-  <button id="tempoUpBtn">➕ Tempo</button>
-<button id="tempoDownBtn">➖ Tempo</button>
+		<button id="seekFwdBtn">⏩ 5s</button>
 </div>
-    <label>Seek</label>
-    <input type="range" id="seekSlider" min="0" max="100" value="0">
+    <label>
+  Seek:
+  <span id="seekPercent">0.0%</span>
+</label>
+<input type="range" id="seekSlider" min="0" max="100" value="0">
 
     <label>Transpose: <span id="transposeValue">0</span></label>
 <input type="range" id="pitchSlider" min="-36" max="36" value="0">
 
 <label>Tempo: <span id="tempoValue">100%</span></label>
 <input type="range" id="tempoSlider" min="5" max="500" value="100">
+			<div class="music-step-buttons">
+ <button id="transposeUpBtn">➕ Transpose</button>
+ <button id="transposeDownBtn">➖ Transpose</button>
+ <button id="tempoUpBtn">➕ Tempo</button>
+<button id="tempoDownBtn">➖ Tempo</button>
+</div>
 
     <div id="trackState">Stopped</div>
     <div id="trackTime">0:00 / 0:00</div>
@@ -600,6 +605,7 @@ const seekFwdBtn  = document.getElementById("seekFwdBtn");
 const transposeUpBtn   = document.getElementById("transposeUpBtn");
 const tempoDownBtn     = document.getElementById("tempoDownBtn");
 const tempoUpBtn       = document.getElementById("tempoUpBtn");
+	const seekPercent = document.getElementById("seekPercent");
 
 function stepSlider(sliderEl, delta) {
   const min = Number(sliderEl.min);
@@ -793,7 +799,9 @@ function buildGraphFromPosition() {
 // ---------- UI update loop ----------
 function updateUI() {
     if (!musicBuffer) return;
-
+const pct = clamp((curSec / durSec) * 100, 0, 100);
+seekSlider.value = pct;
+seekPercent.textContent = `${pct.toFixed(1)}%`;
     // Throttle UI a bit (smoother + less cost)
     const now = performance.now();
     if (now - lastUiUpdate > 60) {
@@ -912,17 +920,19 @@ seekSlider.addEventListener("pointerup", () => {
 seekSlider.oninput = () => {
     if (!musicBuffer) return;
 
-    // If user drags the seek bar, jump input position.
-    const dur = musicBuffer.duration;
-    const targetSec = (seekSlider.value / 100) * dur;
-    positionSamples = Math.floor(targetSec * musicBuffer.sampleRate);
+    const pct = Number(seekSlider.value);
+    seekPercent.textContent = `${pct.toFixed(1)}%`;
 
-    // If currently playing, rebuild graph from new position
+    const duration = musicBuffer.duration;
+    const targetSec = (pct / 100) * duration;
+    positionSamples = Math.floor(
+        targetSec * musicBuffer.sampleRate
+    );
+
     if (isMusicPlaying) {
         buildGraphFromPosition();
     } else {
-        // update timer immediately while paused/stopped
-        setTimeText(targetSec, dur);
+        setTimeText(targetSec, duration);
     }
 };
 
@@ -3993,6 +4003,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
