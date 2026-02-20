@@ -968,7 +968,7 @@ musicInput.onchange = async () => {
     tempoSlider.value = 100;
 	transposeValue.textContent = pitchSlider.value;
     tempoValue.textContent = `${tempoSlider.value}%`;
-    setStateText(`Ready: ${currentTrackName}`);
+    setStateText("Ready");
 	chooseMusicBtn.textContent = `🎵 Loaded: ${currentTrackName} (Choose Music)`;
     setTimeText(0, musicBuffer.duration);
 	
@@ -986,14 +986,14 @@ playBtn.onclick = async () => {
         buildGraphFromPosition();
         isMusicPlaying = true;
         playBtn.textContent = "⏸️";
-        setStateText(`Playing: ${currentTrackName}`);
+        setStateText("Playing");
         cancelAnimationFrame(rafId);
         rafId = requestAnimationFrame(updateUI);
     } else {
         // Pause = disconnect processor but keep positionSamples
         isMusicPlaying = false;
         playBtn.textContent = "▶️";
-        setStateText(`Paused: ${currentTrackName}`);
+        setStateText("Paused");
         teardownGraph(); // stops processing immediately
         cancelAnimationFrame(rafId);
         rafId = null;
@@ -4130,6 +4130,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
