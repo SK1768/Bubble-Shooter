@@ -799,17 +799,19 @@ function buildGraphFromPosition() {
 // ---------- UI update loop ----------
 function updateUI() {
     if (!musicBuffer) return;
-const pct = clamp((curSec / durSec) * 100, 0, 100);
-seekSlider.value = pct;
-seekPercent.textContent = `${pct.toFixed(1)}%`;
+
     // Throttle UI a bit (smoother + less cost)
     const now = performance.now();
     if (now - lastUiUpdate > 60) {
         const durSec = musicBuffer.duration;
         const curSec = positionSamples / musicBuffer.sampleRate;
 
-        const pct = durSec > 0 ? (curSec / durSec) * 100 : 0;
-        seekSlider.value = clamp(pct, 0, 100);
+        const pct = durSec > 0
+            ? clamp((curSec / durSec) * 100, 0, 100)
+            : 0;
+
+        seekSlider.value = pct;
+        seekPercent.textContent = `${pct.toFixed(1)}%`;
 
         setTimeText(curSec, durSec);
         lastUiUpdate = now;
@@ -4003,6 +4005,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
