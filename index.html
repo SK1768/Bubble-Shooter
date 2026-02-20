@@ -300,6 +300,21 @@ canvas {
                 border-radius: 10px;
                 border: 1px solid #444;
             }
+		#chooseMusicBtn {
+    width: 100%;
+    padding: 10px;
+    border-radius: 12px;
+    background: #111;
+    color: #00ffcc;
+    border: 2px solid #00ffcc;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+#chooseMusicBtn:hover {
+    background: #00ffcc;
+    color: #000;
+}
 
             .palette-btn {
                 width: 30px;
@@ -491,7 +506,16 @@ canvas {
     ⚠️ SoundTouch.js is missing!<br>
     The music player will not work without it.
 </div>
-    <input type="file" id="musicInput" accept=".mp3,.ogg,.wav">
+    <input
+  type="file"
+  id="musicInput"
+  accept=".mp3,.ogg,.wav"
+  style="display:none"
+/>
+
+<button id="chooseMusicBtn">
+  🎵 Choose Music
+</button>
 
     <div class="music-buttons">
     <button id="playBtn">▶️</button>
@@ -588,7 +612,12 @@ let playStartCtxTime = 0;        // musicCtx.currentTime when we started outputt
 let lastUiUpdate = 0;
 
 // UI elements
-const musicInput  = document.getElementById("musicInput");
+const chooseMusicBtn = document.getElementById("chooseMusicBtn");
+const musicInput = document.getElementById("musicInput");
+
+chooseMusicBtn.onclick = () => {
+    musicInput.click();
+};
 const playBtn     = document.getElementById("playBtn");
 const stopBtn     = document.getElementById("stopBtn");
 const seekSlider  = document.getElementById("seekSlider");
@@ -846,7 +875,7 @@ musicInput.onchange = async () => {
     tempoSlider.value = 100;
 	transposeValue.textContent = pitchSlider.value;
     tempoValue.textContent = `${tempoSlider.value}%`;
-    setStateText("Ready");
+    setStateText(`Ready: ${currentTrackName}`);
     setTimeText(0, musicBuffer.duration);
 	
 };
@@ -4007,6 +4036,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
