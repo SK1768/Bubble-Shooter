@@ -894,9 +894,11 @@ function stopMusicHard() {
     if (musicBuffer) {
         positionSamples = 0;
         seekSlider.value = 0;
+		seekPercent.textContent = "0.0%";
         setTimeText(0, musicBuffer.duration);
     } else {
         seekSlider.value = 0;
+		seekPercent.textContent = "0.0%";
         setTimeText(0, 0);
     }
 }
@@ -4005,6 +4007,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
