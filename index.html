@@ -479,10 +479,10 @@ canvas {
     <input type="file" id="musicInput" accept=".mp3,.ogg,.wav">
 
     <div class="music-buttons">
-        <button id="playBtn">▶️</button>
-        <button id="stopBtn">⏹️</button>
-    </div>
-
+    <button id="playBtn">▶️</button>
+    <button id="stopBtn">⏹️</button>
+    <button id="repeatBtn">🔁 OFF</button>
+</div>
     <label>Seek</label>
     <input type="range" id="seekSlider" min="0" max="100" value="0">
 
@@ -569,7 +569,7 @@ let processor = null;            // ScriptProcessor
 let isMusicPlaying = false;
 let currentTrackName = "";
 let rafId = null;
-
+let repeatEnabled = false;
 // We track playback position in INPUT samples (source samples)
 let positionSamples = 0;
 let playStartCtxTime = 0;        // musicCtx.currentTime when we started outputting
@@ -586,6 +586,12 @@ const trackState  = document.getElementById("trackState");
 const trackTime   = document.getElementById("trackTime");
 const transposeValue = document.getElementById("transposeValue");
 const tempoValue = document.getElementById("tempoValue");
+	const repeatBtn = document.getElementById("repeatBtn");
+
+repeatBtn.onclick = () => {
+    repeatEnabled = !repeatEnabled;
+    repeatBtn.textContent = repeatEnabled ? "🔁 ON" : "🔁 OFF";
+};
 	window.addEventListener("DOMContentLoaded", () => {
     checkSoundTouchPresence();
 		transposeValue.textContent = pitchSlider.value;
@@ -696,12 +702,19 @@ function buildGraphFromPosition() {
 
     const frames = filter.extract(interleaved, numFrames);
 
-    if (frames === 0) {
-        outL.fill(0);
-        outR.fill(0);
-        stopMusicHard();
+   if (frames === 0) {
+    if (repeatEnabled && musicBuffer) {
+        // restart from beginning
+        positionSamples = 0;
+        buildGraphFromPosition();
         return;
     }
+
+    outL.fill(0);
+    outR.fill(0);
+    stopMusicHard();
+    return;
+}
 
     // De-interleave
     let j = 0;
@@ -3916,6 +3929,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
