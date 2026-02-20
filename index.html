@@ -465,6 +465,9 @@ canvas {
 >
     🗑️ RESET STATS
 </button>
+		<button id="toggleMusicPlayerBtn">
+    HIDE THE MUSIC PLAYER
+</button>
 		<div id="menuDescription" class="menuDescription">
 </div>
 		<h3 style="margin-top:0;text-align:center;">📊 Player Stats</h3>
@@ -630,6 +633,28 @@ console.log("SimpleFilter:", typeof window.SimpleFilter);
 </script>
 
 <script>
+	const toggleMusicPlayerBtn = document.getElementById("toggleMusicPlayerBtn");
+const musicPanel = document.getElementById("musicPanel");
+
+let musicPlayerVisible =
+    localStorage.getItem("musicPlayerVisible") !== "false";
+	function updateMusicPlayerVisibility() {
+    if (musicPlayerVisible) {
+        musicPanel.style.display = "block";
+        toggleMusicPlayerBtn.textContent = "HIDE THE MUSIC PLAYER";
+    } else {
+        musicPanel.style.display = "none";
+        toggleMusicPlayerBtn.textContent = "SHOW THE MUSIC PLAYER";
+    }
+}
+	toggleMusicPlayerBtn.onclick = () => {
+    musicPlayerVisible = !musicPlayerVisible;
+    localStorage.setItem(
+        "musicPlayerVisible",
+        musicPlayerVisible
+    );
+    updateMusicPlayerVisibility();
+};
     // ======================
 // PLAYER STATS SYSTEM
 // ======================
@@ -853,6 +878,7 @@ repeatBtn.onclick = () => {
 	window.addEventListener("DOMContentLoaded", () => {
     checkSoundTouchPresence();
 		updateDragLockUI();
+		updateMusicPlayerVisibility();
 		transposeValue.textContent = pitchSlider.value;
 tempoValue.textContent = `${tempoSlider.value}%`;
 		const savedPos = JSON.parse(localStorage.getItem("musicPanelPos"));
@@ -4223,3 +4249,4 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
