@@ -475,18 +475,6 @@ canvas {
     <button class="mobile-btn" id="colorblindToggle" onclick="toggleColorblind()">👁️</button>
     <button class="mobile-btn" id="aimToggle" onclick="toggleAim()">🎯</button>
 </div>
-		<div id="soundtouchWarning"
-     style="
-        display:none;
-        margin-bottom:6px;
-        color:#ff4444;
-        font-weight:bold;
-        text-align:center;
-        font-size:13px;
-     ">
-    ⚠️ SoundTouch.js is missing!<br>
-    The music player will not work without it.
-</div>
         <div id="musicPanel">
     <input type="file" id="musicInput" accept=".mp3,.ogg,.wav">
 
@@ -506,6 +494,18 @@ canvas {
 
     <div id="trackState">Stopped</div>
     <div id="trackTime">0:00 / 0:00</div>
+</div>
+		<div id="soundtouchWarning"
+     style="
+        display:none;
+        margin-bottom:6px;
+        color:#ff4444;
+        font-weight:bold;
+        text-align:center;
+        font-size:13px;
+     ">
+    ⚠️ SoundTouch.js is missing!<br>
+    The music player will not work without it.
 </div>
     </div>
 
@@ -775,14 +775,14 @@ playBtn.onclick = async () => {
         buildGraphFromPosition();
         isMusicPlaying = true;
         playBtn.textContent = "⏸️";
-        setStateText("Playing: ${currentTrackName}");
+        setStateText(`Playing: ${currentTrackName}`);
         cancelAnimationFrame(rafId);
         rafId = requestAnimationFrame(updateUI);
     } else {
         // Pause = disconnect processor but keep positionSamples
         isMusicPlaying = false;
         playBtn.textContent = "▶️";
-        setStateText("Paused: ${currentTrackName}");
+        setStateText(`Paused: ${currentTrackName}`);
         teardownGraph(); // stops processing immediately
         cancelAnimationFrame(rafId);
         rafId = null;
@@ -3915,6 +3915,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
