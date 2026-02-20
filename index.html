@@ -905,9 +905,12 @@ function setStateText(text) {
     } 
     else if (text === "Stopped") {
         trackState.style.color = "#ff4444"; // 🔴 red
+    }
+		else if (text === "Ready") {
+        trackState.style.color = "#0062ff"; // 🔵 blue
     } 
     else {
-        trackState.style.color = "#00ffcc"; // fallback
+        trackState.style.color = "#ff4444"; // fallback
     }
 }
 
@@ -4220,6 +4223,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
