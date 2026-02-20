@@ -475,6 +475,18 @@ canvas {
     <button class="mobile-btn" id="colorblindToggle" onclick="toggleColorblind()">👁️</button>
     <button class="mobile-btn" id="aimToggle" onclick="toggleAim()">🎯</button>
 </div>
+		<div id="soundtouchWarning"
+     style="
+        display:none;
+        margin-bottom:6px;
+        color:#ff4444;
+        font-weight:bold;
+        text-align:center;
+        font-size:13px;
+     ">
+    ⚠️ SoundTouch.js is missing!<br>
+    The music player will not work without it.
+</div>
         <div id="musicPanel">
     <input type="file" id="musicInput" accept=".mp3,.ogg,.wav">
 
@@ -486,11 +498,11 @@ canvas {
     <label>Seek</label>
     <input type="range" id="seekSlider" min="0" max="100" value="0">
 
-    <label>Transpose</label>
-    <input type="range" id="pitchSlider" min="-12" max="12" value="0">
+    <label>Transpose: <span id="transposeValue">0</span></label>
+<input type="range" id="pitchSlider" min="-36" max="36" value="0">
 
-    <label>Tempo</label>
-    <input type="range" id="tempoSlider" min="50" max="150" value="100">
+<label>Tempo: <span id="tempoValue">100%</span></label>
+<input type="range" id="tempoSlider" min="5" max="500" value="100">
 
     <div id="trackState">Stopped</div>
     <div id="trackTime">0:00 / 0:00</div>
@@ -554,7 +566,7 @@ let soundTouch = null;           // SoundTouch instance
 let filter = null;               // SimpleFilter
 let processor = null;            // ScriptProcessor
 let isMusicPlaying = false;
-
+let currentTrackName = "";
 let rafId = null;
 
 // We track playback position in INPUT samples (source samples)
@@ -571,7 +583,37 @@ const pitchSlider = document.getElementById("pitchSlider");
 const tempoSlider = document.getElementById("tempoSlider");
 const trackState  = document.getElementById("trackState");
 const trackTime   = document.getElementById("trackTime");
+const transposeValue = document.getElementById("transposeValue");
+const tempoValue = document.getElementById("tempoValue");
+	window.addEventListener("DOMContentLoaded", () => {
+    checkSoundTouchPresence();
+		transposeValue.textContent = pitchSlider.value;
+tempoValue.textContent = `${tempoSlider.value}%`;
+});
+	
+function disableMusicPlayerUI(disabled) {
+    const controls = document.querySelectorAll(
+        "#musicPanel button, #musicPanel input[type=range]"
+    );
 
+    controls.forEach(el => {
+        el.disabled = disabled;
+        el.style.opacity = disabled ? "0.5" : "1";
+    });
+}
+	
+	function checkSoundTouchPresence() {
+    const warning = document.getElementById("soundtouchWarning");
+
+    const hasSoundTouch =
+        typeof window.SoundTouch === "function" &&
+        typeof window.SimpleFilter === "function";
+
+    warning.style.display = hasSoundTouch ? "none" : "block";
+    disableMusicPlayerUI(!hasSoundTouch);
+
+    return hasSoundTouch;
+}
 // ---------- helpers ----------
 function fmtTime(sec) {
     sec = Math.max(0, sec);
@@ -701,6 +743,8 @@ musicInput.onchange = async () => {
     const file = musicInput.files[0];
     if (!file) return;
 
+    currentTrackName = file.name; // ✅ store filename
+
     // Ensure context is ready (some browsers need user gesture; file pick counts)
     if (musicCtx.state === "suspended") {
         try { await musicCtx.resume(); } catch {}
@@ -731,14 +775,14 @@ playBtn.onclick = async () => {
         buildGraphFromPosition();
         isMusicPlaying = true;
         playBtn.textContent = "⏸️";
-        setStateText("Playing");
+        setStateText("Playing: ${currentTrackName}");
         cancelAnimationFrame(rafId);
         rafId = requestAnimationFrame(updateUI);
     } else {
         // Pause = disconnect processor but keep positionSamples
         isMusicPlaying = false;
         playBtn.textContent = "▶️";
-        setStateText("Paused");
+        setStateText("Paused: ${currentTrackName}");
         teardownGraph(); // stops processing immediately
         cancelAnimationFrame(rafId);
         rafId = null;
@@ -806,11 +850,15 @@ seekSlider.oninput = () => {
 
 // ---------- pitch / tempo (true SoundTouch controls) ----------
 pitchSlider.oninput = () => {
-    if (soundTouch) soundTouch.pitchSemitones = Number(pitchSlider.value);
+    const v = Number(pitchSlider.value);
+    transposeValue.textContent = v;
+    if (soundTouch) soundTouch.pitchSemitones = v;
 };
 
 tempoSlider.oninput = () => {
-    if (soundTouch) soundTouch.tempo = Number(tempoSlider.value) / 100;
+    const v = Number(tempoSlider.value);
+    tempoValue.textContent = `${v}%`;
+    if (soundTouch) soundTouch.tempo = v / 100;
 };
 const bubbleHexOverlay = document.getElementById('bubbleHexOverlay');
 
@@ -3867,6 +3915,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
