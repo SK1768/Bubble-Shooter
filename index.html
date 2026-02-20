@@ -477,6 +477,20 @@ canvas {
 </div>
         <div id="musicPanel">
 			<h3 style="margin-top:0;text-align:center;">🎵 Music Player</h3>
+    <div id="trackState">Stopped</div>
+    <div id="trackTime">0:00 / 0:00</div>
+	<div id="soundtouchWarning"
+     style="
+        display:none;
+        margin-bottom:6px;
+        color:#ff4444;
+        font-weight:bold;
+        text-align:center;
+        font-size:13px;
+     ">
+    ⚠️ SoundTouch.js is missing!<br>
+    The music player will not work without it.
+</div>
     <input type="file" id="musicInput" accept=".mp3,.ogg,.wav">
 
     <div class="music-buttons">
@@ -504,20 +518,6 @@ canvas {
 <button id="tempoDownBtn">➖ Tempo</button>
 </div>
 
-    <div id="trackState">Stopped</div>
-    <div id="trackTime">0:00 / 0:00</div>
-	<div id="soundtouchWarning"
-     style="
-        display:none;
-        margin-bottom:6px;
-        color:#ff4444;
-        font-weight:bold;
-        text-align:center;
-        font-size:13px;
-     ">
-    ⚠️ SoundTouch.js is missing!<br>
-    The music player will not work without it.
-</div>
 </div>
 		
     </div>
@@ -4005,6 +4005,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
