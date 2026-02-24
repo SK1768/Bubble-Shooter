@@ -1376,6 +1376,20 @@ function updateLivesUI() {
     }
 }
 
+function dropAllBubbles() {
+    for (const b of bubbles) {
+        fallingBubbles.push({
+            x: b.x,
+            y: b.y,
+            color: b.color,
+            vy: Math.random() * 2 + 2,   // fall speed
+            vx: (Math.random() - 0.5) * 1.5,
+            life: 1                      // fade-out timer
+        });
+    }
+
+    bubbles = []; // clear grid
+}
 function updateSoundButton() {
     const btn = document.getElementById('soundToggle');
     if(btn) {
@@ -2525,9 +2539,10 @@ function triggerFail(reason) {
     if (lives <= 0) {
         lives = 0;
         gameOver = true;
-        gameOverReason = "You lost all your lives!";
+        gameOverReason = `You lost all your lives!\n(${reason})`
         sounds.play('fail');
         stats.levelsFailed++;
+        dropAllBubbles();
         saveStats();
         refreshFavicon();
         return;
@@ -2537,6 +2552,7 @@ function triggerFail(reason) {
     gameOver = true;
     gameOverReason = reason;
     sounds.play('fail');
+    dropAllBubbles();
     refreshFavicon();
 
     stats.levelsFailed++;
@@ -2587,6 +2603,18 @@ let glowColor = "rgba(0,0,0,0)";
 // ❤️ LOW LIVES PULSE (every second)
 const inner = document.getElementById('livesInner');
 
+for (let i = fallingBubbles.length - 1; i >= 0; i--) {
+    const b = fallingBubbles[i];
+
+    b.vy += 0.15;      // gravity
+    b.y += b.vy;
+    b.x += b.vx;
+    b.life -= 0.015;
+
+    if (b.life <= 0 || b.y > canvas.height + 50) {
+        fallingBubbles.splice(i, 1);
+    }
+}
 if (
     inner &&
     !isPlaytesting &&
@@ -2775,6 +2803,14 @@ if (panicFade > 0) {
 ctx.fillStyle = bgColor;
 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+for (const b of fallingBubbles) {
+    ctx.globalAlpha = Math.max(0, b.life);
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, RADIUS, 0, Math.PI * 2);
+    ctx.fillStyle = b.color || "#888";
+    ctx.fill();
+}
+ctx.globalAlpha = 1;
 
     ctx.strokeStyle = '#ff3333'; ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(0, DEADLINE); ctx.lineTo(canvas.width, DEADLINE); ctx.stroke(); ctx.setLineDash([]);
@@ -4248,7 +4284,3 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
-
-
-
-
