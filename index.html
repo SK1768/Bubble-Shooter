@@ -1382,13 +1382,15 @@ function updateLivesUI() {
 function dropAllBubbles() {
     for (const b of bubbles) {
         fallingBubbles.push({
-            x: b.x,
-            y: b.y,
-            color: b.color,
-            vy: Math.random() * 2 + 2,   // fall speed
-            vx: (Math.random() - 0.5) * 1.5,
-            life: 1                      // fade-out timer
-        });
+  x: b.x,
+  y: b.y,
+  vx: (Math.random() - 0.5) * 1.2,   // slower wobble
+  vy: 1.0 + Math.random() * 1.2,     // slower fall
+  rot: Math.random() * Math.PI * 2,
+  rotSpeed: (Math.random() - 0.5) * 0.06,
+  color: b.color,
+  life: 1.0                          // ✅ enables translucency fade
+});
     }
 
     bubbles = []; // clear grid
@@ -3868,13 +3870,14 @@ function dropFloatingBubbles() {
         } else {
             // ✅ send to falling animation
             fallingBubbles.push({
-    x: b.x,
-    y: b.y,
-    vx: (Math.random() - 0.5) * 2.5, // side wobble
-    vy: 3 + Math.random() * 2,
-    rot: Math.random() * Math.PI * 2,
-    rotSpeed: (Math.random() - 0.5) * 0.1,
-    color: b.color
+  x: b.x,
+  y: b.y,
+  vx: (Math.random() - 0.5) * 1.2,   // slower wobble
+  vy: 1.0 + Math.random() * 1.2,     // slower fall
+  rot: Math.random() * Math.PI * 2,
+  rotSpeed: (Math.random() - 0.5) * 0.06,
+  color: b.color,
+  life: 1.0                          // ✅ enables translucency fade
 });
 
             droppedCount++;
