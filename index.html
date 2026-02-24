@@ -40,6 +40,9 @@
 }
 
 
+#gameCanvas {
+  touch-action: none; /* stop scroll/zoom gestures while interacting with canvas */
+}
 
 .tick-pulse {
     animation: tickPulse 0.25s ease-out;
@@ -2789,6 +2792,96 @@ function getSnapPreview(x, y) {
     };
 }
 
+// --- Pointer (touch + mouse) aiming support ---
+let activeAimPointerId = null;
+
+function updateAimFromClientXY(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+
+  mouseX = clientX - rect.left;
+  mouseY = clientY - rect.top;
+
+  angle = Math.atan2(
+    mouseY - (canvas.height - 80),
+    mouseX - (canvas.width / 2)
+  );
+}
+
+// Pointer down = start aiming (hold)
+canvas.addEventListener("pointerdown", (e) => {
+  // Only primary pointer (first finger / main mouse button)
+  if (!e.isPrimary) return;
+
+  // Ignore right click, etc.
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+
+  // Don't start aiming if game isn't in a state to aim
+  if (!gameRunning) return;
+  if (isPaused) { setPause(false); return; }
+  if (gameOver || gameWin) return;
+  if (isCustomMode) return;
+
+  // If you’re dragging bubbles, let your existing drag code handle it
+  if (dragBubblesEnabled) return;
+
+  activeAimPointerId = e.pointerId;
+
+  // Capture pointer so moving off-canvas still aims smoothly
+  canvas.setPointerCapture(activeAimPointerId);
+
+  updateAimFromClientXY(e.clientX, e.clientY);
+
+  // ✅ Holding finger down = aiming true
+  isAiming = true;
+
+  e.preventDefault();
+}, { passive: false });
+
+// Pointer move = move aim visualiser
+canvas.addEventListener("pointermove", (e) => {
+  if (activeAimPointerId === null) return;
+  if (e.pointerId !== activeAimPointerId) return;
+
+  updateAimFromClientXY(e.clientX, e.clientY);
+
+  e.preventDefault();
+}, { passive: false });
+
+// Pointer up/cancel = release (shoot if valid)
+function endPointerAim(e) {
+  if (activeAimPointerId === null) return;
+  if (e.pointerId !== activeAimPointerId) return;
+
+  // Mirror your mouseup shooting rules
+  if (
+    isAiming &&
+    gameRunning &&
+    !isPaused &&
+    !gameOver &&
+    !gameWin &&
+    ammo > 0 &&
+    mouseX >= 0 &&
+    mouseX <= canvas.width &&
+    mouseY >= 0 &&
+    mouseY <= DEADLINE
+  ) {
+    shoot();
+  }
+
+  isAiming = false;
+  activeAimPointerId = null;
+
+  try { canvas.releasePointerCapture(e.pointerId); } catch {}
+
+  e.preventDefault();
+}
+
+canvas.addEventListener("pointerup", endPointerAim, { passive: false });
+canvas.addEventListener("pointercancel", endPointerAim, { passive: false });
+canvas.addEventListener("pointerleave", () => {
+  // optional: if you *don't* want aim to cancel when captured, remove this
+  if (activeAimPointerId === null) isAiming = false;
+});
  function draw() {
     // ---- BACKGROUND ----
 let bgColor = "#000000";
