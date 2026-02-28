@@ -2919,10 +2919,13 @@ function autoShootCurrentBubble() {
     });
 
     ammo--;
+    currentBall = nextBall;
+    stats.bubblesShot++;
+    saveStats();
     updateAmmo();
     sounds.play('shoot');
     hurryWarningActive = false;
-hurryWarningSeconds = 0;
+    hurryWarningSeconds = 0;
 }
 function update() {
     // ---- delta time (seconds) ----
@@ -4859,4 +4862,5 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
