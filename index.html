@@ -2920,9 +2920,9 @@ function autoShootCurrentBubble() {
 
     ammo--;
     currentBall = nextBall;
+    updateAmmo(true);
     stats.bubblesShot++;
     saveStats();
-    updateAmmo(true);
     sounds.play('shoot');
     hurryWarningActive = false;
     hurryWarningSeconds = 0;
@@ -4862,6 +4862,7 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
 
