@@ -440,11 +440,159 @@ canvas {
     transform-origin: center center;
     will-change: transform;
 }
+.achievement-popup {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: linear-gradient(135deg, #00ffd5, #037bfc);
+    color: #000;
+    padding: 14px 22px;
+    border-radius: 14px;
+    box-shadow: 0 0 30px rgba(0,255,213,0.6);
+    text-align: center;
+    opacity: 0;
+    transition: all 0.35s ease;
+    z-index: 9999;
+    pointer-events: none;
+}
 
+.achievement-popup.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.achievement-title {
+    font-size: 13px;
+    letter-spacing: 0.14em;
+}
+
+.achievement-name {
+    font-size: 20px;
+    margin-top: 6px;
+}
+
+.achievement-desc {
+    font-size: 14px;
+    opacity: 0.85;
+}
+
+.hidden {
+    display: none;
+}
+.panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #111;
+    border: 2px solid #00ffcc;
+    border-radius: 14px;
+    padding: 16px;
+    width: 90%;
+    max-width: 520px;
+    max-height: 80%;
+    overflow: hidden;
+    z-index: 9999;
+    box-shadow: 0 0 30px rgba(0,255,204,0.5);
+}
+
+.panel h2 {
+    margin-top: 0;
+    text-align: center;
+}
+
+.achievements-list {
+    margin-top: 10px;
+    overflow-y: auto;
+    max-height: 50vh;
+}
+
+.achievement-row {
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 10px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    opacity: 0.45;
+}
+
+.achievement-row.unlocked {
+    background: linear-gradient(135deg, #00ffd5, #037bfc);
+    color: #000;
+    opacity: 1;
+}
+
+.achievement-title {
+    font-size: 16px;
+}
+
+.achievement-desc {
+    font-size: 13px;
+    opacity: 0.85;
+}
+
+.panel-buttons {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 12px;
+}
+
+button.danger {
+    background: #ff4444;
+    color: white;
+}
+.achievement-progress {
+    height: 6px;
+    background: #333;
+    border-radius: 6px;
+    margin-top: 6px;
+    overflow: hidden;
+}
+
+.achievement-progress-fill {
+    height: 100%;
+    background: #00ffcc;
+    width: 0%;
+}
+.achievement-time {
+    font-size: 11px;
+    opacity: 0.75;
+    margin-top: 4px;
+}
+/* 💥 Achievement explosion particles */
+.achievement-burst {
+    position: fixed;
+    left: 50%;
+    bottom: 60px;
+    pointer-events: none;
+    z-index: 9998;
+}
+
+.achievement-particle {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background: #00ffcc;
+    border-radius: 50%;
+    opacity: 1;
+    animation: burst 700ms ease-out forwards;
+}
+
+@keyframes burst {
+    to {
+        transform: translate(var(--dx), var(--dy)) scale(0);
+        opacity: 0;
+    }
+}
     </style>
 </head>
 <body oncontextmenu="return false;">
-
+<div id="achievementPopup" class="achievement-popup hidden">
+    <div class="achievement-title">ACHIEVEMENT COMPLETE!</div>
+    <div class="achievement-name"></div>
+    <div class="achievement-desc"></div>
+</div>
     <div class="menu" id="mainMenu">
         <h1>SK's Bubble Shooter</h1>
         <p>Made by SK1768 :)</p>
@@ -455,6 +603,8 @@ canvas {
         <button onclick="startCampaign()" style="background:#ff9500; font-weight:bold;"onmouseenter="setMenuDesc('Campaign Mode: Beat 20 levels before the timer runs out.')" onmouseleave="clearMenuDesc()">
             🏆 CAMPAIGN MODE
         </button>
+        <br>
+        <button onclick="openAchievements()">🏆 ACHIEVEMENTS</button>
         <br>
         <br>
         <button id="autosaveToggle" onclick="toggleAutosave()" onmouseenter="setMenuDesc('Autosave: Creates a save file every time you complete a level in Puzzle Mode.')" onmouseleave="clearMenuDesc()">💾 Autosave: OFF</button>
@@ -645,6 +795,336 @@ console.log("SimpleFilter:", typeof window.SimpleFilter);
 </script>
 
 <script>
+    // ===============================
+// 🏆 ACHIEVEMENTS
+// ===============================
+const ACHIEVEMENTS = {
+    FIRST_WIN: {
+        title: "Beginner’s Luck",
+        description: "Complete your first level."
+    },
+
+    MAX_LIVES: {
+        title: "Full of Life",
+        description: "Reach the maximum number of lives."
+    },
+
+    LEVEL_10: {
+        title: "Getting Warm",
+        description: "Reach level 10."
+    },
+    LEVEL_50: {
+        title: "Halfway There",
+        description: "Reach level 50."
+    },
+    LEVEL_100: {
+        title: "Centurion",
+        description: "Reach level 100.",
+    },
+     POP_1K: {
+        title: "Pop Machine",
+        description: "Pop 1,000 bubbles.",
+        stat: "bubblesPopped",
+        goal: 1000
+    },
+
+    POP_10K: {
+        title: "Bubble Annihilator",
+        description: "Pop 10,000 bubbles.",
+        stat: "bubblesPopped",
+        goal: 10000
+    },
+
+    PERFECT_CLEAR: {
+        title: "Clean Sweep",
+        description: "Clear a level without missing a shot."
+    },
+
+    CLUTCH_WIN: {
+        title: "Last Breath",
+        description: "Win a level with only 1 life left."
+    },
+
+    CAMPAIGN_COMPLETE: {
+        title: "The End?",
+        description: "Complete Campaign Mode."
+    },
+    DEBUG_USED: {
+        title: "Cheater...",
+        description: "Use a debug command." 
+    },
+    CUSTOM_LEVEL_COMPLETED: {
+        title: "Level Tester",
+        description: "Complete a custom level."
+    },
+    // 💰 SCORE TIERS
+SCORE_1K:   { title: "Pocket Change", description: "Reach 1,000 score.", stat: "score", goal: 1_000 },
+SCORE_10K:  { title: "Getting Rich", description: "Reach 10,000 score.", stat: "score", goal: 10_000 },
+SCORE_100K: { title: "High Roller", description: "Reach 100,000 score.", stat: "score", goal: 100_000 },
+SCORE_1M:   { title: "Millionaire", description: "Reach 1,000,000 score.", stat: "score", goal: 1_000_000 },
+SCORE_10M:  { title: "Multi-Millionaire", description: "Reach 10,000,000 score.", stat: "score", goal: 10_000_000 },
+SCORE_100M: { title: "Bubble Tycoon", description: "Reach 100,000,000 score.", stat: "score", goal: 100_000_000 },
+// 🔥 STREAK TIERS
+STREAK_5:   { title: "Heating Up", description: "Reach a 5x streak.", stat: "totalStreak", goal: 5 },
+STREAK_10:  { title: "On Fire", description: "Reach a 10x streak.", stat: "totalStreak", goal: 10 },
+STREAK_25:  { title: "Unstoppable", description: "Reach a 25x streak.", stat: "totalStreak", goal: 25 },
+STREAK_50:  { title: "Inferno", description: "Reach a 50x streak.", stat: "totalStreak", goal: 50 },
+STREAK_100: { title: "Legendary Combo", description: "Reach a 100x streak.", stat: "totalStreak", goal: 100 },
+// 🫧 BUBBLES DROPPED TIERS
+DROP_1K:   { title: "Gravity Works", description: "Drop 1,000 bubbles.", stat: "bubblesDropped", goal: 1_000 },
+DROP_10K:  { title: "Down They Go", description: "Drop 10,000 bubbles.", stat: "bubblesDropped", goal: 10_000 },
+DROP_100K: { title: "Cascade", description: "Drop 100,000 bubbles.", stat: "bubblesDropped", goal: 100_000 },
+DROP_1M:   { title: "Avalanche", description: "Drop 1,000,000 bubbles.", stat: "bubblesDropped", goal: 1_000_000 },
+DROP_10M:  { title: "Mass Extinction", description: "Drop 10,000,000 bubbles.", stat: "bubblesDropped", goal: 10_000_000 },
+DROP_100M: { title: "Planet Cleaner", description: "Drop 100,000,000 bubbles.", stat: "bubblesDropped", goal: 100_000_000 },
+DROP_1B:   { title: "World Breaker", description: "Drop 1,000,000,000 bubbles.", stat: "bubblesDropped", goal: 1_000_000_000 },
+};
+function spawnAchievementBurst() {
+    const burst = document.createElement("div");
+    burst.className = "achievement-burst";
+    document.body.appendChild(burst);
+
+    const PARTICLES = 48; // ⬆ more particles
+
+    for (let i = 0; i < PARTICLES; i++) {
+        const p = document.createElement("div");
+        p.className = "achievement-particle";
+
+        // random direction
+        const angle = Math.random() * Math.PI * 2;
+
+        // ⬆ MUCH bigger radius
+        const distance = 90 + Math.random() * 120;
+
+        // ⬆ random size for punch
+        const size = 6 + Math.random() * 8;
+        p.style.width = `${size}px`;
+        p.style.height = `${size}px`;
+
+        // slight colour variation
+        const hue = 170 + Math.random() * 40;
+        p.style.background = `hsl(${hue}, 100%, 60%)`;
+
+        p.style.setProperty("--dx", `${Math.cos(angle) * distance}px`);
+        p.style.setProperty("--dy", `${Math.sin(angle) * distance}px`);
+
+        burst.appendChild(p);
+    }
+
+    setTimeout(() => burst.remove(), 1000);
+}
+// 🏆 Achievement popup queue
+const achievementQueue = [];
+let achievementPopupActive = false;
+function checkProgressAchievements() {
+    for (const id in ACHIEVEMENTS) {
+        const a = ACHIEVEMENTS[id];
+        if (!a.stat || unlockedAchievements[id]) continue;
+
+       const value =
+    a.stat === "level"
+        ? level
+        : a.stat === "score"
+            ? score
+            : stats[a.stat];
+
+        if (value >= a.goal) {
+            unlockAchievement(id);
+        }
+    }
+}
+let unlockedAchievements =
+    JSON.parse(localStorage.getItem("bubbleAchievements") || "{}");
+function getAchievementCounts() {
+    const total = Object.keys(ACHIEVEMENTS).length;
+
+    let earned = 0;
+    for (const id in unlockedAchievements) {
+        const e = unlockedAchievements[id];
+        if (e === true || e?.unlocked) earned++;
+    }
+
+    return { earned, total };
+}
+function saveAchievements() {
+    localStorage.setItem(
+        "bubbleAchievements",
+        JSON.stringify(unlockedAchievements)
+    );
+}
+function unlockAchievement(id) {
+    if (unlockedAchievements[id]) return;
+
+      unlockedAchievements[id] = {
+        unlocked: true,
+        time: getAchievementTimestamp()
+    };
+    saveAchievements();
+
+    const a = ACHIEVEMENTS[id];
+    if (a) showAchievementPopup(a.title, a.description);
+}
+function getAchievementTimestamp() {
+    const d = new Date();
+
+    const pad = n => n.toString().padStart(2, "0");
+
+    const days = [
+        "Sunday","Monday","Tuesday","Wednesday",
+        "Thursday","Friday","Saturday"
+    ];
+
+    const months = [
+        "January","February","March","April",
+        "May","June","July","August",
+        "September","October","November","December"
+    ];
+
+    const dayName = days[d.getDay()];
+    const day = d.getDate();
+    const monthName = months[d.getMonth()];
+    const year = d.getFullYear();
+
+    // ordinal suffix
+    let suffix = "th";
+    if (day % 10 === 1 && day !== 11) suffix = "st";
+    else if (day % 10 === 2 && day !== 12) suffix = "nd";
+    else if (day % 10 === 3 && day !== 13) suffix = "rd";
+
+    let h = d.getHours();
+    const ampm = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+
+    const m = pad(d.getMinutes());
+    const s = pad(d.getSeconds());
+
+    const offsetMin = -d.getTimezoneOffset();
+    const sign = offsetMin >= 0 ? "+" : "-";
+    const oh = pad(Math.floor(Math.abs(offsetMin) / 60));
+    const om = pad(Math.abs(offsetMin) % 60);
+
+    return `${dayName}, ${day}${suffix} ${monthName} ${year} ` +
+           `${h}:${m}:${s} ${ampm} ${sign}${oh}${om}`;
+}
+let achievementTimer = null;
+
+function showAchievementPopup(title, description) {
+    achievementQueue.push({ title, description });
+    processAchievementQueue();
+}
+function processAchievementQueue() {
+    if (achievementPopupActive) return;
+    if (achievementQueue.length === 0) return;
+
+    achievementPopupActive = true;
+
+    const { title, description } = achievementQueue.shift();
+    const popup = document.getElementById("achievementPopup");
+
+    popup.querySelector(".achievement-name").textContent = title;
+    popup.querySelector(".achievement-desc").textContent = description;
+spawnAchievementBurst();
+sounds.play("achievement_complete")
+    popup.classList.remove("hidden");
+    requestAnimationFrame(() => popup.classList.add("show"));
+
+    // ⏱️ how long each achievement stays on screen
+    const DISPLAY_TIME = 3000;
+    const TRANSITION_TIME = 400;
+
+    setTimeout(() => {
+        popup.classList.remove("show");
+
+        setTimeout(() => {
+            popup.classList.add("hidden");
+            achievementPopupActive = false;
+
+            // 🔁 show next achievement (if any)
+            processAchievementQueue();
+        }, TRANSITION_TIME);
+
+    }, DISPLAY_TIME);
+}
+function openAchievements() {
+    renderAchievements();
+    document.getElementById("achievementsPanel")
+        .classList.remove("hidden");
+}
+
+function closeAchievements() {
+    document.getElementById("achievementsPanel")
+        .classList.add("hidden");
+}
+function renderAchievements() {
+    const { earned, total } = getAchievementCounts();
+document.getElementById("achievementCount").innerText =
+    `Achievements earned: ${earned} / ${total}`;
+    const list = document.getElementById("achievementsList");
+    list.innerHTML = "";
+
+    for (const id in ACHIEVEMENTS) {
+        const a = ACHIEVEMENTS[id];
+        const entry = unlockedAchievements[id];
+        const unlocked = entry && entry.unlocked !== false;
+        const timestamp =
+        typeof entry === "object" ? entry.time : null;
+
+        let title = a.title;
+        let progressBar = "";
+        let value = null;
+
+        if (a.stat) {
+            value =
+                a.stat === "level"
+                    ? level
+                    : a.stat === "score"
+                        ? score
+                        : stats[a.stat];
+        }
+
+        if (a.stat && !unlocked) {
+            title += ` (${fmt(Math.min(value, a.goal))} / ${fmt(a.goal)})`;
+
+            const pct = Math.min(100, (value / a.goal) * 100);
+
+            progressBar = `
+                <div class="achievement-progress">
+                    <div class="achievement-progress-fill"
+                         style="width:${pct}%"></div>
+                </div>
+            `;
+        }
+
+        const row = document.createElement("div");
+        row.className =
+            "achievement-row" +
+            (unlocked ? " unlocked" : "");
+
+        row.innerHTML = `
+            <div class="achievement-title">
+                ${unlocked ? "✅" : "🔒"} ${title}
+            </div>
+            <div class="achievement-desc">
+                ${a.description}
+            </div>
+            ${progressBar}
+            ${unlocked && timestamp ? `
+    <div class="achievement-time">
+        🕒 ${timestamp}
+    </div>
+` : ""}
+        `;
+
+        list.appendChild(row);
+    }
+}
+function resetAchievements() {
+    if (!confirm("Reset ALL achievements?\nThis cannot be undone.")) return;
+
+    unlockedAchievements = {};
+    saveAchievements();
+    renderAchievements();
+}
 	const toggleMusicPlayerBtn = document.getElementById("toggleMusicPlayerBtn");
 let musicPlayerVisible =
     localStorage.getItem("musicPlayerVisible") !== "false";
@@ -1641,6 +2121,18 @@ else if (type === 'death') {
 
     sub.start();
     sub.stop(now + 1.2);
+}
+else if (type === "achievement_complete")
+{
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(500, now);
+    osc.frequency.exponentialRampToValueAtTime(250, now + 0.25);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.25, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+    osc.start();
+    osc.stop(now + 0.45);
 }}}
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -1987,6 +2479,7 @@ else if (cmd === '!showgrid') {
     e.target.value = '';
         document.getElementById('debugConsole').style.display = 'none';
         setPause(false);
+        unlockAchievement("DEBUG_USED");
     }
 
 });
@@ -2321,6 +2814,7 @@ canvas.addEventListener('mousedown', e => {
         if (isPlaytesting) {
             bubbles = JSON.parse(JSON.stringify(customLevelSnapshot));
             enterCustomEditor();
+            unlockAchievement("CUSTOM_LEVEL_COMPLETED")
             return;
         }
 
@@ -2329,6 +2823,7 @@ canvas.addEventListener('mousedown', e => {
             if (isCampaignMode) {
 
                 if (campaignLevel >= CAMPAIGN_TOTAL_LEVELS) {
+                    unlockAchievement("CAMPAIGN_COMPLETE");
                     isCampaignMode = false;
                     campaignLevel = 1;
                     return;
@@ -2692,6 +3187,9 @@ function popBubbles(m) {
     
     sounds.play('pop');
 	stats.bubblesPopped += m.length;
+    checkProgressAchievements();
+    if (stats.bubblesPopped >= 1000) unlockAchievement("POP_1K");
+if (stats.bubblesPopped >= 10000) unlockAchievement("POP_10K");
     saveStats();
     let pts = m.length * 10 * streakCount;
     score += pts;
@@ -2808,8 +3306,26 @@ if (
     perfectStreak = 0;
 }
     stats.levelsCompleted++;
+    unlockAchievement("FIRST_WIN");
+
+if (lives === MAX_LIVES) {
+    unlockAchievement("MAX_LIVES");
+}
+
+if (lives === 1) {
+    unlockAchievement("CLUTCH_WIN");
+}
+
+if (lastClearWasPerfect) {
+    unlockAchievement("PERFECT_CLEAR");
+}
+
+if (level >= 10) unlockAchievement("LEVEL_10");
+if (level >= 50) unlockAchievement("LEVEL_50");
+if (level >= 100) unlockAchievement("LEVEL_100");
 stats.totalStreak = Math.max(stats.totalStreak, streakCount);
 stats.perfectStreak = Math.max(stats.perfectStreak, perfectStreak);
+checkProgressAchievements();
 
 // 🎁 Reward bubbles on level completion
 if(!isPlaytesting)
@@ -2978,6 +3494,7 @@ for (let i = fallingBubbles.length - 1; i >= 0; i--) {
         // stats
         stats.bubblesDropped++;
         saveStats();
+        checkProgressAchievements();
 
         // remove falling bubble
         fallingBubbles.splice(i, 1);
@@ -4749,7 +5266,8 @@ function closeCustomSavePopup() {
     'panic',
     'tick',
     'heartbeat',
-    'death'
+    'death',
+    "achievement_complete"
 ];
 
 function openSfxMenu() {
@@ -4865,6 +5383,21 @@ justify-content:center;
       font-weight:bold;
     ">CLOSE</button>
   </div>
+</div>
+<div id="achievementsPanel" class="panel hidden">
+    <h2>
+    🏆 ACHIEVEMENTS
+    <div id="achievementCount" style="font-size:13px; opacity:0.8;"></div>
+</h2>
+
+    <div id="achievementsList" class="achievements-list"></div>
+
+    <div class="panel-buttons">
+        <button onclick="resetAchievements()" class="danger">
+            🔄 Reset Achievements
+        </button>
+        <button onclick="closeAchievements()">Close</button>
+    </div>
 </div>
 </body>
 </html>
