@@ -3844,14 +3844,7 @@ function hurryTick() {
     if (hurryWarningActive && hurryWarningSeconds !== null) {
         hurryWarningSeconds--;
         sounds.play("tick");
-
-        const el = document.getElementById("campaignTimerInner");
-        if (el) {
-            el.classList.remove("tick-pulse");
-            void el.offsetWidth;
-            el.classList.add("tick-pulse");
-        }
-
+		
         if (hurryWarningSeconds <= 0) {
             hurryWarningSeconds = 0;
         }
