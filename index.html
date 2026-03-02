@@ -2248,6 +2248,10 @@ function refreshFavicon() {
         setFaviconEmoji("⚠️");
         return;
     }
+    if (hurryWarningActive) {
+        setFaviconEmoji("⏱️");
+        return;
+    }
 
     updateFavicon(currentBall);
 }
@@ -3443,6 +3447,7 @@ function drawHurryWarning(sec) {
     );
 
     ctx.restore();
+    refreshFavicon();
 }
 function autoShootCurrentBubble() {
     if (!currentBall || ammo <= 0 || mouseY > DEADLINE) 
@@ -3837,7 +3842,7 @@ function hurryTick() {
     if (hurryIdleSeconds === 10) {
         hurryWarningActive = true;
         hurryWarningSeconds = 10;
-        setFaviconEmoji("⏱️");
+        refreshFavicon();
     }
 
     // ⏱️ countdown
