@@ -1716,6 +1716,9 @@ let stats = loadStats();
             "color: #00ffcc; font-size: 16px; font-weight: bold;"
         );
         updateHurryButton();
+        gameRunning = false;
+        stopHurryTimer();
+
     });
 
 function resetStats() {
@@ -1788,12 +1791,16 @@ let snapWillFall = false;
 const DRAG_EMOJI = "🧲";
 let deathSfxPlayed = false;
 let hurryWarningActive = false;
-let hurryWarningSeconds = 0;
+let hurryWarningSeconds = null;
 let hurryMode =
     localStorage.getItem("bubbleHurryMode") === "true";
-
-let hurryTimer = 0;
+let isFileDialogOpen = false;
+let wasPausedBeforeFileDialog = false;
+let hurryTimer = null;
 let lastHurrySecond = null;
+let hurryIdleSeconds = 0;
+let hurryPaused = false;
+
 function toggleHurryMode() {
     hurryMode = !hurryMode;
     localStorage.setItem("bubbleHurryMode", hurryMode);
@@ -2217,7 +2224,7 @@ function startCampaign() {
         campaignTimer = CAMPAIGN_TIME_LIMIT;
         lastTimeMs = performance.now(); // ✅ reset timer baseline
         startMode('puzzle');
-        hurryWarningSeconds = 20;
+        startHurryTimer();
     }
 
 function refreshFavicon() {
@@ -3005,12 +3012,26 @@ canvas.addEventListener('mouseleave', () => {
 
 function setPause(state) {
     isPaused = state;
+    stopHurryTimer();
     document.getElementById('pauseBtn').innerText = isPaused ? "RESUME" : "PAUSE";
     refreshFavicon();
+    
+     if (isPaused) {
+        pauseHurryTimer();
+    } else {
+        resumeHurryTimer();
+    }
 }
 function togglePause() { if(!gameRunning || gameOver || gameWin) return; setPause(!isPaused);}
 
 function shoot() {
+    hurryIdleSeconds = 0;
+    hurryWarningActive = false;
+    hurryWarningSeconds = null;
+
+    if (gameRunning && !isPaused) {
+        resetHurryTimer(); // resume cleanly
+    }
 if (dragBubblesEnabled && draggedBubble) return;
    loadedProgressOverride = null;
 
@@ -3019,7 +3040,7 @@ if (dragBubblesEnabled && draggedBubble) return;
     lastShotUsedFinalAmmo = (ammo === 1);
     lastShotBubbleCount = bubbles.length;
     hurryWarningActive = false;
-    hurryWarningSeconds = 0;
+    hurryWarningSeconds = null;
     if (projectiles.length > 0 || ammo <= 0) return;
     sounds.play('shoot');
 
@@ -3080,6 +3101,7 @@ if (m.length >= 3) {
     lastShotWasMatch = false;
     spawnDudHitParticles(nb.x, nb.y, nb.color);
         sounds.play('place');
+        startHurryTimer();
         if (ammo <= 0 && bubbles.length > 0)
             triggerFail("You ran out of bubbles!\n-1❤️");
 
@@ -3184,7 +3206,7 @@ function spawnProjectileTrail(x, y, color, vx, vy, t = 0) {
 }
 function popBubbles(m) {
     const beforePct = calcProgressPercent(bubbles.length, initialBubbleCount);
-    
+    startHurryTimer();
     sounds.play('pop');
 	stats.bubblesPopped += m.length;
     checkProgressAchievements();
@@ -3426,11 +3448,18 @@ function autoShootCurrentBubble() {
     if (!currentBall || ammo <= 0 || mouseY > DEADLINE) 
     {
       hurryWarningActive = false;
-      hurryWarningSeconds = 0;
+      hurryWarningSeconds = null;
+      console.error("Auto shoot cancelled.")
       return;
     }
     
+hurryIdleSeconds = 0;
+    hurryWarningActive = false;
+    hurryWarningSeconds = null;
 
+    if (gameRunning && !isPaused) {
+        startHurryTimer(); // resume cleanly
+    }
     const speed = 10;
 
     projectiles.push({
@@ -3448,7 +3477,46 @@ function autoShootCurrentBubble() {
     saveStats();
     sounds.play('shoot');
     hurryWarningActive = false;
-    hurryWarningSeconds = 0;
+    hurryWarningSeconds = null;
+    resetHurryTimer();
+}
+const floatingTexts = [];
+
+function spawnFloatingScore(text, x, y, color = "#00ffcc") {
+    floatingTexts.push({
+        text,
+        x,
+        y,
+        vy: -0.6,
+        life: 1.0,
+        color
+    });
+}
+
+function updateFloatingTexts() {
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        const t = floatingTexts[i];
+        t.y += t.vy;
+        t.life -= 0.02;
+
+        if (t.life <= 0) {
+            floatingTexts.splice(i, 1);
+        }
+    }
+}
+
+function drawFloatingTexts(ctx) {
+    ctx.save();
+    ctx.font = "bold 18px Storopia";
+    ctx.textAlign = "center";
+
+    for (const t of floatingTexts) {
+        ctx.globalAlpha = Math.max(0, t.life);
+        ctx.fillStyle = t.color;
+        ctx.fillText(t.text, t.x, t.y);
+    }
+
+    ctx.restore();
 }
 function update() {
     // ---- delta time (seconds) ----
@@ -3480,31 +3548,59 @@ for (let i = fallingBubbles.length - 1; i >= 0; i--) {
     // fade slightly
     b.life -= 0.01;
 
-    // 🚨 DEADLINE HIT → POP
-    if (b.y >= DEADLINE) {
-        // pop particles
-        spawnPopParticles(b.x, DEADLINE, b.color);
-        if (absorbFallingBubbles && !isPlaytesting) {
+    const DEADLINE_SCORE = 10;
+
+if (b.y >= DEADLINE) {
+    if (!gameOver)
+{
+    score += DEADLINE_SCORE;
+    
+}
+if (absorbFallingBubbles && !isPlaytesting && !gameOver)
+{
+    floatingScores.push({
+        x: b.x,
+        y: DEADLINE,
+        text: `+${DEADLINE_SCORE}\n+1 BUBBLE`,
+        life: 1.0
+    });
+}
+else if (absorbFallingBubbles && !isPlaytesting && gameOver)
+{
+    floatingScores.push({
+        x: b.x,
+        y: DEADLINE,
+        text: `+1 BUBBLE`,
+        life: 1.0
+    });
+}
+else if (!gameOver)
+{
+   floatingScores.push({
+        x: b.x,
+        y: DEADLINE,
+        text: `+${DEADLINE_SCORE}`,
+        life: 1.0
+    }); 
+}
+    // 💥 particles exactly where it hits
+    spawnPopParticles(b.x, DEADLINE, b.color);
+
+    // 🧲 absorb logic
+    if (absorbFallingBubbles ) {
         ammo++;
         updateAmmo();
     }
-        // sound
-        sounds.play('pop');
 
-        // stats
-        stats.bubblesDropped++;
-        saveStats();
-        checkProgressAchievements();
+    sounds.play("pop");
 
-        // remove falling bubble
-        fallingBubbles.splice(i, 1);
-        continue;
-    }
+    stats.bubblesDropped++;
+    saveStats();
+    checkProgressAchievements();
 
-    // natural fade-out cleanup
-    if (b.life <= 0) {
-        fallingBubbles.splice(i, 1);
-    }
+    fallingBubbles.splice(i, 1);
+    continue;
+}
 }
 if (
     inner &&
@@ -3543,48 +3639,6 @@ if (
     }
 } else {
     lastHeartbeatSecond = null;
-}
-
-// ======================
-// HURRY MODE
-// ======================
-if (
-    hurryMode &&
-    !isCustomMode &&
-    !gameOver &&
-    !gameWin &&
-    gameRunning &&
-    projectiles.length === 0
-) {
-    if (isPaused) return; // ⏸️ freeze, don’t reset
-
-    hurryTimer += dt;
-
-    const timeLeft = Math.ceil(20 - hurryTimer);
-
-    if (timeLeft <= 10 && timeLeft >= 1) {
-        hurryWarningActive = true;
-        hurryWarningSeconds = timeLeft;
-
-        if (lastHurrySecond !== timeLeft) {
-            sounds.play('tick');
-            lastHurrySecond = timeLeft;
-        }
-    } else {
-        hurryWarningActive = false;
-    }
-
-    if (hurryTimer >= 20) {
-        autoShootCurrentBubble();
-        hurryTimer = 0;
-        lastHurrySecond = null;
-        hurryWarningActive = false;
-    }
-}
-else if (!isPaused) {
-    hurryTimer = 0;
-    lastHurrySecond = null;
-    hurryWarningActive = false;
 }
 // LEVEL FAILED → solid red glow
 if (gameOver) {
@@ -3728,6 +3782,86 @@ spawnWallBounceParticles(
 
     floatingScores.forEach((fs, i) => { fs.y -= 1; fs.life -= 0.01; if (fs.life <= 0) floatingScores.splice(i, 1); });
     confetti.forEach((c, i) => { c.x += c.vx; c.y += c.vy; c.vy += 0.2; c.life -= 0.01; if (c.life <= 0) confetti.splice(i, 1); });
+}
+let hurryRunning = false;
+function startHurryTimer() {
+    if (!hurryMode || !gameRunning) return;
+    if (hurryTimer) return;
+
+    hurryRunning = true;
+    hurryPaused = false;
+
+    hurryTimer = setInterval(hurryTick, 1000);
+}
+
+function pauseHurryTimer() {
+    hurryPaused = true;
+}
+
+function resumeHurryTimer() {
+    if (!hurryMode || !gameRunning) return;
+
+    if (!hurryTimer) {
+        startHurryTimer();
+    }
+
+    hurryPaused = false;
+}
+
+function stopHurryTimer() {
+    if (hurryTimer) {
+        clearInterval(hurryTimer);
+        hurryTimer = null;
+    }
+    hurryRunning = false;
+    hurryPaused = false;
+}
+
+function resetHurryTimer() {
+    hurryIdleSeconds = 0;
+    hurryWarningActive = false;
+    hurryWarningSeconds = null;
+
+    if (hurryMode && gameRunning && !isPaused) {
+        resumeHurryTimer();
+    }
+}
+
+function hurryTick() {
+    if (!hurryRunning || hurryPaused) return;
+    if (!hurryMode || !gameRunning || isPaused || projectiles.length === 1 || gameOver || gameWin) return;
+
+    hurryIdleSeconds++;
+    console.log(hurryIdleSeconds, hurryWarningSeconds)
+    // ⚠️ warning phase
+    if (hurryIdleSeconds === 10) {
+        hurryWarningActive = true;
+        hurryWarningSeconds = 10;
+        setFaviconEmoji("⏱️");
+    }
+
+    // ⏱️ countdown
+    if (hurryWarningActive && hurryWarningSeconds !== null) {
+        hurryWarningSeconds--;
+        sounds.play("tick");
+
+        const el = document.getElementById("campaignTimerInner");
+        if (el) {
+            el.classList.remove("tick-pulse");
+            void el.offsetWidth;
+            el.classList.add("tick-pulse");
+        }
+
+        if (hurryWarningSeconds <= 0) {
+            hurryWarningSeconds = 0;
+        }
+    }
+
+    // 💥 auto shoot
+    if (hurryIdleSeconds >= 20) {
+        autoShootCurrentBubble();
+        resetHurryTimer();
+    }
 }
 function isCellOccupied(row, col, ignoreBubble) {
     return bubbles.some(b => b !== ignoreBubble && b.row === row && b.col === col);
@@ -4299,7 +4433,7 @@ if (dragBubblesEnabled) {
     
     
 }
-if (hurryWarningActive) {
+if (hurryWarningActive && gameRunning) {
     drawHurryWarning(hurryWarningSeconds);
 }
 if (showGrid || isCustomMode) {
@@ -4307,7 +4441,7 @@ if (showGrid || isCustomMode) {
     drawDeadlineGridRow();
 }
 }}
-function gameLoop() { if (gameRunning) { update(); draw(); animationId = requestAnimationFrame(gameLoop); } }
+function gameLoop() { if (gameRunning) { update(); draw(); animationId = requestAnimationFrame(gameLoop); }}
 
 function initializeAmmo(type, savedAmmo = null) {
 
@@ -4344,7 +4478,7 @@ function initializeAmmo(type, savedAmmo = null) {
         lastTickSecond = null;
         hideCampaignTimer();
         startMode('puzzle');
-        hurryWarningSeconds = 20;
+        startHurryTimer();
     }
 function hideCampaignTimer() {
     const timerSpan = document.getElementById('campaignTimerDisplay');
@@ -4447,6 +4581,7 @@ document.getElementById('percentText').style.display = 'none';
     drawGridOverlay();
     drawDeadlineGridRow();
     gameLoop();
+    stopHurryTimer();
 }
 
 function hasAtLeastOneConnection(bubble) {
@@ -4560,6 +4695,7 @@ setBrowserTitle("▶️ SK's Bubble Shooter — Playtesting");
     initialBubbleCount = bubbles.length;
     updateProgressBar();
     updateAmmo();
+    startHurryTimer();
 }
     
 function hasParentAbove(r, c) {
@@ -5142,10 +5278,22 @@ function handleLoadClick() {
             alert("Cannot load a save file in playtest mode.");
             return;
         }
+            // remember previous pause state
+    wasPausedBeforeFileDialog = isPaused;
+
+    // pause the game if not already
+    if (!isPaused) {
+        togglePause(true); // force pause
+    }
+
+    isFileDialogOpen = true;
+
+    document.getElementById("fileInput").value = ""; // reset
         document.getElementById('fileInput').click();
     }
 
 function loadGame(e) {
+    isFileDialogOpen = false;
     const file = e.target.files[0];
     if (!file) return;
     
@@ -5249,7 +5397,22 @@ updateLivesUI();
 
     reader.readAsText(file);
     event.target.value = "";
+        if (!wasPausedBeforeFileDialog) {
+        togglePause(false); // resume
+        hurryTimer = null;
+        hurryWarningActive = false;
+        hurryWarningSeconds = null;
+    }
 }
+window.addEventListener("focus", () => {
+    if (isFileDialogOpen) {
+        isFileDialogOpen = false;
+
+        if (!wasPausedBeforeFileDialog) {
+            togglePause(false);
+        }
+    }
+});
 function closeCustomSavePopup() {
     const popup = document.getElementById('customSavePopup');
     if (popup) popup.style.display = 'none';
@@ -5321,10 +5484,7 @@ function exitToMenu() { setBrowserTitle("⭐ SK's Bubble Shooter"); gameRunning 
     lives = DEFAULT_LIVES;
     updateLivesUI(); updateStatsBoard(); updateFavicon(); resetProgressBar(); addSfxButtonToMenu();
         // 🔥 stop hurry mode completely
-    hurryTimer = 0;
-    lastHurrySecond = null;
-    hurryWarningActive = false;
-    hurryWarningSeconds = 0;
+    resetHurryTimer();
 }
 updateStatsBoard();
 	updateFavicon();
