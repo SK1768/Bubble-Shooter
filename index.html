@@ -3747,9 +3747,9 @@ if (panicMode) {
 }
 
 if (isCampaignMode) {
-if (isPaused || gameOver || gameWin || winPending) return;
+if (!isPaused || !gameOver || !gameWin || !winPending) {
         campaignTimer -= dt;
-
+}
 
 // use DISPLAYED time for logic
 const secondsLeft = Math.ceil(campaignTimer);
@@ -5761,5 +5761,6 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
 
