@@ -3746,7 +3746,7 @@ if (panicMode) {
     panicFade = Math.max(0, panicFade - FADE_SPEED);
 }
 
-if (isCampaignMode && !isPaused && !gameOver && !gameWin) {
+if (isCampaignMode && !isPaused && !gameOver && !gameWin && !winPending) {
 
         campaignTimer -= dt;
 
@@ -4692,6 +4692,7 @@ function startMode(m, isLoad = false, isNextLevel = false) {
         campaignLevel = 1;
         campaignTimer = 0;
         lastTickSecond = null;
+		campaignFinished = false;
     }
     gameRunning = true; gameOver = false; gameWin = false; isPaused = false; isCustomMode = false; isPlaytesting = false;
     lastClearWasPerfect = false;
@@ -5760,3 +5761,4 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
