@@ -2187,7 +2187,7 @@ const COLOR_EMOJIS = {
 
 
 let mode = 'puzzle', score = 0, level = 1, angle = 0, mouseInside = false;
-let bubbles = [], fallingBubbles = [], projectiles = [], particles = [], floatingScores = [], confetti = []; let fallingParticles = [];
+let bubbles = [], fallingBubbles = [], projectiles = [], particles = [], floatingScores = [], confetti = [];
 let currentBall = '', nextBall = '', ammo = 0, initialBubbleCount = 0;
 let streakCount = 1, streakTimer = 0, streakFrozen = false;
 const STREAK_DURATION = 180;
@@ -3576,23 +3576,7 @@ for (let i = fallingBubbles.length - 1; i >= 0; i--) {
     b.x += b.vx;
     b.y += b.vy;
     // fade slightly
-    b.life -= 0.01;    
-// --- Spawn falling particles ---
-if (!isPaused) {
-   
-    for (let i = 0; i < 2; i++) {
-        fallingParticles.push({
-            x: b.x + (Math.random() - 0.5) * 6,
-            y: b.y + (Math.random() - 0.5) * 6,
-            vx: (Math.random() - 0.5) * 0.8,
-            vy: Math.random() * 1.2,
-            life: 1,
-            color: b.color ?? "#888"
-        });
-    }
-    
-} 
-
+    b.life -= 0.01;
     const DEADLINE_SCORE = 10;
 
 if (b.y >= DEADLINE) {
@@ -3647,7 +3631,6 @@ else if (!gameOver)
     checkProgressAchievements();
 
     fallingBubbles.splice(i, 1);
-    fallingParticles = [];
     continue;
 }
 
@@ -4667,7 +4650,7 @@ function startMode(m, isLoad = false, isNextLevel = false) {
 }}
 
 
-    if (!isLoad) {bubbles = [];} fallingBubbles = []; projectiles = []; particles = []; confetti = []; fallingParticles = [];
+    if (!isLoad) {bubbles = [];} fallingBubbles = []; projectiles = []; particles = []; confetti = [];
     document.getElementById('mainMenu').style.display = 'none';
     document.getElementById('customUI').style.display = 'none';
     document.getElementById('gameUI').style.display = 'block';
@@ -5715,3 +5698,4 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
