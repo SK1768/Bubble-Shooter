@@ -3063,7 +3063,7 @@ function setPause(state) {
         resumeHurryTimer();
     }
 }
-function togglePause() { if(!gameRunning || gameOver || gameWin) return; setPause(!isPaused);}
+function togglePause() { if(!gameRunning || gameOver || gameWin || winPending) return; setPause(!isPaused);}
 
 function shoot() {
 if (winPending) return;
