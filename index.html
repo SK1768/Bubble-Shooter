@@ -3062,6 +3062,7 @@ function setPause(state) {
     } else {
         resumeHurryTimer();
     }
+    campaignTimerAcc = 0;
 }
 function togglePause() { if(!gameRunning || gameOver || gameWin || winPending) return; setPause(!isPaused);}
 
@@ -3312,6 +3313,7 @@ if (bubbles.length === 0) {
     ctx.restore();
     console.log("WAIT")
     winPending = true;
+    campaignTimerAcc = 0;
 }
 
 
@@ -3584,7 +3586,15 @@ function drawFloatingTexts(ctx) {
     ctx.restore();
 }
 function update() {
+    
 if (isPaused) return;
+    // ---- delta time (seconds) ----
+const nowMs = performance.now();
+const dt = (nowMs - lastTimeMs) / 1000;
+lastTimeMs = nowMs;
+panicPulseTime += 0.02; // speed of pulse (lower = slower)
+const FADE_SPEED = 3; // lower = slower fade
+const canvasEl = canvas; // already have it
 if (
     winPending &&
     fallingBubbles.length === 0 &&
@@ -3595,13 +3605,8 @@ if (
     winPending = false;
     triggerWin();
 }
-    // ---- delta time (seconds) ----
-const nowMs = performance.now();
-const dt = (nowMs - lastTimeMs) / 1000;
-lastTimeMs = nowMs;
-panicPulseTime += 0.02; // speed of pulse (lower = slower)
-const FADE_SPEED = 3; // lower = slower fade
-const canvasEl = canvas; // already have it
+
+
 if (isAiming) {
     aimGlowPulse += 0.15; // speed of glow pulse
 } else {
@@ -3746,15 +3751,24 @@ if (panicMode) {
     panicFade = Math.max(0, panicFade - FADE_SPEED);
 }
 
-if (isCampaignMode) {
-if (!isPaused || !gameOver || !gameWin || !winPending) {
-        campaignTimer -= dt;
+if (isCampaignMode && !gameOver && !gameWin && !isPaused && !winPending) {
+    if (isPaused || winPending)
+{
+    campaignTimerAcc = 0;
 }
+else
+{
+    campaignTimerAcc += dt;
+}
+    if (campaignTimerAcc >= 1) {
+        campaignTimer--;
+        campaignTimerAcc = 0;
+    }
 
 // use DISPLAYED time for logic
 const secondsLeft = Math.ceil(campaignTimer);
 
-if (secondsLeft <= -1) {
+if (secondsLeft <= -1 && projectiles.length === 0) {
     triggerFail("You ran out of time!\n-1❤️");
     campaignLevel = 1;
 }
@@ -4495,14 +4509,14 @@ document.getElementById('scoreDisplay').innerText =
 
 const timerSpan = document.getElementById('campaignTimerDisplay');
 const inner = document.getElementById('campaignTimerInner');
-if (isCampaignMode) {
+if (isCampaignMode && !isPaused && !winPending & !gameOver && !gameWin) {
     const t = Math.ceil(campaignTimer);
     const minutes = Math.floor(t / 60);
     const seconds = t % 60;
 
 
 
-if (isCampaignMode && timerSpan && inner) {
+if (isCampaignMode && timerSpan && inner && !isPaused && !winPending & !gameOver && !gameWin) {
     const t = Math.ceil(campaignTimer);
     const minutes = Math.floor(t / 60);
     const seconds = t % 60;
@@ -4637,7 +4651,7 @@ if (showFPS) {
     ctx.restore();
 }
 }
-function gameLoop() { if (gameRunning) { update(); draw(); animationId = requestAnimationFrame(gameLoop); }}
+function gameLoop() { if (gameRunning) { draw(); update(); animationId = requestAnimationFrame(gameLoop); }}
 
 function initializeAmmo(type, savedAmmo = null) {
 
@@ -5761,6 +5775,3 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
-
-
-
