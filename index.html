@@ -59,13 +59,26 @@
             flex-direction: column;
             align-items: center;
         }
+#debugOverlayPanel {
+    width: 530px;
+    min-height: 640px;
+    background: rgba(0, 0, 0, 0.85);
+    border: 2px solid #00ffcc;
+    color: #00ffcc;
+    font-family: Storopia;
+    font-size: 13px;
+    padding: 10px;
+    overflow-y: auto;
+    display: none;
+    white-space: pre;
+}
 
-            .game-container {
-                position: relative;
-                width: 100%;
-                display: flex;
-                justify-content: center;
-            }
+.game-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 10px;
+}
 
             canvas {
                 background: #000000;
@@ -585,6 +598,7 @@ button.danger {
         opacity: 0;
     }
 }
+
     </style>
 </head>
 <body oncontextmenu="return false;">
@@ -712,14 +726,13 @@ button.danger {
 
     </div>
 
-    <div class="game-container">
-        <canvas id="gameCanvas" width="440" height="640"></canvas>
+    <div class="game-container">    
+    <canvas id="gameCanvas" width="440" height="640"></canvas>
 		<div id="bubbleHexOverlay"></div>
         <div id="mobileControls">
+            <div id="debugOverlayPanel"></div>
     <button class="mobile-btn" onclick="swapBubbles()">SWAP</button>
     <button class="mobile-btn" id="debugBtn" onclick="openDebug()">DEBUG</button>
-
-    <!-- NEW: moved here -->
     <button class="mobile-btn" id="colorblindToggle" onclick="toggleColorblind()">👁️</button>
     <button class="mobile-btn" id="aimToggle" onclick="toggleAim()">🎯</button>
 </div>
@@ -1807,6 +1820,7 @@ let fps = 0;
 let fpsFrameCount = 0;
 let fpsLastTime = performance.now();
 let winPending = false;
+let showDebugOverlay = false;
 function toggleHurryMode() {
     hurryMode = !hurryMode;
     localStorage.setItem("bubbleHurryMode", hurryMode);
@@ -2524,7 +2538,25 @@ else if (cmd === '!resetgame')
    ammo = 50;
 
 }
+else if (cmd === "!showdebug") {
+
+    if (arg === "true") {
+        showDebugOverlay = true;
+        console.log("Debug overlay enabled.");
+    }
+    else if (arg === "false") {
+        showDebugOverlay = false;
+        console.log("Debug overlay disabled.");
+    }
+    else {
+        console.log("Usage: !showdebug true/false");
+    }
+
+
+}
     e.target.value = '';
+        stats.debugCommandsUsed++;
+        saveStats();
         document.getElementById('debugConsole').style.display = 'none';
         setPause(false);
         unlockAchievement("DEBUG_USED");
@@ -2874,6 +2906,7 @@ canvas.addEventListener('mousedown', e => {
                     unlockAchievement("CAMPAIGN_COMPLETE");
                     isCampaignMode = false;
                     campaignLevel = 1;
+                    campaignFinished = false;
                     return;
                 }
 
@@ -3081,7 +3114,7 @@ if (dragBubblesEnabled && draggedBubble) return;
 
      // 🔒 Freeze shot conditions
     lastShotWasMatch = false;
-    lastShotUsedFinalAmmo = (ammo === 1);
+    lastShotUsedFinalAmmo = (ammo === 0);
     lastShotBubbleCount = bubbles.length;
     hurryWarningActive = false;
     hurryWarningSeconds = null;
@@ -3372,11 +3405,7 @@ updateLivesUI();
 
 saveStats();
 // 🎯 PERFECT = last ammo + match + clears board
-lastClearWasPerfect =
-    lastShotUsedFinalAmmo &&
-    lastShotWasMatch &&
-    lastShotBubbleCount > 0;
-
+lastClearWasPerfect = ammo === 0 || campaignTimer <= -1;
 if (
     lastClearWasPerfect &&
     mode !== "custom" &&
@@ -3771,6 +3800,7 @@ const secondsLeft = Math.ceil(campaignTimer);
 if (secondsLeft <= -1 && projectiles.length === 0) {
     triggerFail("You ran out of time!\n-1❤️");
     campaignLevel = 1;
+    lastClearWasPerfect = false;
 }
 
         // 🔥 Ticking sound under 10 seconds
@@ -4078,6 +4108,7 @@ canvas.addEventListener("pointerleave", () => {
   if (activeAimPointerId === null) isAiming = false;
 });
  function draw() {
+    drawDebugOverlay();
     // ---- FPS Counter ----
 fpsFrameCount++;
 
@@ -4430,7 +4461,7 @@ if (winPending && !gameWin && !gameOver && bubbles.length === 0) {
     }
 
     // --- PERFECT WIN SCREEN ---
-    else if (!gameOver && lastClearWasPerfect) {
+    else if (!gameOver && lastClearWasPerfect && !winPending) {
         ctx.fillStyle = "#FFD700";
         ctx.shadowColor = "#FFD700";
         ctx.shadowBlur = 12;
@@ -4441,7 +4472,7 @@ if (winPending && !gameWin && !gameOver && bubbles.length === 0) {
         ctx.shadowBlur = 0;
 
         ctx.font = "bold 20px Storopia";
-        ctx.fillText(isPlaytesting ? "" : "+1,000 SCORE  +150 BUBBLES  +10❤️", canvas.width / 2, 295);
+        ctx.fillText(isPlaytesting ? "" : isCampaignMode ? "+50 BUBBLES! +1❤️"  : "+1,000 SCORE  +150 BUBBLES  +10❤️", canvas.width / 2, 295);
 
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "16px Storopia";
@@ -4651,6 +4682,80 @@ if (showFPS) {
     ctx.restore();
 }
 }
+function drawDebugOverlay() {
+    const panel = document.getElementById("debugOverlayPanel");
+
+    if (!showDebugOverlay) {
+        panel.style.display = "none";
+        return;
+    }
+
+    panel.style.display = "block";
+
+    let mode = "PUZZLE";
+
+    let trueGameOver = lives === 0;
+
+    if (isCampaignMode) mode = "CAMPAIGN";
+    else if (isCustomMode || isPlaytesting) mode = "CUSTOM";
+
+    const lines = [
+        `--- SK's Bubble Shooter\'s DEBUG OVERLAY ---`,
+        ``,
+        `gameMode: ${mode}`,
+        `bubblesRemaining: ${bubbles.length}`,
+        `bubblesFalling: ${fallingBubbles.length}`,
+        `projectiles: ${projectiles.length}`,
+        `currentBubble: ${ammo <= 0 ? null : currentBall}`,
+        `nextBubble: ${ammo <= 1 ? null : nextBall}`,
+        `ammo: ${ammo}`,
+        `levelName: ${customLevelName ?? null}`,
+        `levelAuthorName: ${customAuthorName ?? null}`,
+        `level: ${isCampaignMode ? campaignLevel + "/" + CAMPAIGN_TOTAL_LEVELS : level}`,
+        `score: ${score}`,
+        `lives: ${lives}`,
+        `streak: ${streakCount}`,
+        `perfectStreak: ${perfectStreak}`,
+        `progress: ${getProgress()}`,
+        `streakTimer: ${streakTimer}`,
+        `gameOver: ${gameOver}`,
+        `gameOverReason: ${gameOver ? gameOverReason : null}`,
+        `gameWin: ${gameWin}`,
+        `lastClearWasPerfect: ${lastClearWasPerfect}`,
+        `trueGameOver: ${trueGameOver}`,
+        `isAiming: ${isAiming}`,
+        `panicMode: ${panicMode}`,
+        `panicTriggered: ${panicTriggered}`,
+        `gameRunning: ${gameRunning}`,
+        `isPaused: ${isPaused}`,
+        `hurryMode: ${hurryMode}`,
+        `hurryWarningActive: ${hurryWarningActive}`,
+        `hurryTimer: ${hurryTimer}`,
+        `hurryIdleSeconds: ${hurryIdleSeconds}`,
+        `hurryWarningSeconds: ${hurryWarningSeconds}`,
+        `winPending: ${winPending}`,
+        `campaignTimer: ${campaignTimer}`,
+        `campaignTimerAcc: ${campaignTimerAcc.toFixed(1)}`,
+        `campaignFinished: ${campaignFinished}`,
+        ``,
+        `--- BUBBLES ON GRID ---`
+    ];
+
+    const MAX_DEBUG_BUBBLES = 999999;
+
+    for (let i = 0; i < Math.min(bubbles.length, MAX_DEBUG_BUBBLES); i++) {
+        const b = bubbles[i];
+        lines.push(bubbles.length === 0 ? `None`:
+            `[${i}] x: ${Math.round(b.x)} y: ${Math.round(b.y)} row: ${b.row} col: ${b.col} color: ${b.color ?? "COLORLESS"}`
+        );
+    }
+
+    if (bubbles.length > MAX_DEBUG_BUBBLES) {
+        lines.push(`...and ${bubbles.length - MAX_DEBUG_BUBBLES} more`);
+    }
+
+    panel.textContent = lines.join("\n");
+}
 function gameLoop() { if (gameRunning) { draw(); update(); animationId = requestAnimationFrame(gameLoop); }}
 
 function initializeAmmo(type, savedAmmo = null) {
@@ -4770,7 +4875,7 @@ suppressAutosaveOnce = false; // always clear after startMode
     refreshFavicon();
 
 function enterCustomEditor() {
-    
+    ammo = 0;
     stats.customPlays++;
     saveStats();
     setBrowserTitle("🛠️ SK's Bubble Shooter — Level Editor");
@@ -4783,7 +4888,7 @@ mouseX = canvas.width / 2;
 mouseY = canvas.height - 200;
 
     document.getElementById('gameUI').style.display = 'none';
-    document.getElementById('mobileControls').style.display = 'flex';
+    document.getElementById('mobileControls').style.display = 'none';
     document.getElementById('progressContainer').style.display = 'none';
 document.getElementById('percentText').style.display = 'none';
     canvas.style.display = 'block';
@@ -4881,6 +4986,7 @@ if (!hasReachableColoredBubble()) {
     alert("This level has no reachable bubbles. Remove or reposition colourless bubbles.");
     return;
 }
+
 setBrowserTitle("▶️ SK's Bubble Shooter — Playtesting");
     customLevelSnapshot = JSON.parse(JSON.stringify(bubbles));
     isCustomMode = false;
@@ -4896,7 +5002,7 @@ setBrowserTitle("▶️ SK's Bubble Shooter — Playtesting");
     document.getElementById('customUI').style.display = 'none';
     document.getElementById('gameUI').style.display = 'block';
     document.getElementById('streakContainer').style.display = 'block';
-
+    document.getElementById('mobileControls').style.display = 'flex';
     // ✅ SHOW PROGRESS BAR
     document.getElementById('progressContainer').style.display = 'block';
     document.getElementById('percentText').style.display = 'inline-block';
@@ -5263,7 +5369,7 @@ if (isLoadingSave) {
     refreshFavicon();
 }
 
-function swapBubbles() { [currentBall, nextBall] = [nextBall, currentBall]; sounds.play('swap'); refreshFavicon(); stats.bubblesSwapped++; saveStats();}
+function swapBubbles() { if (ammo <= 1) return; [currentBall, nextBall] = [nextBall, currentBall]; sounds.play('swap'); refreshFavicon(); stats.bubblesSwapped++; saveStats();}
 function triggerConfetti() { for(let i=0; i<50; i++) confetti.push({ x: 220, y: 300, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, color: ALL_COLORS[Math.floor(Math.random()*6)], life: 1.0 }); }
 function updatePaletteUI() {
     const p = document.getElementById('colorPalette');
@@ -5698,6 +5804,7 @@ function exitToMenu() { setBrowserTitle("⭐ SK's Bubble Shooter"); gameRunning 
     updateLivesUI(); updateStatsBoard(); updateFavicon(); resetProgressBar(); addSfxButtonToMenu();
         // 🔥 stop hurry mode completely
     resetHurryTimer();
+    bubbles = [];
 }
 updateStatsBoard();
 	updateFavicon();
