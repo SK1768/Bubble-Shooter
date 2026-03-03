@@ -3746,8 +3746,8 @@ if (panicMode) {
     panicFade = Math.max(0, panicFade - FADE_SPEED);
 }
 
-if (isCampaignMode && !isPaused && !gameOver && !gameWin && !winPending) {
-
+if (isCampaignMode) {
+if (isPaused || gameOver || gameWin || winPending) return;
         campaignTimer -= dt;
 
 
@@ -5761,4 +5761,5 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
