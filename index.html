@@ -1806,7 +1806,7 @@ let showFPS = false;
 let fps = 0;
 let fpsFrameCount = 0;
 let fpsLastTime = performance.now();
-
+let winPending = false;
 function toggleHurryMode() {
     hurryMode = !hurryMode;
     localStorage.setItem("bubbleHurryMode", hurryMode);
@@ -2513,6 +2513,17 @@ else if (cmd === '!showfps') {
 
     showFPS = (arg === 'true');
 }
+else if (cmd === '!resetgame')
+{
+   if (confirm("Are you sure you want to reset the game?\nOK = Yes\nCancel = No"))
+   startMode("puzzle")
+   perfectStreak = 0;
+   score = 0;
+   streakCount = 1;
+   streakTimer = 0;
+   ammo = 50;
+
+}
     e.target.value = '';
         document.getElementById('debugConsole').style.display = 'none';
         setPause(false);
@@ -3055,6 +3066,8 @@ function setPause(state) {
 function togglePause() { if(!gameRunning || gameOver || gameWin) return; setPause(!isPaused);}
 
 function shoot() {
+if (winPending) return;
+
     hurryIdleSeconds = 0;
     hurryWarningActive = false;
     hurryWarningSeconds = null;
@@ -3278,7 +3291,27 @@ if (stats.bubblesPopped >= 10000) unlockAchievement("POP_10K");
     });
 
 if (bubbles.length === 0) {
-    triggerWin();
+    ctx.save();
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "bold 64px Storopia";
+
+    // glow
+    ctx.fillStyle = "#ffcc00";
+    ctx.shadowColor = "#ff9900";
+    ctx.shadowBlur = 25;
+
+    // slight pulse
+    const pulse = 1 + Math.sin(performance.now() / 120) * 0.05;
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(pulse, pulse);
+
+    ctx.fillText("WAIT...", canvas.width / 2, 280);
+
+    ctx.restore();
+    console.log("WAIT")
+    winPending = true;
 }
 
 
@@ -3475,6 +3508,8 @@ function drawHurryWarning(sec) {
     ctx.restore();
 }
 function autoShootCurrentBubble() {
+    if (winPending) return;
+
     if (!currentBall || ammo <= 0 || mouseY > DEADLINE) 
     {
       hurryWarningActive = false;
@@ -3550,6 +3585,16 @@ function drawFloatingTexts(ctx) {
 }
 function update() {
 if (isPaused) return;
+if (
+    winPending &&
+    fallingBubbles.length === 0 &&
+    projectiles.length === 0 &&
+    !gameWin &&
+    !gameOver
+) {
+    winPending = false;
+    triggerWin();
+}
     // ---- delta time (seconds) ----
 const nowMs = performance.now();
 const dt = (nowMs - lastTimeMs) / 1000;
@@ -3739,7 +3784,7 @@ if (inner) {
 
     if (isPaused && !isCustomMode) return;
     updatePanicState();
-    if (!gameOver && !gameWin) {
+    if (!gameOver && !gameWin && !winPending) {
         if (streakTimer > 0 && !streakFrozen) { 
             streakTimer--; 
             if (streakTimer <= 0) streakCount = 1; 
@@ -3862,7 +3907,7 @@ function resetHurryTimer() {
 
 function hurryTick() {
     if (!hurryRunning || hurryPaused) return;
-    if (!hurryMode || !gameRunning || isPaused || projectiles.length === 1 || gameOver || gameWin) return;
+    if (!hurryMode || !gameRunning || isPaused || projectiles.length === 1 || gameOver || gameWin || winPending) return;
 
     hurryIdleSeconds++;
     console.log(hurryIdleSeconds, hurryWarningSeconds)
@@ -4331,12 +4376,30 @@ if (isAiming) {
             ctx.font = "16px Storopia";
             ctx.fillText("Click \"RESUME\" to unpause the game", canvas.width / 2, 370);
         }
-        if (gameOver || gameWin) {
-    ctx.fillStyle = "rgba(0,0,0,0.85)";
+        if (gameOver || gameWin || winPending) {
+    ctx.fillStyle = winPending ? "rgba(0,0,0,0.0)" :"rgba(0,0,0,0.85)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.textAlign = "center";
+if (winPending && !gameWin && !gameOver && bubbles.length === 0) {
+    ctx.save();
 
+    ctx.font = "bold 64px Storopia";
+
+    // glow
+    ctx.fillStyle = "#ffcc00";
+    ctx.shadowColor = "#ff9900";
+    ctx.shadowBlur = 25;
+
+    // slight pulse
+    const pulse = 1 + Math.sin(performance.now() / 120) * 0.05;
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(pulse, pulse);
+
+    ctx.fillText("WAIT...", 0, 0);
+
+    ctx.restore();
+    }
     // --- CAMPAIGN FINISHED SCREEN ---
     if (campaignFinished) {
         ctx.fillStyle = "#00ffcc";
@@ -4370,18 +4433,17 @@ if (isAiming) {
         ctx.font = "16px Storopia";
         ctx.fillText("Click to continue", canvas.width / 2, 330);
     }
-
     // --- NORMAL WIN/FAIL SCREEN ---
     else {
+        if (winPending) return;
         ctx.fillStyle = gameOver ? "#ff5555" : "#00ffcc";
         ctx.font = "bold 34px Storopia";
         const endText =
-    gameOver
+    gameOver 
         ? (lives <= 0 ? "GAME OVER!" : "LEVEL FAILED!")
         : "LEVEL COMPLETE!";
 
 ctx.fillText(endText, canvas.width / 2, 280);
-
 		    // 🎁 Show bubble reward ONLY on win
     if (gameWin && !gameOver) {
         ctx.fillStyle = "#ffcc00";
@@ -4405,7 +4467,7 @@ ctx.fillText(endText, canvas.width / 2, 280);
         ctx.fillRect(c.x, c.y, 5, 5);
     });
     ctx.restore();
-    }
+}
     // ===============================
 // 🫧 DRAGGED BUBBLE (TOP LAYER)
 // ===============================
@@ -5698,4 +5760,3 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
-
