@@ -1800,6 +1800,12 @@ let hurryTimer = null;
 let lastHurrySecond = null;
 let hurryIdleSeconds = 0;
 let hurryPaused = false;
+let noFallingBubblesAllowed = false;
+const COLORLESS_EMOJI = "❔";
+let showFPS = false;
+let fps = 0;
+let fpsFrameCount = 0;
+let fpsLastTime = performance.now();
 
 function toggleHurryMode() {
     hurryMode = !hurryMode;
@@ -2181,7 +2187,7 @@ const COLOR_EMOJIS = {
 
 
 let mode = 'puzzle', score = 0, level = 1, angle = 0, mouseInside = false;
-let bubbles = [], fallingBubbles = [], projectiles = [], particles = [], floatingScores = [], confetti = [];
+let bubbles = [], fallingBubbles = [], projectiles = [], particles = [], floatingScores = [], confetti = []; let fallingParticles = [];
 let currentBall = '', nextBall = '', ammo = 0, initialBubbleCount = 0;
 let streakCount = 1, streakTimer = 0, streakFrozen = false;
 const STREAK_DURATION = 180;
@@ -2486,6 +2492,26 @@ else if (cmd === '!showgrid') {
     alert(
         `Grid overlay ${showGrid ? "ENABLED" : "DISABLED"}`
     );
+}
+else if (cmd === '!nofallingbubblesallowed') {
+    if (arg !== 'true' && arg !== 'false') {
+        alert("Usage: !nofallingbubblesallowed true/false");
+        return;
+    }
+
+    noFallingBubblesAllowed = (arg === 'true');
+
+    alert(
+        `No falling bubbles allowed ${noFallingBubblesAllowed ? "ENABLED" : "DISABLED"}`
+    );
+}
+else if (cmd === '!showfps') {
+    if (arg !== 'true' && arg !== 'false') {
+        alert("Usage: !showfps true/false");
+        return;
+    }
+
+    showFPS = (arg === 'true');
 }
     e.target.value = '';
         document.getElementById('debugConsole').style.display = 'none';
@@ -3053,7 +3079,7 @@ if (dragBubblesEnabled && draggedBubble) return;
         y: canvas.height - 80,
         dx: Math.cos(angle) * 12,
         dy: Math.sin(angle) * 12,
-        color: currentBall
+        color: currentBall,    
     });
 
     ammo--;
@@ -3523,6 +3549,7 @@ function drawFloatingTexts(ctx) {
     ctx.restore();
 }
 function update() {
+if (isPaused) return;
     // ---- delta time (seconds) ----
 const nowMs = performance.now();
 const dt = (nowMs - lastTimeMs) / 1000;
@@ -3548,13 +3575,28 @@ for (let i = fallingBubbles.length - 1; i >= 0; i--) {
     b.vy += 0.04; // soft gravity
     b.x += b.vx;
     b.y += b.vy;
-
     // fade slightly
-    b.life -= 0.01;
+    b.life -= 0.01;    
+// --- Spawn falling particles ---
+if (!isPaused) {
+   
+    for (let i = 0; i < 2; i++) {
+        fallingParticles.push({
+            x: b.x + (Math.random() - 0.5) * 6,
+            y: b.y + (Math.random() - 0.5) * 6,
+            vx: (Math.random() - 0.5) * 0.8,
+            vy: Math.random() * 1.2,
+            life: 1,
+            color: b.color ?? "#888"
+        });
+    }
+    
+} 
 
     const DEADLINE_SCORE = 10;
 
 if (b.y >= DEADLINE) {
+    
     if (!gameOver)
 {
     score += DEADLINE_SCORE;
@@ -3587,11 +3629,13 @@ else if (!gameOver)
         life: 1.0
     }); 
 }
-    // 💥 particles exactly where it hits
+ if (!gameOver && !gameWin && noFallingBubblesAllowed){
+    triggerFail("One of the falling bubbles hit the red line!\n-1❤️")
+}   // 💥 particles exactly where it hits
     spawnPopParticles(b.x, DEADLINE, b.color);
 
     // 🧲 absorb logic
-    if (absorbFallingBubbles ) {
+    if (absorbFallingBubbles && !isPlaytesting) {
         ammo++;
         updateAmmo();
     }
@@ -3603,8 +3647,10 @@ else if (!gameOver)
     checkProgressAchievements();
 
     fallingBubbles.splice(i, 1);
+    fallingParticles = [];
     continue;
 }
+
 }
 if (
     inner &&
@@ -3990,6 +4036,15 @@ canvas.addEventListener("pointerleave", () => {
   if (activeAimPointerId === null) isAiming = false;
 });
  function draw() {
+    // ---- FPS Counter ----
+fpsFrameCount++;
+
+const now = performance.now();
+if (now - fpsLastTime >= 1000) {
+    fps = fpsFrameCount;
+    fpsFrameCount = 0;
+    fpsLastTime = now;
+}
     // ---- BACKGROUND ----
 let bgColor = "#000000";
 // normal grid overlay
@@ -4024,13 +4079,33 @@ ctx.globalAlpha = 1;
     ctx.strokeStyle = '#ff3333'; ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(0, DEADLINE); ctx.lineTo(canvas.width, DEADLINE); ctx.stroke(); ctx.setLineDash([]);
     bubbles.forEach(b => {
+        
     // COLORLESS bubble = outline only
     if (!b.color) {
+        
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(b.x, b.y, RADIUS - 2, 0, Math.PI * 2);
         ctx.stroke();
+               if (colorblindMode) {
+        const emoji =
+            b.color === null
+                ? "❔"
+                : (COLOR_EMOJIS[b.color] || "❔");
+
+        ctx.save();
+        ctx.font = `14px Storopia`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        ctx.strokeStyle = "rgba(0,0,0,0.6)";
+        ctx.lineWidth = 3;
+        ctx.strokeText(emoji, b.x, b.y);
+        ctx.fillText(emoji, b.x, b.y);
+
+        ctx.restore();
+}
         return;
     }
     ctx.strokeStyle = '#ff3333';
@@ -4099,20 +4174,49 @@ if (panicMode) {
     ctx.fill();
 
     // Colorblind emoji overlay (only for colored bubbles)
+       // 👁️ colorblind overlay
     if (colorblindMode) {
-        ctx.fillStyle = "black";
-        ctx.font = "16px Storopia";
+        const emoji =
+            b.color === null
+                ? "❔"
+                : (COLOR_EMOJIS[b.color] || "❔");
+
+        ctx.save();
+        ctx.font = `16px Storopia`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(COLOR_EMOJIS[b.color] || '❔', b.x, b.y);
-    }
-});
+
+        ctx.strokeStyle = "rgba(0,0,0,0.6)";
+        ctx.lineWidth = 3;
+        ctx.strokeText(emoji, b.x, b.y);
+        ctx.fillText(emoji, b.x, b.y);
+
+        ctx.restore();
+}});
 
 
     if (!isCustomMode) {
         ctx.save();
-        fallingBubbles.forEach(fb => { ctx.globalAlpha = 0.5; ctx.fillStyle = fb.color; ctx.beginPath(); ctx.arc(fb.x, fb.y, RADIUS - 2, 0, Math.PI * 2); ctx.fill(); });
+        fallingBubbles.forEach(fb => { ctx.globalAlpha = 0.5; ctx.fillStyle = fb.color; ctx.beginPath(); ctx.arc(fb.x, fb.y, RADIUS - 2, 0, Math.PI * 2); ctx.fill(); // 👁️ colorblind overlay
+    if (colorblindMode) {
+
+        const emoji =
+            fb.color === null
+                ? "❔"
+                : (COLOR_EMOJIS[fb.color] || "❔");
+
+        ctx.font = `16px Storopia`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        ctx.strokeStyle = "rgba(0,0,0,0.6)";
+        ctx.lineWidth = 3;
+        ctx.strokeText(emoji, fb.x, fb.y);
+        ctx.fillText(emoji, fb.x, fb.y);
+    }});
+}
         particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); });
+        
         // ---- Floating score text ----
         ctx.save();
         floatingScores.forEach(fs => {
@@ -4126,11 +4230,23 @@ if (panicMode) {
         confetti.forEach(c => { ctx.globalAlpha = c.life; ctx.fillStyle = c.color; ctx.fillRect(c.x, c.y, 5, 5); });
         ctx.restore();
         projectiles.forEach(p => {
-            ctx.fillStyle = p.color;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, RADIUS - 2, 0, Math.PI * 2);
-            ctx.fill();
-        });
+    // bubble
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, RADIUS - 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // colorblind emoji overlay
+    if (colorblindMode) {
+        ctx.save();
+        ctx.fillStyle = "black";
+        ctx.font = "16px Storopia";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(COLOR_EMOJIS[p.color] || "❔", p.x, p.y);
+        ctx.restore();
+    }
+});
 
         drawAimVisualizer(); // ✅ TOP LAYER — now visible
 
@@ -4437,7 +4553,45 @@ if (showGrid || isCustomMode) {
     drawGridOverlay();
     drawDeadlineGridRow();
 }
-}}
+if (showFPS) {
+
+    let rating = "Very Low";
+    let color = "#ff0000";
+
+    if (fps >= 60) {
+        rating = "Excellent";
+        color = "#00ff66";
+    }
+    else if (fps >= 45) {
+        rating = "Good";
+        color = "#00ffcc";
+    }
+    else if (fps >= 30) {
+        rating = "Playable";
+        color = "#ffcc00";
+    }
+    else if (fps >= 20) {
+        rating = "Low";
+        color = "#ff8800";
+    }
+
+    ctx.save();
+    ctx.font = "10px Storopia";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+
+    ctx.fillStyle = color;
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 3;
+
+    const text = `FPS: ${fps}\n(${rating})`;
+
+    ctx.strokeText(text, 10, canvas.height - 10);
+    ctx.fillText(text, 10, canvas.height - 10);
+
+    ctx.restore();
+}
+}
 function gameLoop() { if (gameRunning) { update(); draw(); animationId = requestAnimationFrame(gameLoop); }}
 
 function initializeAmmo(type, savedAmmo = null) {
@@ -4513,7 +4667,7 @@ function startMode(m, isLoad = false, isNextLevel = false) {
 }}
 
 
-    if (!isLoad) {bubbles = [];} fallingBubbles = []; projectiles = []; particles = []; confetti = [];
+    if (!isLoad) {bubbles = [];} fallingBubbles = []; projectiles = []; particles = []; confetti = []; fallingParticles = [];
     document.getElementById('mainMenu').style.display = 'none';
     document.getElementById('customUI').style.display = 'none';
     document.getElementById('gameUI').style.display = 'block';
@@ -4999,6 +5153,7 @@ function dropFloatingBubbles() {
         } else {
             // ✅ send to falling animation
             fallingBubbles.push({
+                
     x: b.x,
     y: b.y,
 
@@ -5010,6 +5165,7 @@ function dropFloatingBubbles() {
 
     color: b.color,
     life: 1                            // 👻 for translucency
+    
 });
 
             droppedCount++;
@@ -5559,4 +5715,3 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
-
