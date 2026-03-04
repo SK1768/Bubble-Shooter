@@ -668,7 +668,7 @@ button.danger {
     <div id="customUI">
         <span style="color:#a155ff; font-weight:bold; margin: 100 100px;">🛠️ CUSTOM MODE</span>
         <div style="margin-bottom: 10px;">
-            <button class="back-btn" onclick="exitToMenu()">← MENU</button>
+            <button class="back-btn" onclick="exitToMenu()">⬅️ MENU</button>
             <button onclick="openCustomSavePopup()" style="background:#4CAF50;">SAVE FILE</button>
             <button onclick="document.getElementById('fileInput').click()" style="background:#2196F3;">LOAD FILE</button>
             <button onclick="clearEditor()" style="background:#cc3300;">CLEAR ALL</button>
@@ -715,7 +715,7 @@ button.danger {
             </div>
             <div id="streakContainer"><div id="streakBar"></div></div>
         </div>
-        <button class="back-btn" onclick="exitToMenu()">← MENU</button> |
+        <button class="back-btn" onclick="exitToMenu()">⬅️ MENU</button> |
         <button onclick="saveGame()" style="background:#4CAF50;">SAVE</button>
         <button id="loadBtn" onclick="handleLoadClick()" style="background:#2196F3;">LOAD</button>
 |
@@ -4728,7 +4728,6 @@ function drawDebugOverlay() {
         `panicTriggered: ${panicTriggered}`,
         `gameRunning: ${gameRunning}`,
         `isPaused: ${isPaused}`,
-        `hurryMode: ${hurryMode}`,
         `hurryWarningActive: ${hurryWarningActive}`,
         `hurryTimer: ${hurryTimer}`,
         `hurryIdleSeconds: ${hurryIdleSeconds}`,
@@ -4737,6 +4736,19 @@ function drawDebugOverlay() {
         `campaignTimer: ${campaignTimer}`,
         `campaignTimerAcc: ${campaignTimerAcc.toFixed(1)}`,
         `campaignFinished: ${campaignFinished}`,
+        ``,
+        `--- CHEATS ---`,
+        `absorbFallingBubbles: ${absorbFallingBubbles}`,
+        `noFallingBubblesAllowed: ${noFallingBubblesAllowed}`,
+        `dragBubblesEnabled: ${dragBubblesEnabled}`,
+        `visualiseBubbleColour: ${visualiseBubbleColour}`,
+        `streakFrozen: ${streakFrozen}`,
+        ``,
+        `--- MAIN MENU SETTINGS ---`,
+        `autoSaveEnabled: ${autosaveEnabled}`,
+        `soundEnabled: ${soundEnabled}`,
+        `hurryMode: ${hurryMode}`,
+        `musicPlayerVisible: ${musicPlayerVisible}`,
         ``,
         `--- BUBBLES ON GRID ---`
     ];
