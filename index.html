@@ -4570,9 +4570,9 @@ if (isCampaignMode && timerSpan && inner && !isPaused && !winPending & !gameOver
 // ---- Level Display Update ----
 let levelText;
 if (isCampaignMode) levelText = `${campaignLevel}/${CAMPAIGN_TOTAL_LEVELS}`;
-else if (isPlaytesting && customLevelName && customAuthorName) levelText = `Custom (${customLevelName} by ${customAuthorName})`;
-else if (mode === 'custom') levelText = "Custom Editor";
-else levelText = level;
+else if (isPlaytesting && customLevelName && customAuthorName) levelText = `Custom Level (${customLevelName} by ${customAuthorName})`;
+else if (mode === 'custom') levelText = "Custom Level";
+else levelText = fmt(level);
 
 document.getElementById('levelDisplay').innerText = `Level: ${levelText}`;
 document.getElementById('streakDisplay').innerText =
