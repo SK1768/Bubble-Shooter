@@ -834,6 +834,10 @@ const ACHIEVEMENTS = {
         title: "Centurion",
         description: "Reach level 100.",
     },
+	LEVEL_1000: {
+        title: "Legendary",
+        description: "Reach level 1,000.",
+    },
      POP_1K: {
         title: "Pop Machine",
         description: "Pop 1,000 bubbles.",
@@ -868,8 +872,17 @@ const ACHIEVEMENTS = {
     },
     CUSTOM_LEVEL_COMPLETED: {
         title: "Level Tester",
-        description: "Complete a custom level."
+        description: "Play a custom level in Custom Mode."
     },
+	WIN_SCREEN_DELAY: {
+		title: "Tick tock...",
+		description: "Delay the win screen."
+	},
+	HURRY_TIMER_SHOT: {
+		title: "Slowpoke",
+		description: "Make the bubble shoot itself by making the hurry timer go to 0."
+	},
+	
     // 💰 SCORE TIERS
 SCORE_1K:   { title: "Pocket Change", description: "Reach 1,000 score.", stat: "score", goal: 1_000 },
 SCORE_10K:  { title: "Getting Rich", description: "Reach 10,000 score.", stat: "score", goal: 10_000 },
@@ -2181,7 +2194,10 @@ const ALL_COLORS = [
     '#FF2D55', // pink
     '#8E8E93', // grey
     '#A2845E', // brown (visible, not muddy)
-    '#FFFFFF'  // white
+    '#FFFFFF',  // white
+	'#8B0000',
+	'#F54298', 
+	'#C588EB'
 ];
 
 const COLOR_EMOJIS = {
@@ -2196,7 +2212,10 @@ const COLOR_EMOJIS = {
     '#FF2D55': '💗',
     '#8E8E93': '⚪',
     '#A2845E': '🟤',
-    '#FFFFFF': '⬜'
+    '#FFFFFF': '⬜',
+	'#8B0000': '💣',
+	'#F54298': '⭐️', 
+	'#C588EB': '⚡️'
 };
 
 
@@ -3347,6 +3366,7 @@ if (bubbles.length === 0) {
     console.log("WAIT")
     winPending = true;
     campaignTimerAcc = 0;
+	unlockAchievement("WIN_SCREEN_DELAY");
 }
 
 
@@ -3439,6 +3459,7 @@ if (lastClearWasPerfect) {
 if (level >= 10) unlockAchievement("LEVEL_10");
 if (level >= 50) unlockAchievement("LEVEL_50");
 if (level >= 100) unlockAchievement("LEVEL_100");
+if (level >= 1000) unlockAchievement("LEVEL_1000");
 stats.totalStreak = Math.max(stats.totalStreak, streakCount);
 stats.perfectStreak = Math.max(stats.perfectStreak, perfectStreak);
 checkProgressAchievements();
@@ -3572,6 +3593,7 @@ hurryIdleSeconds = 0;
     stats.bubblesShot++;
     saveStats();
     sounds.play('shoot');
+	unlockAchievement("HURRY_TIMER_SHOT");
     hurryWarningActive = false;
     hurryWarningSeconds = null;
     resetHurryTimer();
@@ -5481,7 +5503,7 @@ function updatePaletteUI() {
         a.download = `customModeLevel_${safeLevel}_${safeAuthor}.bubblesav`;
     } else {
         const prefix = isAuto ? "(AUTOSAVE) " : "";
-        a.download = `${prefix}puzzleModeLevel_${level}.bubblesav`;
+        a.download = `${prefix}puzzleModeLevel_${fmt(level)}.bubblesav`;
     }
 
     a.href = URL.createObjectURL(blob);
@@ -5894,3 +5916,4 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
