@@ -1834,6 +1834,10 @@ let fpsFrameCount = 0;
 let fpsLastTime = performance.now();
 let winPending = false;
 let showDebugOverlay = false;
+let conversionQueue = [];
+let conversionTimer = 0;
+let showBubbleHitBox = false;
+const CONVERSION_DELAY = 3; // frames between conversions
 function toggleHurryMode() {
     hurryMode = !hurryMode;
     localStorage.setItem("bubbleHurryMode", hurryMode);
@@ -2173,11 +2177,24 @@ else if (type === "achievement_complete")
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
     osc.start();
     osc.stop(now + 0.45);
+}
+else if (type === 'poof') {
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.exponentialRampToValueAtTime(80, now + 0.1);
+
+    gain.gain.setValueAtTime(0.05, now);
+    gain.gain.linearRampToValueAtTime(0, now + 0.1);
+
+    osc.start();
+    osc.stop(now + 0.1);
 }}}
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 const RADIUS = 20;
+const RADIUS_OFFSET = 1.5;
 const ROW_HEIGHT = 34;
 const DEADLINE = 520;
 const DEADLINE_ROW = Math.floor((DEADLINE - RADIUS) / ROW_HEIGHT) + 1;
@@ -2572,6 +2589,18 @@ else if (cmd === "!showdebug") {
     }
 
 
+}
+else if (cmd === '!showbubblehitbox') {
+    if (arg !== 'true' && arg !== 'false') {
+        alert("Usage: !showbubblehitbox true/false");
+        return;
+    }
+
+    showBubbleHitBox = (arg === 'true');
+
+    alert(
+        `The bubbles hitbox is now ${showBubbleHitBox ? "ENABLED" : "DISABLED"}`
+    );
 }
     e.target.value = '';
         stats.debugCommandsUsed++;
@@ -3119,7 +3148,7 @@ function setPause(state) {
 function togglePause() { if(!gameRunning || gameOver || gameWin || winPending) return; setPause(!isPaused);}
 
 function shoot() {
-if (winPending) return;
+if (winPending || conversionQueue.length > 0) return;
 
     hurryIdleSeconds = 0;
     hurryWarningActive = false;
@@ -3154,7 +3183,80 @@ if (dragBubblesEnabled && draggedBubble) return;
 saveStats();
     updateAmmo(true); // ✅ ONLY here do we reroll next
 }
+function getNeighbors(bubble) {
+
+    const r = bubble.row;
+    const c = bubble.col;
+
+    const offsetsEven = [
+        [-1, 0], [-1, -1],
+        [0, -1], [0, 1],
+        [1, 0], [1, -1]
+    ];
+
+    const offsetsOdd = [
+        [-1, 0], [-1, 1],
+        [0, -1], [0, 1],
+        [1, 0], [1, 1]
+    ];
+
+    const offsets = (r % 2 === 0) ? offsetsEven : offsetsOdd;
+
+    const neighbors = [];
+
+    for (const [dr, dc] of offsets) {
+
+        const nr = r + dr;
+        const nc = c + dc;
+
+        const found = bubbles.find(b => b.row === nr && b.col === nc);
+
+        if (found) neighbors.push(found);
+    }
+
+    return neighbors;
+}
+
+function queueColorlessCluster(startBubble, newColor) {
+ let clusterSize = 0;
+  pauseHurryTimer();
+    const stack = [startBubble];
+    const visited = new Set();
+
+    while (stack.length > 0) {
+
+        const b = stack.pop();
+        const key = b.row + "," + b.col;
+
+        if (visited.has(key)) continue;
+        visited.add(key);
+
+        if (b.color == null) {
+
+    clusterSize++;
+
+    conversionQueue.push({
+        bubble: b,
+        newColor: newColor
+    });
+}
+
+            const neighbors = getNeighbors(b);
+
+            for (const n of neighbors) {
+                if (!n) continue;
+
+                if (n.color == null) {
+                    stack.push(n);
+                }
+            }
+        }
+    }
+
 function snapToGrid(p) {
+
+    let convertedColorless = false;
+
     p.x -= p.dx * 0.5;
     p.y -= p.dy * 0.5;
 
@@ -3186,20 +3288,31 @@ function snapToGrid(p) {
 
     bubbles.push(nb);
 
-let m = findMatches(nb);
+// detect colourless bubbles around placed bubble
+const neighbors = getNeighbors(nb);
 
-if (m.length >= 3) {
-    lastShotWasMatch = true; // ✅ mark match
-    streakCount++;
-    streakTimer = STREAK_DURATION;
-    popBubbles(m);
-} else {
-    lastShotWasMatch = false;
-    spawnDudHitParticles(nb.x, nb.y, nb.color);
+let colorlessNeighbors = neighbors.filter(n => n.color == COLORLESS);
+
+if (nb.color != COLORLESS && colorlessNeighbors.length >= 2) {
+
+    for (const n of colorlessNeighbors) {
+        queueColorlessCluster(n, nb.color);
+    }
+
+}
+
+    let m = convertedColorless ? [] : findMatches(nb);
+
+    if (m.length >= 3) {
+        lastShotWasMatch = true;
+        streakCount++;
+        streakTimer = STREAK_DURATION;
+        popBubbles(m);
+    } else {
+        lastShotWasMatch = false;
+        spawnDudHitParticles(nb.x, nb.y, nb.color);
         sounds.play('place');
         startHurryTimer();
-        if (ammo <= 0 && bubbles.length > 0)
-            triggerFail("You ran out of bubbles!\n-1❤️");
 
 const beforePct = calcProgressPercent(bubbles.length - 1, initialBubbleCount); 
 // bubbles.length already includes the newly placed bubble, so -1 = before placement
@@ -3621,7 +3734,42 @@ function updateFloatingTexts() {
         }
     }
 }
+function processConversionStep() {
 
+    if (conversionQueue.length === 0) return;
+
+    conversionTimer++;
+
+    if (conversionTimer < CONVERSION_DELAY) return;
+
+    conversionTimer = 0;
+
+    const step = conversionQueue.shift();
+
+    const b = step.bubble;
+
+    b.color = step.newColor;
+
+    spawnPoof(b.x, b.y, b.color); // 💥 particle
+}
+function spawnPoof(x, y, color) {
+
+    for (let i = 0; i < 10; i++) {
+        const angle = Math.random() * Math.PI * 2;
+
+        particles.push({
+            x,
+            y,
+            vx: Math.cos(angle) * 1.2,
+            vy: Math.sin(angle) * 1.2,
+            gravity: 0,
+            life: 1,
+            color,
+            size: 5
+        });
+    }
+
+}
 function drawFloatingTexts(ctx) {
     ctx.save();
     ctx.font = "bold 18px Storopia";
@@ -3657,7 +3805,31 @@ if (
 	unlockAchievement("WIN_SCREEN_DELAY");
 }
 
+const CONVERSIONS_PER_FRAME = 1;
 
+let convertedThisFrame = 0;
+
+while (convertedThisFrame < CONVERSIONS_PER_FRAME && conversionQueue.length > 0) {
+
+    const item = conversionQueue.shift();
+    const b = item.bubble;
+
+    // Only convert if still colourless
+    if (b.color != COLORLESS) continue;
+
+    b.color = item.newColor;
+
+    spawnPoof(b.x, b.y);
+    sounds.play("poof");
+
+    convertedThisFrame++;
+}
+
+if (conversionQueue.length === 0) {
+    if (!isCustomMode) {
+        resumeHurryTimer();
+    }
+}
 if (isAiming) {
     aimGlowPulse += 0.15; // speed of glow pulse
 } else {
@@ -3862,7 +4034,13 @@ if (inner) {
 
             particles.push({ x: p.x, y: p.y, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2, life: 0.5, color: p.color, size: Math.random()*4+2 });
             p.x += p.dx; p.y += p.dy;
-                        // every few frames only (cheap)
+            if (showBubbleHitBox){
+            ctx.beginPath();
+ctx.strokeStyle = "lime";
+ctx.lineWidth = 2;
+ctx.arc(p.x, p.y, RADIUS * RADIUS_OFFSET, 0, Math.PI * 2);
+ctx.stroke();
+}                        // every few frames only (cheap)
 p.trailTime = (p.trailTime || 0) + 0.1;
 
 spawnProjectileTrail(
@@ -3888,8 +4066,36 @@ spawnWallBounceParticles(
     -1, // normal facing left
     p.color
 );sounds.play('bounce'); }
-            if (p.y < RADIUS) { snapToGrid(p); projectiles.splice(i, 1); }
-            else { for (let b of bubbles) { if (Math.hypot(p.x - b.x, p.y - b.y) < RADIUS * 1.5) { snapToGrid(p); projectiles.splice(i, 1); break; } } }
+if (p.y < RADIUS) {
+    snapToGrid(p);
+    projectiles.splice(i, 1); }
+            else {
+ for (let b of bubbles) {
+   if (showBubbleHitBox)
+   {
+    ctx.beginPath();
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 2;
+    ctx.arc(b.x, b.y, RADIUS * RADIUS_OFFSET, 0, Math.PI * 2);
+    ctx.stroke();
+}
+
+    const dx = p.x - b.x;
+    const dy = p.y - b.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist < RADIUS * RADIUS_OFFSET) {
+
+        // only convert if we hit from BELOW the bubble
+           if (b.color == null){
+            queueColorlessCluster(b, p.color);
+           }
+
+        snapToGrid(p);
+        projectiles.splice(i, 1);
+        break;
+    }
+}}
             // every few frames only (cheap)
 
         });
@@ -4704,6 +4910,9 @@ if (showFPS) {
     ctx.restore();
 }
 }
+function debugBubbleName(b) {
+    return b === COLORLESS ? "COLORLESS" : b;
+}
 function drawDebugOverlay() {
     const panel = document.getElementById("debugOverlayPanel");
 
@@ -4726,10 +4935,11 @@ function drawDebugOverlay() {
         ``,
         `gameMode: ${mode}`,
         `bubblesRemaining: ${bubbles.length}`,
+        `conversionQueue: ${conversionQueue.length}`,
         `bubblesFalling: ${fallingBubbles.length}`,
         `projectiles: ${projectiles.length}`,
-        `currentBubble: ${ammo <= 0 ? null : currentBall}`,
-        `nextBubble: ${ammo <= 1 ? null : nextBall}`,
+        `currentBubble: ${ammo <= 0 ? null : debugBubbleName(currentBall)}`,
+        `nextBubble: ${ammo <= 1 ? null : debugBubbleName(nextBall)}`,
         `ammo: ${ammo}`,
         `levelName: ${customLevelName ?? null}`,
         `levelAuthorName: ${customAuthorName ?? null}`,
@@ -4765,6 +4975,7 @@ function drawDebugOverlay() {
         `dragBubblesEnabled: ${dragBubblesEnabled}`,
         `visualiseBubbleColour: ${visualiseBubbleColour}`,
         `streakFrozen: ${streakFrozen}`,
+        `showBubbleHitBox: ${showBubbleHitBox}`,
         ``,
         `--- MAIN MENU SETTINGS ---`,
         `autoSaveEnabled: ${autosaveEnabled}`,
@@ -4908,6 +5119,7 @@ suppressAutosaveOnce = false; // always clear after startMode
     }
     refreshFavicon();
 
+
 function enterCustomEditor() {
     ammo = 0;
     stats.customPlays++;
@@ -4949,48 +5161,6 @@ function hasAtLeastOneConnection(bubble) {
         )
     );
 }
-    function hasReachableColoredBubble() {
-    const visited = new Set();
-    const queue = [];
-
-    // Start from all TOP ROW colored bubbles
-    bubbles.forEach(b => {
-        if (b.row === 0 && b.color) {
-            queue.push(b);
-            visited.add(`${b.row},${b.col}`);
-        }
-    });
-
-    while (queue.length > 0) {
-        const cur = queue.shift();
-
-        // If we find ANY colored bubble, level is playable
-        if (cur.color) return true;
-
-        const dirs = (cur.row % 2 === 0)
-            ? [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]]
-            : [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
-
-        dirs.forEach(([dr, dc]) => {
-            const nr = cur.row + dr;
-            const nc = cur.col + dc;
-            const key = `${nr},${nc}`;
-
-            if (visited.has(key)) return;
-
-            const nb = bubbles.find(b => b.row === nr && b.col === nc);
-            if (!nb) return;
-
-            // ❗ BLOCK traversal through colourless bubbles
-            if (!nb.color) return;
-
-            visited.add(key);
-            queue.push(nb);
-        });
-    }
-
-    return false;
-}
 function startFromCustom() {
     if (bubbles.length === 0) {
         alert("Add some bubbles in the canvas first!");
@@ -5002,24 +5172,12 @@ function startFromCustom() {
         return;
     }
 
-    // 🚫 NEW CHECK — colorless on top row
-    const hasColorlessTopRow = bubbles.some(b => b.row === 0 && !b.color);
-    if (hasColorlessTopRow) {
-        alert("Don't put the colourless bubbles on the top row.");
-        return;
-    }
-
     // 🚨 existing floating-bubble check
     const hasFloating = bubbles.some(b => !hasAtLeastOneConnection(b));
     if (hasFloating) {
         alert("Connect one of the floating bubbles to another bubble.");
         return;
     }
-        // 🚫 Block inaccessible layouts (sealed by colourless bubbles)
-if (!hasReachableColoredBubble()) {
-    alert("This level has no reachable bubbles. Remove or reposition colourless bubbles.");
-    return;
-}
 
 setBrowserTitle("▶️ SK's Bubble Shooter — Playtesting");
     customLevelSnapshot = JSON.parse(JSON.stringify(bubbles));
@@ -5063,7 +5221,7 @@ function hasParentAbove(r, c) {
 }
 function drawAimVisualizer() {
 
-        if (!aimEnabled || isPaused || gameOver || gameWin || isCustomMode || projectiles.length > 0) return;
+        if (!aimEnabled || isPaused || gameOver || gameWin || isCustomMode || projectiles.length > 0 || winPending || conversionQueue.length > 0) return;
 
         if (
             mouseX < 0 ||
@@ -5106,7 +5264,7 @@ function drawAimVisualizer() {
 
             // 🔥 BUBBLE COLLISION CHECK (same as projectile)
             for (let b of bubbles) {
-                if (Math.hypot(simX - b.x, simY - b.y) < RADIUS * 1.5) {
+                if (Math.hypot(simX - b.x, simY - b.y) < RADIUS * RADIUS_OFFSET) {
                     ctx.lineTo(simX, simY);
                     ctx.stroke();
                     ctx.restore();
@@ -5124,13 +5282,13 @@ function drawAimVisualizer() {
 
 function shouldPlaceBubble(r, c) {
 
-    if (r === 0) return true;
+    if (r === 0) return Math.random() < 0.5;
 
     // First rule: must be attached to something above
     if (!hasParentAbove(r, c)) return false;
 
     const density = 0.55 + (Math.random() * 0.35);
-    const centerBias = Math.abs(c - 5) < (Math.random() * 4 + 2);
+    const centerBias = Math.abs(c - c / 2) < (Math.random() * 4 + 2);
 
     return Math.random() < density && centerBias;
 }
@@ -5425,7 +5583,7 @@ function updatePaletteUI() {
             b.style.color = "white";
             b.style.fontWeight = "bold";
             b.innerText = "Ø";
-            b.title = "Colorless bubble";
+            b.title = "Colourless bubble";
         } else {
             b.style.backgroundColor = c;
             b.title = c;
@@ -5783,6 +5941,7 @@ function closeCustomSavePopup() {
     'tick',
     'heartbeat',
     'death',
+    'poof',
     "achievement_complete"
 ];
 
@@ -5916,7 +6075,3 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
-
-
-
-
