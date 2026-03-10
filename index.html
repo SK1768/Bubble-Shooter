@@ -3822,6 +3822,15 @@ while (convertedThisFrame < CONVERSIONS_PER_FRAME && conversionQueue.length > 0)
     spawnPoof(b.x, b.y);
     sounds.play("poof");
 
+	score++;
+
+    floatingScores.push({
+        x: b.x,
+        y: b.y,
+        text: "+1",
+        life: 1.0
+    });
+
     convertedThisFrame++;
 }
 
@@ -6075,3 +6084,4 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
