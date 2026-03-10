@@ -882,6 +882,10 @@ const ACHIEVEMENTS = {
 		title: "Slowpoke",
 		description: "Make the bubble shoot itself by making the hurry timer go to 0."
 	},
+	BUBBLE_CONVERTER: {
+	title: "Bubble Converter",
+		description: "Convert one of the colourless bubbles to your representing bubble colour by hitting it with your bubble."
+	},
 	
     // 💰 SCORE TIERS
 SCORE_1K:   { title: "Pocket Change", description: "Reach 1,000 score.", stat: "score", goal: 1_000 },
@@ -3830,8 +3834,8 @@ while (convertedThisFrame < CONVERSIONS_PER_FRAME && conversionQueue.length > 0)
         text: "+1",
         life: 1.0
     });
-
     convertedThisFrame++;
+	unlockAchievement("BUBBLE_CONVERTER");
 }
 
 if (conversionQueue.length === 0) {
@@ -6084,4 +6088,5 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
+
 
