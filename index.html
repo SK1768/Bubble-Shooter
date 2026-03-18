@@ -781,6 +781,11 @@ button.danger {
 
 <label>Tempo: <span id="tempoValue">100%</span></label>
 <input type="range" id="tempoSlider" min="5" max="500" value="100">
+<label>
+  Volume:
+  <span id="volumeValue">100%</span>
+</label>
+<input type="range" id="volumeSlider" min="0" max="100" value="100">
 			<div class="music-step-buttons">
  <button id="transposeUpBtn">➕ Transpose</button>
  <button id="transposeDownBtn">➖ Transpose</button>
@@ -1241,6 +1246,10 @@ const stopBtn     = document.getElementById("stopBtn");
 const seekSlider  = document.getElementById("seekSlider");
 const pitchSlider = document.getElementById("pitchSlider");
 const tempoSlider = document.getElementById("tempoSlider");
+const volumeSlider = document.getElementById("volumeSlider");
+const volumeValue = document.getElementById("volumeValue");
+
+let volumeGainNode = null;
 const trackState  = document.getElementById("trackState");
 const trackTime   = document.getElementById("trackTime");
 const transposeValue = document.getElementById("transposeValue");
@@ -1406,6 +1415,12 @@ if (savedPos) {
   musicPanel.style.left = savedPos.left;
   musicPanel.style.top = savedPos.top;
   musicPanel.style.transform = "none";
+  // Load saved volume
+const savedVolume = localStorage.getItem("musicVolume");
+if (savedVolume !== null) {
+    volumeSlider.value = savedVolume;
+    volumeSlider.dispatchEvent(new Event("input"));
+}
 }
 });
 	
@@ -1496,7 +1511,23 @@ class BufferSource {
         return frames;
     }
 }
+volumeSlider.oninput = () => {
+    const v = Number(volumeSlider.value);
 
+    if (volumeGainNode) {
+        volumeGainNode.gain.value = v / 100;
+    }
+
+    localStorage.setItem("musicVolume", v);
+
+    if (v <= 0) {
+        volumeValue.textContent = "MUTED";
+        volumeValue.style.color = "#ff0000";
+    } else {
+        volumeValue.textContent = `${v}%`;
+        volumeValue.style.color = "#00ffcc";
+    }
+};
 // ---------- build / rebuild processing graph ----------
 function buildGraphFromPosition() {
     if (!musicBuffer) return;
@@ -1554,7 +1585,14 @@ function buildGraphFromPosition() {
     
 };
 
-    processor.connect(musicCtx.destination);
+    // 🎚️ Volume control
+volumeGainNode = musicCtx.createGain();
+
+// apply volume (0.0 → 1.0)
+volumeGainNode.gain.value = volumeSlider.value / 100;
+
+processor.connect(volumeGainNode);
+volumeGainNode.connect(musicCtx.destination);
     playStartCtxTime = musicCtx.currentTime;
 }
 
@@ -6088,5 +6126,3 @@ justify-content:center;
 </body>
 </html>
 <!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
-
-
