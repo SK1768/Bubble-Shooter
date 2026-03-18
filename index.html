@@ -5649,7 +5649,6 @@ function updatePaletteUI() {
     });
 }
     function saveGame(isAuto = false, forceSave = false) {
-    
     if (gameOver) return;
 
     if (isCampaignMode) {
@@ -5665,40 +5664,43 @@ function updatePaletteUI() {
     const ts = getSaveTimestamp();
 
     const saveData = {
-    _metadata: {
-        timestamp: ts.readable,
-        epoch: ts.epoch,
-        gameType:
-            (mode === 'custom' || isPlaytesting) ? "CUSTOM" :
-            isCampaignMode ? "CAMPAIGN" :
-            "PUZZLE",
-        saveMethod: isAuto ? "AUTO" : "MANUAL",
-        isSaveFileProtected: false
-    },
+        _metadata: {
+            timestamp: ts.readable,
+            epoch: ts.epoch,
+            gameType:
+                (mode === 'custom' || isPlaytesting) ? "CUSTOM" :
+                isCampaignMode ? "CAMPAIGN" :
+                "PUZZLE",
+            saveMethod: isAuto ? "AUTO" : "MANUAL",
+            isSaveFileProtected: false
+        },
 
-    mode,
-    level: (mode === 'custom' || isPlaytesting) ? "CUSTOM LEVEL" : level,
-    levelName: (mode === 'custom' || isPlaytesting) ? customLevelName : null,
-    authorName: (mode === 'custom' || isPlaytesting) ? customAuthorName : null,
+        mode,
+        level: (mode === 'custom' || isPlaytesting) ? "CUSTOM LEVEL" : level,
+        levelName: (mode === 'custom' || isPlaytesting) ? customLevelName : null,
+        authorName: (mode === 'custom' || isPlaytesting) ? customAuthorName : null,
 
-    // 📊 CORE STATS (ordered)
-    score,
-	perfect_streak: perfectStreak,
-    lives: lives,
-    ammo: (mode === 'custom' || isPlaytesting)
-        ? parseInt(document.getElementById('customAmmoInput')?.value) || ammo
-        : ammo,
-    progress: (mode === 'custom' && !isPlaytesting)
-        ? "0.0%"
-        : getProgress(),
+        score,
+        perfect_streak: perfectStreak,
+        lives: lives,
+        ammo: (mode === 'custom' || isPlaytesting)
+            ? parseInt(document.getElementById('customAmmoInput')?.value) || ammo
+            : ammo,
+        progress: (mode === 'custom' && !isPlaytesting)
+            ? "0.0%"
+            : getProgress(),
 
-    // 🫧 GAME STATE
-    bubbles,
+        // save board state only
+        bubbles: bubbles.map(b => ({
+            row: b.row,
+            col: b.col,
+            color: b.color ?? null
+        })),
 
-    currentBubble: currentBall ?? null,
-    nextBubble: nextBall ?? null
-};
-
+        // save shooter state
+        currentBubble: currentBall ?? null,
+        nextBubble: nextBall ?? null
+    };
 
     const blob = new Blob(
         [JSON.stringify(saveData, null, 2)],
@@ -5718,6 +5720,7 @@ function updatePaletteUI() {
 
     a.href = URL.createObjectURL(blob);
     a.click();
+    URL.revokeObjectURL(a.href);
 }
     function getSaveTimestamp() {
     const d = new Date();
@@ -5846,22 +5849,30 @@ function loadGame(e) {
     isFileDialogOpen = false;
     const file = e.target.files[0];
     if (!file) return;
-    
 
     const reader = new FileReader();
     isLoadingSave = true;
 
     reader.onload = (ev) => {
-        const s = JSON.parse(ev.target.result);
-// 🔐 Block protected files
-if (s._metadata.isSaveFileProtected) {
-    alert(`${file.name} is protected and cannot be loaded.`);
-    return;
-}
+        let s;
 
-        // -----------------------------
-        // Restore basic metadata
-        // -----------------------------
+        try {
+            s = JSON.parse(ev.target.result);
+        } catch {
+            isLoadingSave = false;
+            alert("Invalid save file.");
+            return;
+        }
+
+        // backward-safe metadata check
+        const meta = s._metadata || {};
+        if (meta.isSaveFileProtected === true) {
+            isLoadingSave = false;
+            alert(`${file.name} is protected and cannot be loaded.`);
+            return;
+        }
+
+        // restore basic metadata
         customLevelName = s.levelName || "";
         customAuthorName = s.authorName || "";
 
@@ -5869,29 +5880,34 @@ if (s._metadata.isSaveFileProtected) {
         // CUSTOM LEVEL LOAD
         // -----------------------------
         if (s.level === "CUSTOM LEVEL") {
-
             enterCustomEditor();
 
             bubbles = [];
-            s.bubbles.forEach(b => {
+            (s.bubbles || []).forEach(b => {
                 const co = getGridCoords(b.row, b.col);
                 const nb = {
                     x: co.x,
                     y: co.y,
                     row: b.row,
-                    col: b.col
+                    col: b.col,
+                    color: b.color ?? null
                 };
-                if (b.color) nb.color = b.color;
                 bubbles.push(nb);
             });
 
             ammo = s.ammo ?? 40;
-            document.getElementById('customAmmoInput').value = ammo;
+            document.getElementById("customAmmoInput").value = ammo;
 
-            // progress is irrelevant in editor
+            // reset shooter cleanly for editor/custom load
+            currentBall = s.currentBubble ?? null;
+            nextBall = s.nextBubble ?? null;
+
             loadedProgressOverride = null;
+            initialBubbleCount = bubbles.length;
 
             isLoadingSave = false;
+            updateAmmo(false);
+            updateProgressBar();
             updateAmmo(false);
             refreshFavicon();
             return;
@@ -5900,60 +5916,66 @@ if (s._metadata.isSaveFileProtected) {
         // -----------------------------
         // PUZZLE MODE LOAD
         // -----------------------------
-
-        // Restore level & score FIRST
         level = s.level ?? 1;
         score = s.score ?? 0;
         lives = s.lives ?? 5;
-updateLivesUI();
+        perfectStreak = s.perfect_streak ?? 0;
+        updateLivesUI();
 
+        loadedProgressOverride =
+            typeof s.progress === "string" ? s.progress : null;
 
-        // Capture saved progress AS-IS (string like "12.1%")
-        if (typeof s.progress === "string") {
-            loadedProgressOverride = s.progress;
-        } else {
-            loadedProgressOverride = null;
-        }
+        // start loaded puzzle mode
+        startMode("puzzle", true);
 
-        // Start game WITHOUT resetting
-        startMode('puzzle', true);
-
-        // Rebuild bubbles AFTER startMode
+        // NOW rebuild bubbles from the save
         bubbles = [];
-        s.bubbles.forEach(b => {
+        (s.bubbles || []).forEach(b => {
             const co = getGridCoords(b.row, b.col);
             const nb = {
                 x: co.x,
                 y: co.y,
                 row: b.row,
-                col: b.col
+                col: b.col,
+                color: b.color ?? null
             };
-            if (b.color) nb.color = b.color;
             bubbles.push(nb);
         });
 
-        // Restore shooter state
+        // restore core state
         ammo = s.ammo ?? ammo;
-		perfectStreak = s.perfect_streak ?? 0;
-        currentBall = s.currentBubble ?? currentBall;
-        nextBall = s.nextBubble ?? nextBall;
+        initialBubbleCount = bubbles.length;
 
-        // IMPORTANT:
-        // Do NOT recompute initialBubbleCount here
-        // Do NOT touch progress math
+        // restore shooter state safely
+        const pool = bubbles.length > 0
+            ? Array.from(new Set(bubbles.map(b => b.color).filter(c => c)))
+            : ALL_COLORS;
+
+        currentBall = s.currentBubble ?? null;
+        nextBall = s.nextBubble ?? null;
+
+        // if saved colours are missing/invalid, clear them so updateAmmo can reroll
+        if (!currentBall || !pool.includes(currentBall)) {
+            currentBall = null;
+        }
+
+        if (!nextBall || !pool.includes(nextBall)) {
+            nextBall = null;
+        }
 
         isLoadingSave = false;
 
-        // Force UI refresh
-        updateProgressBar();
+        // rebuild shooter from the LOADED board only
         updateAmmo(false);
+        updateProgressBar();
         refreshFavicon();
     };
 
     reader.readAsText(file);
-    event.target.value = "";
-        if (!wasPausedBeforeFileDialog) {
-        togglePause(false); // resume
+    e.target.value = "";
+
+    if (!wasPausedBeforeFileDialog) {
+        togglePause(false);
         hurryTimer = null;
         hurryWarningActive = false;
         hurryWarningSeconds = null;
@@ -6049,7 +6071,7 @@ addSfxButtonToMenu();
 
 </script>
     <div id="customSavePopup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;">
-  <div style="background:#222;padding:25px;border-radius:12px;border:2px solid #00ffcc;text-align:center;">
+  <div style="background:#000;padding:25px;border-radius:12px;border:2px solid #00ffcc;text-align:center;">
     <h2 style="color:#00ffcc;">Save Custom Level</h2>
 
     <input id="levelNameInput" placeholder="Level Name"
