@@ -5784,25 +5784,12 @@ function updatePaletteUI() {
         alert("Add at least 3 bubbles on to the canvas.");
         return;
     }
-
-    // 🚫 NEW CHECK — colorless on top row
-    const hasColorlessTopRow = bubbles.some(b => b.row === 0 && !b.color);
-    if (hasColorlessTopRow) {
-        alert("Don't put the colourless bubbles on the top row.");
-        return;
-    }
-
     // 🚨 existing floating-bubble check
     const hasFloating = bubbles.some(b => !hasAtLeastOneConnection(b));
     if (hasFloating) {
         alert("Connect one of the floating bubbles to another bubble.");
         return;
     }
-        // 🚫 Block inaccessible layouts (sealed by colourless bubbles)
-if (!hasReachableColoredBubble()) {
-    alert("This level has no reachable bubbles. Remove or reposition colourless bubbles.");
-    return;
-}
         if (!isCustomMode) {
         saveGame(); // normal save outside editor
         return;
