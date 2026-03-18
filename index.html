@@ -5672,7 +5672,8 @@ function updatePaletteUI() {
             (mode === 'custom' || isPlaytesting) ? "CUSTOM" :
             isCampaignMode ? "CAMPAIGN" :
             "PUZZLE",
-        saveMethod: isAuto ? "AUTO" : "MANUAL"
+        saveMethod: isAuto ? "AUTO" : "MANUAL",
+        isSaveFileProtected: false
     },
 
     mode,
@@ -5865,6 +5866,11 @@ function loadGame(e) {
 
     reader.onload = (ev) => {
         const s = JSON.parse(ev.target.result);
+// 🔐 Block protected files
+if (s._metadata.isSaveFileProtected) {
+    alert(`${file.name} is protected and cannot be loaded.`);
+    return;
+}
 
         // -----------------------------
         // Restore basic metadata
