@@ -1288,7 +1288,6 @@ musicHeader.addEventListener("mousedown", (e) => {
     dragOffsetY = e.clientY - musicPanel.offsetTop;
     document.body.style.userSelect = "none";
 });
-
 document.addEventListener("mousemove", (e) => {
     if (!isDragging) return;
 
@@ -1880,6 +1879,7 @@ let conversionQueue = [];
 let conversionTimer = 0;
 let showBubbleHitBox = false;
 const CONVERSION_DELAY = 3; // frames between conversions
+let isInGameCanvas = false;
 function toggleHurryMode() {
     hurryMode = !hurryMode;
     localStorage.setItem("bubbleHurryMode", hurryMode);
@@ -2408,7 +2408,11 @@ document.getElementById('debugInput').addEventListener('keydown', e => {
         const cmd = args[0].toLowerCase();
         const arg = args[1];
 		const val = Number(arg);
-
+        if (!cmd.startsWith("!"))
+        {
+            alert("Commands must start with \"!\".")
+            return;
+        }
 
         if (cmd === '!completelevel') { 
             bubbles = []; 
@@ -2848,6 +2852,19 @@ canvas.addEventListener("pointerdown", e => {
         canvas.setPointerCapture(e.pointerId);
     }
 });
+canvas.addEventListener("mousemove", (e) => {
+    const rect = canvas.getBoundingClientRect();
+
+    mouseX = e.clientX - rect.left;
+    mouseY = e.clientY - rect.top;
+});
+canvas.addEventListener("mouseenter", () => {
+    isInGameCanvas = true;
+});
+
+canvas.addEventListener("mouseleave", () => {
+    isInGameCanvas = false;
+});
 canvas.addEventListener("pointermove", e => {
     const { x, y } = getCanvasPos(e);
 
@@ -2943,26 +2960,36 @@ canvas.addEventListener('mousedown', e => {
     // -----------------------------
     if (isCustomMode) {
         let r = Math.round((e.clientY - rect.top - RADIUS) / ROW_HEIGHT);
-        let off = (r % 2 === 0) ? 0 : RADIUS;
-        let c = Math.round((e.clientX - rect.left - RADIUS - off) / (RADIUS * 2));
+        const maxCol1 = (r % 2 === 0 ? 10 : 9);
+let off = (r % 2 === 0) ? 0 : RADIUS;
 
-        const idx = bubbles.findIndex(b => b.row === r && b.col === c);
+let c = Math.round((e.clientX - rect.left - RADIUS - off) / (RADIUS * 2));
+if (r > 13 || c === -1 || c > maxCol1)
+{
+    alert("You cannot place the bubble there.")
+    return;
+}
+// ✅ clamp row
+r = Math.max(0, Math.min(13, r));
 
-        // Click existing bubble = remove it
-        if (idx !== -1) {
-            bubbles.splice(idx, 1);
-        }
-        // Click empty spot = place it (limit rows)
-        else if (r >= 0 && r < 13) {
-            let co = getGridCoords(r, c);
 
-            // If you want "true colorless" like your save file (missing color field),
-            // do NOT store color when selectedColor is null.
-            const bubble = { x: co.x, y: co.y, row: r, col: c };
-            if (selectedColor) bubble.color = selectedColor; // only store when colored
+// ✅ clamp column per hex row
+const maxCol = (r % 2 === 0 ? 10 : 9);
+c = Math.max(0, Math.min(maxCol, c));
 
-            bubbles.push(bubble);
-        }
+const idx = bubbles.findIndex(b => b.row === r && b.col === c);
+
+if (idx !== -1) {
+    bubbles.splice(idx, 1);
+} else {
+    let co = getGridCoords(r, c);
+
+    const bubble = { x: co.x, y: co.y, row: r, col: c };
+    if (selectedColor) bubble.color = selectedColor;
+
+    bubbles.push(bubble);
+}
+
 
         // IMPORTANT: stop here so editor clicks do NOT shoot / advance levels
         return;
@@ -4461,7 +4488,7 @@ ctx.globalAlpha = 1;
         return;
     }
     ctx.strokeStyle = '#ff3333';
-ctx.setLineDash([200, 200]);
+ctx.setLineDash([9999, 9999]);
 ctx.beginPath();
 ctx.moveTo(0, DEADLINE);
 ctx.lineTo(canvas.width, DEADLINE);
@@ -4762,10 +4789,7 @@ if (winPending && !gameWin && !gameOver && bubbles.length === 0) {
         if (winPending) return;
         ctx.fillStyle = gameOver ? "#ff5555" : "#00ffcc";
         ctx.font = "bold 34px Storopia";
-        const endText =
-    gameOver 
-        ? (lives <= 0 ? "GAME OVER!" : "LEVEL FAILED!")
-        : "LEVEL COMPLETE!";
+        const endText = gameOver ? (lives <= 0 ? "GAME OVER!" : "LEVEL FAILED!") : isPlaytesting ? "CUSTOM LEVEL COMPLETE!" : "LEVEL COMPLETE!";
 
 ctx.fillText(endText, canvas.width / 2, 280);
 		    // 🎁 Show bubble reward ONLY on win
@@ -4960,6 +4984,24 @@ if (showFPS) {
 
     ctx.restore();
 }
+// ===== MOUSE DEBUG DOT =====
+if (showDebugOverlay && isInGameCanvas) {
+    const isBelowDeadline = mouseY >= DEADLINE;
+
+    canvas.style.cursor = "none";
+
+    ctx.save();
+
+    ctx.fillStyle = isBelowDeadline ? "red" : "cyan";
+    ctx.beginPath();
+    ctx.arc(mouseX, mouseY, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+
+} else {
+    canvas.style.cursor = dragBubblesEnabled ? "none" : "cell";
+}
 }
 function debugBubbleName(b) {
     return b === COLORLESS ? "COLORLESS" : b;
@@ -4980,6 +5022,7 @@ function drawDebugOverlay() {
 
     if (isCampaignMode) mode = "CAMPAIGN";
     else if (isCustomMode || isPlaytesting) mode = "CUSTOM";
+    const isBelowDeadline = mouseY >= DEADLINE;
 
     const lines = [
         `--- SK's Bubble Shooter\'s DEBUG OVERLAY ---`,
@@ -5019,6 +5062,14 @@ function drawDebugOverlay() {
         `campaignTimer: ${campaignTimer}`,
         `campaignTimerAcc: ${campaignTimerAcc.toFixed(1)}`,
         `campaignFinished: ${campaignFinished}`,
+        ``,
+        `--- MOUSE COORDS---`,
+        `mouseX: ${mouseX.toFixed(1)}`,
+        `mouseY: ${mouseY.toFixed(1)}`,
+        `isBelowDeadline: ${isBelowDeadline}`,
+        `isInGameCanvas: ${isInGameCanvas}`,
+        `deadlineY: ${DEADLINE}`,
+        `distanceToDeadline: ${(DEADLINE - mouseY).toFixed(1)}`,
         ``,
         `--- CHEATS ---`,
         `absorbFallingBubbles: ${absorbFallingBubbles}`,
@@ -5197,20 +5248,36 @@ document.getElementById('percentText').style.display = 'none';
     stopHurryTimer();
 }
 
-function hasAtLeastOneConnection(bubble) {
-    const r = bubble.row;
-    const c = bubble.col;
+function getConnectedToTop() {
+    const visited = new Set();
+    const stack = [];
 
-    const dirs = (r % 2 === 0)
-        ? [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]]
-        : [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
+    // start from ALL top row bubbles
+    for (const b of bubbles) {
+        if (b.row === 0) {
+            const key = `${b.row},${b.col}`;
+            visited.add(key);
+            stack.push(b);
+        }
+    }
 
-    return dirs.some(d =>
-        bubbles.some(b =>
-            b.row === r + d[0] &&
-            b.col === c + d[1]
-        )
-    );
+    while (stack.length > 0) {
+        const current = stack.pop();
+
+        const neighbors = getNeighbors(current);
+
+        for (const n of neighbors) {
+            if (!n) continue;
+
+            const key = `${n.row},${n.col}`;
+            if (!visited.has(key)) {
+                visited.add(key);
+                stack.push(n);
+            }
+        }
+    }
+
+    return visited;
 }
 function startFromCustom() {
     if (bubbles.length === 0) {
@@ -5223,8 +5290,12 @@ function startFromCustom() {
         return;
     }
 
-    // 🚨 existing floating-bubble check
-    const hasFloating = bubbles.some(b => !hasAtLeastOneConnection(b));
+    const connected = getConnectedToTop();
+
+const hasFloating = bubbles.some(b => {
+    const key = `${b.row},${b.col}`;
+    return !connected.has(key);
+});
     if (hasFloating) {
         alert("Connect one of the floating bubbles to another bubble.");
         return;
@@ -5846,10 +5917,11 @@ function handleLoadClick() {
     }
 
 function loadGame(e) {
+    
     isFileDialogOpen = false;
     const file = e.target.files[0];
     if (!file) return;
-
+    console.log(`Loading save file. ("${file.name}")`)
     const reader = new FileReader();
     isLoadingSave = true;
 
@@ -5860,15 +5932,17 @@ function loadGame(e) {
             s = JSON.parse(ev.target.result);
         } catch {
             isLoadingSave = false;
-            alert("Invalid save file.");
+            alert(`${file.name} is not a valid save file. It must end with ".bubblesav"`);
+            console.error(`Attempted to load an invalid save file. Loading blocked. ("${file.name}")`)
             return;
         }
 
         // backward-safe metadata check
         const meta = s._metadata || {};
-        if (meta.isSaveFileProtected === true) {
+        if (meta.isSaveFileProtected) {
             isLoadingSave = false;
             alert(`${file.name} is protected and cannot be loaded.`);
+            console.warn(`Attempted to load a protected save file. Loading blocked. ("${file.name}")`)
             return;
         }
 
@@ -5969,6 +6043,7 @@ function loadGame(e) {
         updateAmmo(false);
         updateProgressBar();
         refreshFavicon();
+        console.log(`Save file loaded. ("${file.name}")`)
     };
 
     reader.readAsText(file);
