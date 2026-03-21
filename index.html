@@ -617,6 +617,14 @@ onclick="startDailyPuzzleMode()"
 style="font-size:1.2em; background:#00ff88; color:#000;">
 🧩 DAILY PUZZLE MODE
 </button>
+<div id="dailyLastPlayedText" style="
+    margin-top:6px;
+    font-size:13px;
+    color:#aaa;
+    text-align:center;
+">
+    Last played: Never
+</div>
 <br>
         <button onclick="enterCustomEditor()" style="background: #a155ff;"onmouseenter="setMenuDesc('Custom Mode: Create and test your own bubble layouts.')" onmouseleave="clearMenuDesc()">🛠️ CUSTOM MODE</button>
         <br>
@@ -1924,7 +1932,71 @@ const CONVERSION_DELAY = 3; // frames between conversions
 let isInGameCanvas = false;
 let isDailyPuzzle = false;
 const DAILY_RESET_HOURS = 24;
+function formatFullDateTime(d) {
+    const pad = n => n.toString().padStart(2, "0");
 
+    const days = [
+        "Sunday","Monday","Tuesday","Wednesday",
+        "Thursday","Friday","Saturday"
+    ];
+
+    const months = [
+        "January","February","March","April",
+        "May","June","July","August",
+        "September","October","November","December"
+    ];
+
+    const dayName = days[d.getDay()];
+    const day = d.getDate();
+    const monthName = months[d.getMonth()];
+    const year = d.getFullYear();
+
+    // ordinal suffix
+    let suffix = "th";
+    if (day % 10 === 1 && day !== 11) suffix = "st";
+    else if (day % 10 === 2 && day !== 12) suffix = "nd";
+    else if (day % 10 === 3 && day !== 13) suffix = "rd";
+
+    let h = d.getHours();
+    const ampm = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+
+    const m = pad(d.getMinutes());
+    const s = pad(d.getSeconds());
+
+    const offsetMin = -d.getTimezoneOffset();
+    const sign = offsetMin >= 0 ? "+" : "-";
+    const oh = pad(Math.floor(Math.abs(offsetMin) / 60));
+    const om = pad(Math.abs(offsetMin) % 60);
+
+    return `${dayName}, ${day}${suffix} ${monthName} ${year} ` +
+           `${h}:${m}:${s} ${ampm} ${sign}${oh}${om}`;
+}
+function updateDailyLastPlayedText() {
+    const el = document.getElementById("dailyLastPlayedText");
+    if (!el) return;
+
+    const data = loadDailyData();
+    const today = getTodayKey();
+
+    // ❌ No data → hide
+    if (!data.lastPlayedTime) {
+        el.style.display = "none";
+        return;
+    }
+
+    // ✅ If ready again → HIDE
+    if (data.lastPlayedDate !== today) {
+        el.style.display = "none";
+        return;
+    }
+
+    // ✅ If still on cooldown → SHOW
+    el.style.display = "block";
+
+    const d = new Date(data.lastPlayedTime);
+    el.innerText = "Last played: " + formatFullDateTime(d);
+}
 function updateDailyPuzzleButton() {
     const btn = document.getElementById("dailyPuzzleBtn");
     if (!btn) return;
@@ -1943,7 +2015,7 @@ function updateDailyPuzzleButton() {
 }
 function getTodayKey() {
     const d = new Date();
-    return `${d.getDate()}/${d.getMonth()}/${d.getFullYear()}`;
+    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
 }
 function loadDailyData() {
     return JSON.parse(localStorage.getItem("dailyPuzzleData") || "{}");
@@ -1967,6 +2039,7 @@ function getDailyRemainingTime() {
 
     return `${h}H ${m}M ${s}S`;
 }
+window.addEventListener("DOMContentLoaded", updateDailyLastPlayedText);
 function toggleHurryMode() {
     hurryMode = !hurryMode;
     localStorage.setItem("bubbleHurryMode", hurryMode);
@@ -2104,6 +2177,7 @@ function updateAutosaveButton() {
     }
 }
 setInterval(updateDailyPuzzleButton, 1000);
+setInterval(updateDailyLastPlayedText, 1000);
 window.addEventListener("DOMContentLoaded", updateDailyPuzzleButton);
 function addSfxButtonToMenu() {
     const menu = document.getElementById('mainMenu');
@@ -5271,6 +5345,7 @@ function endDailyPuzzle(completed) {
     data.lastPlayedDate = today;
     data.lastPlayedTime = Date.now();
     saveDailyData(data);
+    updateDailyLastPlayedText(); // 👈 ADD THIS
 
     if (completed) {
         stats.dailyPuzzleCompleted = (stats.dailyPuzzleCompleted || 0) + 1;
