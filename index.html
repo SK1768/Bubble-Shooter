@@ -5946,6 +5946,10 @@ function updatePaletteUI() {
         alert("Cannot create a save file in playtest mode.");
         return;
     }
+		if (isDailyPuzzle) {
+        alert("Cannot create a save file in daily puzzle mode.");
+        return;
+    }
 
     const ts = getSaveTimestamp();
 
@@ -6117,6 +6121,10 @@ function handleLoadClick() {
             alert("Cannot load a save file in playtest mode.");
             return;
         }
+	if (isDailyPuzzle) {
+        alert("Cannot load a save file in daily puzzle mode.");
+        return;
+    }
             // remember previous pause state
     wasPausedBeforeFileDialog = isPaused;
 
