@@ -6078,7 +6078,12 @@ function updatePaletteUI() {
         return;
     }
     // 🚨 existing floating-bubble check
-    const hasFloating = bubbles.some(b => !hasAtLeastOneConnection(b));
+    const connected = getConnectedToTop();
+
+const hasFloating = bubbles.some(b => {
+    const key = `${b.row},${b.col}`;
+    return !connected.has(key);
+});
     if (hasFloating) {
         alert("Connect one of the floating bubbles to another bubble.");
         return;
