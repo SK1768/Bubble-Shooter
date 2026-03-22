@@ -2579,7 +2579,7 @@ document.getElementById('debugInput').addEventListener('keydown', e => {
 
         if (cmd === '!completelevel') { 
             bubbles = []; 
-            (); 
+            triggerWin(); 
         } 
         else if (cmd === '!setammo' && !isNaN(val)) { 
             ammo = val; 
