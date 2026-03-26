@@ -612,11 +612,7 @@ button.danger {
         <p>Made by SK1768 :)</p>
         <button onclick="startPuzzleMode()" style="font-size: 1.5em; background: #00ffcc; color: #000;" onmouseenter="setMenuDesc('Puzzle Mode: Clear all bubbles using limited ammo.')" onmouseleave="clearMenuDesc()">🧩 PUZZLE MODE</button>
         <br>
-        <button id="dailyPuzzleBtn"
-onclick="startDailyPuzzleMode()"
-style="font-size:1.2em; background:#00ff88; color:#000;">
-🧩 DAILY PUZZLE MODE
-</button>
+        <button id="dailyPuzzleBtn"onclick="startDailyPuzzleMode()"onmouseenter="setMenuDesc('Daily Puzzle Mode: Provides you with daily puzzles to complete with no limited ammos.')"onmouseleave="clearMenuDesc()"style="font-size:1.2em; background:#00ff88; color:#000;">🧩 DAILY PUZZLE MODE</button>
 <div id="dailyLastPlayedText" style="
     margin-top:6px;
     font-size:13px;
@@ -628,11 +624,11 @@ style="font-size:1.2em; background:#00ff88; color:#000;">
 <br>
         <button onclick="enterCustomEditor()" style="background: #a155ff;"onmouseenter="setMenuDesc('Custom Mode: Create and test your own bubble layouts.')" onmouseleave="clearMenuDesc()">🛠️ CUSTOM MODE</button>
         <br>
-        <button onclick="startCampaign()" style="background:#ff9500; font-weight:bold;"onmouseenter="setMenuDesc('Campaign Mode: Beat 20 levels before the timer runs out.')" onmouseleave="clearMenuDesc()">
+        <button onclick="startCampaign()" style="background:#ff9500; font-weight:bold;"onmouseenter="setMenuDesc('Campaign Mode: Beat 20 levels with only 5 lives before the timer runs out.')" onmouseleave="clearMenuDesc()">
             🏆 CAMPAIGN MODE
         </button>
         <br>
-        <button onclick="openAchievements()">🏆 ACHIEVEMENTS</button>
+        <button onclick="openAchievements()"onmouseenter="setMenuDesc('Achievements: Opens a list of achievements you\'ve earned.')" onmouseleave="clearMenuDesc()">🏆 ACHIEVEMENTS</button>
         <br>
         <br>
         <button id="autosaveToggle" onclick="toggleAutosave()" onmouseenter="setMenuDesc('Autosave: Creates a save file every time you complete a level in Puzzle Mode.')" onmouseleave="clearMenuDesc()">💾 Autosave: OFF</button>
@@ -2110,7 +2106,7 @@ function updateLivesUI() {
 
     outer.style.display = "inline";
 
-    if (isPlaytesting) {
+    if (isPlaytesting || isDailyPuzzle) {
         inner.innerText = "❤️-";
         inner.style.color = "#888";
         outer.classList.remove('low-lives');
@@ -2595,7 +2591,7 @@ document.getElementById('debugInput').addEventListener('keydown', e => {
             streakFrozen = false; 
         }
         else if (cmd === '!faillevel') {
-            triggerFail("You used the !faillevel debug command.\n-1❤️");
+            triggerFail("You used the !faillevel debug command.");
         }
         else if (cmd === '!advancelevel' && !isNaN(val)) {
             level = val;
@@ -3085,6 +3081,12 @@ canvas.addEventListener('mousedown', e => {
         swapBubbles();
         return false;
     }
+    if (isDailyPuzzle) {
+        exitToMenu();
+        isDailyPuzzle = false;
+        suppressAutosaveOnce = false;
+        return;
+    }
 
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
@@ -3213,11 +3215,12 @@ if (idx !== -1) {
             campaignTimer = CAMPAIGN_TIME_LIMIT;
         }
             
-    // 💀 True game over → back to menu
+    // 💀 True game over or daily puzzle → back to menu
     if (lives <= 0) {
         exitToMenu();
         return;
     }
+    
 
     // 🔁 Retry same level
     gameOver = false;
@@ -3545,6 +3548,11 @@ if (nb.color != COLORLESS && colorlessNeighbors.length >= 2) {
         spawnDudHitParticles(nb.x, nb.y, nb.color);
         sounds.play('place');
         startHurryTimer();
+        
+        if (ammo <= 0) { 
+        triggerFail("You ran out of bubbles!")
+        return;
+    }
 
 const beforePct = calcProgressPercent(bubbles.length - 1, initialBubbleCount); 
 // bubbles.length already includes the newly placed bubble, so -1 = before placement
@@ -3714,7 +3722,7 @@ if (bubbles.length === 0) {
 }
 
 
- else if (ammo <= 0) triggerFail("You ran out of bubbles!\n-1❤️");
+ else if (ammo <= 0) triggerFail("You ran out of bubbles!");
  updateAmmo();
  lastShotWasMatch = false;
 }
@@ -3728,7 +3736,7 @@ function triggerWin() {
     endDailyPuzzle(true);
 
 
-if (!isPlaytesting) {
+if (!isPlaytesting && !isDailyPuzzle && !isCampaignMode) {
     const before = lives;
     lives = Math.min(lives + 1, MAX_LIVES);
     if (lives > before) {
@@ -3749,7 +3757,7 @@ updateLivesUI();
      	        stats.campaignWins++;
                 saveStats();
 
-               triggerConfetti();
+                triggerConfetti();
                 triggerConfetti();
                 sounds.play('win');
                 refreshFavicon();
@@ -3776,7 +3784,7 @@ lastClearWasPerfect = ammo === 0 || campaignTimer <= -1;
 if (
     lastClearWasPerfect &&
     mode !== "custom" &&
-    !isPlaytesting
+    !isPlaytesting && !isDailyPuzzle && !isCampaignMode
 ) {
     perfectStreak++;
     stats.levelsCompletedPerfectly++;
@@ -3795,7 +3803,7 @@ if (lives === MAX_LIVES) {
     unlockAchievement("MAX_LIVES");
 }
 
-if (lives === 1) {
+if (lives === 2) {
     unlockAchievement("CLUTCH_WIN");
 }
 
@@ -3849,7 +3857,7 @@ function triggerFail(reason) {
     if (lives <= 0) {
         lives = 0;
         gameOver = true;
-        gameOverReason = `You lost all your lives!\n(${reason})`
+        gameOverReason = reason
         sounds.play('death');   // 🔥 NEW SFX
         deathSfxPlayed = true;
         stats.levelsFailed++;
@@ -4027,6 +4035,10 @@ function drawFloatingTexts(ctx) {
 function update() {
     
 if (isPaused) return;
+if (isDailyPuzzle)
+{
+    ammo = Infinity
+}
     // ---- delta time (seconds) ----
 const nowMs = performance.now();
 const dt = (nowMs - lastTimeMs) / 1000;
@@ -4139,7 +4151,7 @@ else if (!gameOver)
     }); 
 }
  if (!gameOver && !gameWin && noFallingBubblesAllowed){
-    triggerFail("One of the falling bubbles hit the red line!\n-1❤️")
+    triggerFail("One of the falling bubbles hit the red line!")
 }   // 💥 particles exactly where it hits
     spawnPopParticles(b.x, DEADLINE, b.color);
 
@@ -4244,7 +4256,7 @@ else
 const secondsLeft = Math.ceil(campaignTimer);
 
 if (secondsLeft <= -1 && projectiles.length === 0) {
-    triggerFail("You ran out of time!\n-1❤️");
+    triggerFail("You ran out of time!");
     campaignLevel = 1;
     lastClearWasPerfect = false;
 }
@@ -4351,7 +4363,7 @@ if (p.y < RADIUS) {
             // every few frames only (cheap)
 
         });
-        bubbles.forEach(b => { if (b.y > DEADLINE) triggerFail("You hit the red line!\n-1❤️"); });
+        bubbles.forEach(b => { if (b.y > DEADLINE) triggerFail("You hit the red line!"); });
         // 👻 Ghost snap outline
 
 
@@ -4952,35 +4964,38 @@ if (winPending && !gameWin && !gameOver && bubbles.length === 0) {
         ctx.shadowBlur = 0;
 
         ctx.font = "bold 20px Storopia";
-        ctx.fillText(isPlaytesting ? "" : isCampaignMode ? "+50 BUBBLES! +1❤️"  : "+1,000 SCORE  +150 BUBBLES  +10❤️", canvas.width / 2, 295);
+        ctx.fillText(isPlaytesting || isDailyPuzzle ? "" : isCampaignMode ? "+50 BUBBLES!"  : "+1,000 SCORE  +150 BUBBLES  ❤️+10", canvas.width / 2, 295);
 
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "16px Storopia";
-        ctx.fillText("Click to continue", canvas.width / 2, 330);
+        ctx.fillText(isPlaytesting ? "Click to continue" : isDailyPuzzle ? "" : isCampaignMode ? `Click to advance to Level ${level + 1} (${campaignLevelsLeft} ${sp} to go!)` : `Click to advance to Level ${level + 1}`, canvas.width / 2, 330);
     }
     // --- NORMAL WIN/FAIL SCREEN ---
     else {
         if (winPending) return;
         ctx.fillStyle = gameOver ? "#ff5555" : "#00ffcc";
         ctx.font = "bold 34px Storopia";
-        const endText = gameOver ? (lives <= 0 ? "GAME OVER!" : isPlaytesting ? "CUSTOM LEVEL FAILED!" : isDailyPuzzle ? "DAILY PUZZLE FAILED!" : "LEVEL FAILED!" ) : isPlaytesting ? "CUSTOM LEVEL COMPLETE!" : isDailyPuzzle ? "DAILY PUZZLE COMPLETE!" : "LEVEL COMPLETE!";
+        const endText = gameOver ? (lives <= 0 ? "GAME OVER!" : isPlaytesting ? "CUSTOM LEVEL FAILED!" : isDailyPuzzle ? "DAILY PUZZLE FAILED!" : `LEVEL ${level} FAILED!` ) : isPlaytesting ? "CUSTOM LEVEL COMPLETE!" : isDailyPuzzle ? "DAILY PUZZLE COMPLETE!" : `LEVEL ${level} COMPLETE!`;
 
 ctx.fillText(endText, canvas.width / 2, 280);
 		    // 🎁 Show bubble reward ONLY on win
     if (gameWin && !gameOver) {
         ctx.fillStyle = "#ffcc00";
         ctx.font = "bold 22px Storopia";
-        ctx.fillText(isPlaytesting ? "" : "+50 BUBBLES! +1❤️", canvas.width / 2, 315);
+        ctx.fillText(isPlaytesting || isDailyPuzzle ? "" : !isCampaignMode ? "+50 BUBBLES! ❤️+1" : "+50 BUBBLES!", canvas.width / 2, 315);
     }
         if (gameOver && gameOverReason) {
             ctx.fillStyle = "#FF0000"
 			ctx.font = "20px Storopia";
             ctx.fillText(gameOverReason, canvas.width / 2, 350);
+            ctx.font = "15px Storopia";
+            ctx.fillText(lives > 0 && !isDailyPuzzle && !isPlaytesting ? `❤️-1 (❤️${lives} remaining)` : isDailyPuzzle || isPlaytesting ? `` : `You lost all your lives!`, canvas.width / 2, 380);
         }
-		
+		const campaignLevelsLeft = CAMPAIGN_TOTAL_LEVELS - campaignLevel;
+        const sp = campaignLevelsLeft === 1 ? "level" : "levels";
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "16px Storopia";
-        ctx.fillText(lives <= 0 ? "Click to exit to the main menu" : "Click to continue", canvas.width / 2, 420); // lol
+        ctx.fillText(lives <= 0 || isDailyPuzzle ? "Click to exit to the main menu" : isPlaytesting ? "Click to continue" : gameOver ? "Click to try again" : isCampaignMode ? `Click to advance to Level ${level + 1} (${campaignLevelsLeft} ${sp} to go!)` : `Click to advance to Level ${level + 1}`, canvas.width / 2, 420); // lol
         if (gameWin) {
     ctx.save();
     confetti.forEach(c => {
@@ -5351,17 +5366,14 @@ function endDailyPuzzle(completed) {
     data.lastPlayedDate = today;
     data.lastPlayedTime = Date.now();
     saveDailyData(data);
-    updateDailyLastPlayedText(); // 👈 ADD THIS
+    updateDailyLastPlayedText();
 
     if (completed) {
         stats.dailyPuzzleCompleted = (stats.dailyPuzzleCompleted || 0) + 1;
         saveStats();
         checkProgressAchievements();
+        suppressAutosaveOnce = true
     }
-
-    setTimeout(() => {
-        exitToMenu();
-    }, 1000);
 }
 function hideCampaignTimer() {
     const timerSpan = document.getElementById('campaignTimerDisplay');
