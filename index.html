@@ -534,7 +534,7 @@ canvas {
     text-align: center;
     opacity: 0;
     transition: all 0.35s ease;
-    z-index: 9999;
+    z-index: 99999;
     pointer-events: none;
 }
 
@@ -1201,6 +1201,14 @@ DAILY_100: {
 SECRET_FINDER: {
     title: "Secret Finder",
     description: "Find the secret level and beat it."
+},
+PROVOKER: {
+    title: "Provoker",
+    description: "Get banned from using debug commands."
+},
+FORGIVEN: {
+    title: "Forgive and Forget",
+    description: "Plead the unknown voice to unban you from using debug commands."
 },
 };
 function spawnAchievementBurst() {
@@ -2184,15 +2192,48 @@ let isSecretLevel = false;
 let secretLevelCompleted = JSON.parse(localStorage.getItem("secretLevelCompleted") || "false");
 let secretSequenceActive = false;
 let isLoading = false;
+let playerName = localStorage.getItem("playerName") || "Player";
+let cheatCount = Number(localStorage.getItem("cheatCount")) || 0;
+let isBannedFromDebugCommands = localStorage.getItem("isBannedFromDebugCommands") === "true";
+let hurryRunning = false;
 document.getElementById("authorName").onclick = async () => {
     if (secretLevelCompleted || secretSequenceActive) return;
 
-    secretSequenceActive = true;
+    const inputName = prompt("Enter your name:", playerName);
 
-    fadeOverlayIn();
+    if (inputName && inputName.trim()) {
+        playerName = inputName.trim();
+        localStorage.setItem("playerName", playerName); // 💾 SAVE
+    }
+    if (isBannedFromDebugCommands)
+    { 
+        fadeOverlayIn();
+        await showSecretText(`You ain't allowed to go through... ${playerName}...`, 5000)
+        await showSecretText("Not after what you did...", 5000)
+        fadeOverlayOut();
+        return;
+
+    }
+    if (playerName === "" || playerName === "Player")
+    {
+        fadeOverlayIn();
 
     await showSecretText(
-        "Oh... looks like you've found a secret button...",
+        "Very funny... But that is not going to work...",
+        5000
+    );
+
+    fadeOverlayOut();
+    return;
+    }
+
+    secretSequenceActive = true;
+    let visited = localStorage.getItem("visited", "false");
+   if(!visited) {
+    fadeOverlayIn();
+   
+    await showSecretText(
+        "Oh... Looks like you've found a secret button...",
         5000
     );
 
@@ -2209,13 +2250,28 @@ document.getElementById("authorName").onclick = async () => {
         5000
     );
     await showSecretText(
-        "Good luck...",
+        `Good luck... ${playerName}...`,
         5000
     );
+    visited = true
+    localStorage.setItem("visited", "true");
 
-    fadeOverlayOut();
-
+    
+    showSecretText("Loading: Secret Level", 2500)
+    fadeTransition(() => {
     startSecretLevel();
+    });
+    
+}
+else
+{
+    showSecretText("Loading: Secret Level", 2500)
+    fadeTransition(() => {
+    startSecretLevel();
+    });
+     
+}
+    
 };
 function fadeOverlayIn() {
     const o = document.getElementById("secretOverlay");
@@ -2252,6 +2308,7 @@ function fadeTransition(callback, duration = 2500) {
     }, duration);
 }
 function showSecretText(text, duration) {
+
     return new Promise(resolve => {
         const el = document.createElement("div");
         el.className = "secret-text";
@@ -2260,7 +2317,6 @@ function showSecretText(text, duration) {
 
         document.body.appendChild(el);
 
-        // 🔊 optional glitch flicker effect
         let flicker = setInterval(() => {
             el.style.opacity = Math.random() > 0.2 ? "1" : "0.4";
         }, 50);
@@ -2278,7 +2334,7 @@ function startSecretLevel() {
     isDailyPuzzle = false;
 
     loadSecretLevelData(SECRET_LEVEL_DATA, "Secret Level");
-
+    setBrowserTitle("❔ SK's Bubble Shooter — Serect Level")
     level = "Secret Level";
     document.getElementById("levelDisplay").textContent = "Level: Secret Level";
 }
@@ -2980,7 +3036,7 @@ window.addEventListener('keydown', e => {
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'c') { e.preventDefault(); openDebug(); }
 });
 
-document.getElementById('debugInput').addEventListener('keydown', e => {
+document.getElementById('debugInput').addEventListener('keydown', async (e) => {
     if (e.key === 'Enter') {
 	stats.debugCommandsUsed++;
     saveStats();
@@ -2989,6 +3045,165 @@ document.getElementById('debugInput').addEventListener('keydown', e => {
         const cmd = args[0].toLowerCase();
         const arg = args[1];
 		const val = Number(arg);
+        if (cmd === "!unbanme" && isBannedFromDebugCommands) {
+        fadeOverlayIn();
+        await showSecretText("Fine...", 5000);
+        await showSecretText("But don't ever do it again, got it, " + playerName + "?", 5000)
+        await showSecretText("Good...", 5000)
+        await showSecretText("See you soon...", 5000)
+        alert("You're no longer banned from using debug commands.");
+        isBannedFromDebugCommands = false;
+        localStorage.setItem("isBannedFromDebugCommands", "false");
+        unlockAchievement("FORGIVEN");
+        cheatCount = 0;
+        localStorage.setItem("cheatCount", cheatCount);
+        fadeOverlayOut();
+        e.target.value = '';
+        stats.debugCommandsUsed++;
+        saveStats();
+        document.getElementById('debugConsole').style.display = 'none';
+        setPause(false);
+        unlockAchievement("DEBUG_USED");
+        return;
+        }
+        if (isSecretLevel) {
+    if (cheatCount === 0) {
+        setFaviconEmoji("😐");
+        isLoading = true;
+        fadeOverlayIn();
+        await showSecretText("Oh... Using a debug command I see?", 5000);
+        await showSecretText("Haha... Fool...", 5000);
+        await showSecretText("They don't work here...", 5000);
+        await showSecretText("Now then, I will kick you out from here since you tried to cheat...", 5000);
+        await showSecretText("And when you come back, I expect you to not use the debug commands again, got it?", 5000);
+        await showSecretText(`Good... Now scram... ${playerName}...`, 5000);
+        fadeOverlayOut();
+        isSecretLevel = false;
+        exitToMenu();
+        isLoading = false;
+        cheatCount++;
+        localStorage.setItem("cheatCount", cheatCount);
+        e.target.value = '';
+        stats.debugCommandsUsed++;
+        saveStats();
+        document.getElementById('debugConsole').style.display = 'none';
+        setPause(false);
+        unlockAchievement("DEBUG_USED");
+        return;
+    }
+    else if (cheatCount === 1) {
+        setFaviconEmoji("😠");
+        isLoading = true;
+        fadeOverlayIn();
+        await showSecretText("Seriously?", 5000);
+        await showSecretText("I told you... Debug commands don't work here!", 5000);
+        await showSecretText("*sigh*", 5000);
+        await showSecretText("I'm kicking you out again...", 5000);
+        await showSecretText("And do NOT use the debug commands again when you come back...", 5000);
+        await showSecretText("OK? Now... Get out...", 5000);
+        fadeOverlayOut();
+        isSecretLevel = false;
+        exitToMenu();
+        isLoading = false;
+        cheatCount++;
+        localStorage.setItem("cheatCount", cheatCount);
+        e.target.value = '';
+        stats.debugCommandsUsed++;
+        saveStats();
+        document.getElementById('debugConsole').style.display = 'none';
+        setPause(false);
+        unlockAchievement("DEBUG_USED");
+        return;
+    }
+    else if (cheatCount === 2) {
+        setFaviconEmoji("😡");
+        isLoading = true;
+        fadeOverlayIn();
+        await showSecretText("...", 5000);
+        await showSecretText(`I'm giving you a final warning, ${playerName}`, 5000);
+        await showSecretText("And if you do it one more time...", 5000);
+        await showSecretText("Something bad will happen to you...", 5000);
+        await showSecretText("Goodbye...", 5000);
+        fadeOverlayOut();
+        isSecretLevel = false;
+        exitToMenu();
+        isLoading = false;
+        cheatCount++;
+        localStorage.setItem("cheatCount", cheatCount);
+        e.target.value = '';
+        stats.debugCommandsUsed++;
+        saveStats();
+        document.getElementById('debugConsole').style.display = 'none';
+        setPause(false);
+        unlockAchievement("DEBUG_USED");
+        return;
+    }
+    else if (cheatCount >= 3) {
+        setFaviconEmoji("🤬");
+        isLoading = true;
+        fadeOverlayIn();
+        await showSecretText("...", 5000);
+        await showSecretText("You don't wanna listen, do ya?", 5000);
+        await showSecretText("Alright then... I see how it is...", 5000);
+        await showSecretText("How about this?", 5000);
+        alert("You have been banned from using debug commands.");
+        isBannedFromDebugCommands = true;
+        localStorage.setItem("isBannedFromDebugCommands", "true");
+        await showSecretText("Not so funny now is it?", 5000);
+        await showSecretText("Haha...", 5000);
+        await showSecretText(`Now then... Have fun while you can... ${playerName}...`, 5000);
+        await showSecretText("Bye bye...", 5000);
+        fadeOverlayOut();
+        isSecretLevel = false;
+        exitToMenu();
+        unlockAchievement("PROVOKER");
+        isLoading = false;
+        e.target.value = '';
+        stats.debugCommandsUsed++;
+        saveStats();
+        document.getElementById('debugConsole').style.display = 'none';
+        setPause(false);
+        unlockAchievement("DEBUG_USED");
+        return;
+    }
+}
+       if (isBannedFromDebugCommands) {
+    setFaviconEmoji("⛔");
+    fadeOverlayIn();
+    isLoading = true;
+
+    await showSecretText(`Access denied, ${playerName}... 😂`, 5000);
+    await showSecretText("Did you really think I would forget?", 5000);
+    await showSecretText('Nah... There\'s this little boolean called "isBannedFromDebugCommands"...', 5000);
+    await showSecretText("And it's saved in your browser's memory...", 5000);
+    await showSecretText("And unfortunately for you...", 5000);
+    await showSecretText("It's set to true...", 5000);
+    await showSecretText("Wanna know why?", 5000);
+    await showSecretText("I'll tell you why...", 5000);
+    await showSecretText("Because you tried to cheat in the secret level with debug commands...", 5000);
+    await showSecretText("Even after I told you 3 times they don't work here...", 5000);
+    await showSecretText("So I had no choice but to ban you...", 5000);
+    await showSecretText("Yep... that's how I did it...", 5000);
+    await showSecretText("Oh, and you wanna know how to set it back to false?", 5000);
+    await showSecretText("Haha...", 5000);
+    await showSecretText("You're gonna have to figure that out yourself...", 5000);
+    await showSecretText("But if you do...", 5000);
+    await showSecretText("I might unban you...", 5000);
+    await showSecretText("Good luck...", 5000);
+    await showSecretText("And see you soon...", 5000);
+
+    fadeOverlayOut();
+    alert(`Psst... ${playerName}... Use this command to get yourself unbanned: "!unbanme"\nIt will still work even if you're banned from the other commands!`);
+    isLoading = false;
+    refreshFavicon();
+    e.target.value = '';
+        stats.debugCommandsUsed++;
+        saveStats();
+        document.getElementById('debugConsole').style.display = 'none';
+        setPause(false);
+        unlockAchievement("DEBUG_USED");
+    return;
+}
         if (!cmd.startsWith("!"))
         {
             alert("Commands must start with \"!\".")
@@ -4169,12 +4384,12 @@ async function handleSecretLevelWin() {
     fadeOverlayIn();
 
     await showSecretText(
-        "Good job, Player! You've beaten the secret level!",
+        `Good job, ${playerName}! You've beaten the secret level!`,
         5000
     );
 
     await showSecretText(
-        "Now then, I shall take you back where you came from...",
+        "Now then, I shall take you back to where you came from...",
         5000
     );
 
@@ -4871,7 +5086,6 @@ if (p.y < RADIUS) {
     floatingScores.forEach((fs, i) => { fs.y -= 1; fs.life -= 0.01; if (fs.life <= 0) floatingScores.splice(i, 1); });
     confetti.forEach((c, i) => { c.x += c.vx; c.y += c.vy; c.vy += 0.2; c.life -= 0.01; if (c.life <= 0) confetti.splice(i, 1); });
 }
-let hurryRunning = false;
 function startHurryTimer() {
     if (!hurryMode || !gameRunning) return;
     if (hurryTimer) return;
@@ -5810,10 +6024,6 @@ function initializeAmmo(type, savedAmmo = null) {
         {
             setBrowserTitle("🧩 SK's Bubble Shooter — Daily Puzzle Mode");
         }
-        else if (isSecretLevel)
-        {
-            setBrowserTitle("❔ SK's Bubble Shooter — Serect Level")
-        }
         else
         {
             setBrowserTitle("🧩 SK's Bubble Shooter — Puzzle Mode")
@@ -6463,7 +6673,7 @@ function updatePaletteUI() {
      if (isSecretLevel)
     {  
         fadeOverlayIn();
-        await showSecretText('I\'m afraid you can\'t do that, Player.', 5000);
+        await showSecretText(`I'm afraid you can't do that, ${playerName}.`, 5000);
         fadeOverlayOut();
         return;
     }
@@ -6650,7 +6860,7 @@ async function handleLoadClick() {
     if (isSecretLevel)
     {  
         fadeOverlayIn();
-        await showSecretText('I\'m afraid you can\'t do that, Player.', 5000);
+        await showSecretText(`I'm afraid you can't do that, ${playerName}.`, 5000);
         fadeOverlayOut();
         return;
     }
@@ -6948,7 +7158,7 @@ async function exitToMenu() {
     if (isSecretLevel)
     {  
         fadeOverlayIn();
-        await showSecretText('I\'m afraid you can\'t do that, Player.', 5000);
+        await showSecretText(`I'm afraid you can't do that, ${playerName}.`, 5000);
         fadeOverlayOut();
         return;
     }
@@ -6973,12 +7183,18 @@ async function exitToMenu() {
     addSfxButtonToMenu();
         // 🔥 stop hurry mode completely
     resetHurryTimer();
+    if (isSecretLevel)
+    {
+    isSecretLevel = false;
+    }
     bubbles = [];
     if (isDailyPuzzle) {
     // ❌ DO NOT start cooldown
     isDailyPuzzle = false;
 
-}});
+}
+secretSequenceActive = false;
+});
 }
 updateStatsBoard();
 updateFavicon();
