@@ -3819,7 +3819,7 @@ if (idx !== -1) {
 
         if (gameWin) {
         const s = autosaveEnabled ? "(Creating an autosave file...)" : "";
-        showSecretText(isCampaignMode ? `Loading: Level ${campaignLevel + 1}...` : `Loading: Level ${level + 1}...\n${s}`, 2500)
+        showSecretText(isCampaignMode ? `Loading: Level ${fmt(campaignLevel + 1)}...` : `Loading: Level ${fmt(level + 1)}...\n${s}`, 2500)
         fadeTransition(() => {
             if (isCampaignMode) {
 
@@ -5662,7 +5662,7 @@ if (winPending && !gameWin && !gameOver && bubbles.length === 0) {
         if (winPending) return;
         ctx.fillStyle = gameOver ? "#ff5555" : "#00ffcc";
         ctx.font = "bold 34px Storopia";
-        const endText = gameOver ? (lives <= 0 ? "GAME OVER!" : isPlaytesting ? "CUSTOM LEVEL FAILED!" : isDailyPuzzle ? "DAILY PUZZLE FAILED!" : `LEVEL ${level} FAILED!` ) : isPlaytesting ? "CUSTOM LEVEL COMPLETE!" : isDailyPuzzle ? "DAILY PUZZLE COMPLETE!" : `LEVEL ${level} COMPLETE!`;
+        const endText = gameOver ? (lives <= 0 ? "GAME OVER!" : isPlaytesting ? "CUSTOM LEVEL FAILED!" : isDailyPuzzle ? "DAILY PUZZLE FAILED!" : `LEVEL ${fmt(level)} FAILED!` ) : isPlaytesting ? "CUSTOM LEVEL COMPLETE!" : isDailyPuzzle ? "DAILY PUZZLE COMPLETE!" : `LEVEL ${fmt(level)} COMPLETE!`;
 
 ctx.fillText(endText, canvas.width / 2, 280);
 		    // 🎁 Show bubble reward ONLY on win
@@ -5682,7 +5682,7 @@ ctx.fillText(endText, canvas.width / 2, 280);
         const sp = campaignLevelsLeft === 1 ? "level" : "levels";
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "16px Storopia";
-        ctx.fillText(lives <= 0 || isDailyPuzzle ? "Click to exit to the main menu" : isPlaytesting ? "Click to continue" : gameOver ? "Click to try again" : isCampaignMode ? `Click to advance to Level ${level + 1} (${campaignLevelsLeft} ${sp} to go!)` : `Click to advance to Level ${level + 1}`, canvas.width / 2, 420); // lol
+        ctx.fillText(lives <= 0 || isDailyPuzzle ? "Click to exit to the main menu" : isPlaytesting ? "Click to continue" : gameOver ? "Click to try again" : isCampaignMode ? `Click to advance to Level ${fmt(level + 1)} (${campaignLevelsLeft} ${sp} to go!)` : `Click to advance to Level ${fmt(level + 1)}`, canvas.width / 2, 420); // lol
         if (gameWin) {
     ctx.save();
     confetti.forEach(c => {
