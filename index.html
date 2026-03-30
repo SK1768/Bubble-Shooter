@@ -2257,7 +2257,7 @@ document.getElementById("authorName").onclick = async () => {
     localStorage.setItem("visited", "true");
 
     
-    showSecretText("Loading: Secret Level", 2500)
+    showSecretText("Loading: Secret Level...", 2500)
     fadeTransition(() => {
     startSecretLevel();
     });
@@ -2265,7 +2265,7 @@ document.getElementById("authorName").onclick = async () => {
 }
 else
 {
-    showSecretText("Loading: Secret Level", 2500)
+    showSecretText("Loading: Secret Level...", 2500)
     fadeTransition(() => {
     startSecretLevel();
     });
@@ -2277,14 +2277,14 @@ function fadeOverlayIn() {
     const o = document.getElementById("secretOverlay");
     o.style.pointerEvents = "auto";
     o.style.opacity = "1";
+	isLoading = true;
 }
 
 function fadeOverlayOut() {
     const o = document.getElementById("secretOverlay");
     o.style.opacity = "0";
-    setTimeout(() => {
-        o.style.pointerEvents = "none";
-    }, 800);
+    o.style.pointerEvents = "none";
+	isLoading = false;
 }
 function fadeTransition(callback, duration = 2500) {
     const overlay = document.getElementById("secretOverlay");
