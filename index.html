@@ -721,7 +721,33 @@ button.danger {
   onmouseleave="clearMenuDesc()">			 
     HIDE THE MUSIC PLAYER
 </button>
-
+<div style="margin-top:10px;">
+    <label>
+        🎮 FPS Cap:
+        <span id="fpsValue">60</span> FPS
+    </label>
+    <br>
+    <input
+        type="range"
+        id="fpsSlider"
+        min="1"
+        max="200"
+        value="30"
+        style="width:200px;"
+    >
+</div>
+<div id="fpsWarning" style="
+    margin-top:6px;
+    font-size:13px;
+    color:#ff4444;
+    font-weight:bold;
+    text-align:center;
+    display:none;
+">
+    ⚠️ Your FPS cap is set to <span id="fpsWarnValue"></span>.
+    This will make the game become very slow and unplayable.<br>
+    Recommended FPS: 20 and above.
+</div>
 		<div id="menuDescription" class="menuDescription">
 </div>
 		<h3 style="margin-top:0;text-align:center;">📊 Player Stats</h3>
@@ -827,7 +853,7 @@ button.danger {
         text-align:center;
         font-size:13px;
      ">
-    ⚠️ SoundTouch.js is missing!<br>
+    ⚠️ "soundtouch.js" is missing!<br>
     The music player will not work without it.
 </div>
     <input
@@ -891,9 +917,59 @@ console.log("SimpleFilter:", typeof window.SimpleFilter);
 </script>
 
 <script>
-    // ===============================
-// 🏆 ACHIEVEMENTS
-// ===============================
+let fpsCap = Number(localStorage.getItem("fpsCap")) || 30;
+let frameInterval = 1000 / fpsCap;
+let lastFrameTime = performance.now();
+const fpsSlider = document.getElementById("fpsSlider");
+const fpsValue = document.getElementById("fpsValue");
+const fpsWarning = document.getElementById("fpsWarning");
+const fpsWarnValue = document.getElementById("fpsWarnValue");
+
+// load saved value
+fpsSlider.value = fpsCap;
+fpsValue.textContent = fpsCap;
+function updateFPSWarning() {
+    // 🟥 LOW FPS WARNING
+    if (fpsCap < 20) {
+        fpsWarning.style.display = "block";
+        fpsWarnValue.textContent = `${fpsCap} FPS`;
+
+        fpsWarning.innerHTML = `
+        ⚠️ Your FPS cap is set to ${fpsCap} FPS.
+        This will make the game become very slow and unplayable.<br>
+        Recommended FPS: 20 and above.
+        `;
+    }
+
+    // ⚡ HIGH FPS + HURRY MODE WARNING
+    else if (fpsCap > 30 && hurryMode) {
+        fpsWarning.style.display = "block";
+        fpsWarnValue.textContent = `${fpsCap} FPS`;
+
+        fpsWarning.innerHTML = `
+        ⚠️ Your FPS cap is set to ${fpsCap} FPS.
+        This will make the hurry timer go faster and you won't have time to react.<br>
+        Recommended FPS: Between 20 and 30.
+        `;
+    }
+
+    // ✅ NO WARNING
+    else {
+        fpsWarning.style.display = "none";
+    }
+}
+
+// update on change
+fpsSlider.oninput = () => {
+    fpsCap = Number(fpsSlider.value);
+    fpsValue.textContent = fpsCap;
+
+    frameInterval = 1000 / fpsCap;
+
+    // 💾 save to browser memory
+    localStorage.setItem("fpsCap", fpsCap);
+    updateFPSWarning();
+};
 const SECRET_LEVEL_DATA = {
 
   "score": 0,
@@ -2450,6 +2526,7 @@ function toggleHurryMode() {
     hurryMode = !hurryMode;
     localStorage.setItem("bubbleHurryMode", hurryMode);
     updateHurryButton();
+    updateFPSWarning();
 }
 
 function updateHurryButton() {
@@ -5086,14 +5163,15 @@ if (p.y < RADIUS) {
     floatingScores.forEach((fs, i) => { fs.y -= 1; fs.life -= 0.01; if (fs.life <= 0) floatingScores.splice(i, 1); });
     confetti.forEach((c, i) => { c.x += c.vx; c.y += c.vy; c.vy += 0.2; c.life -= 0.01; if (c.life <= 0) confetti.splice(i, 1); });
 }
+let hurryAccumulator = 0;
+let hurryAccumulator1 = 0;
 function startHurryTimer() {
     if (!hurryMode || !gameRunning) return;
-    if (hurryTimer) return;
-
+    if (hurryRunning) return;
     hurryRunning = true;
     hurryPaused = false;
-
-    hurryTimer = setInterval(hurryTick, 1000);
+    hurryAccumulator = 0; // reset accumulator
+    hurryTick();
 }
 
 function pauseHurryTimer() {
@@ -5112,7 +5190,7 @@ function resumeHurryTimer() {
 
 function stopHurryTimer() {
     if (hurryTimer) {
-        clearInterval(hurryTimer);
+        hurryRunning = false;
         hurryTimer = null;
     }
     hurryRunning = false;
@@ -5129,23 +5207,31 @@ function resetHurryTimer() {
     }
 }
 
-function hurryTick() {
-    if (!hurryRunning || hurryPaused || isLoading || !hurryMode || !gameRunning || isPaused || projectiles.length === 1 || gameOver || gameWin || winPending) return;
-
-    hurryIdleSeconds++;
-    console.log(hurryIdleSeconds, hurryWarningSeconds)
+function hurryTick(dt) {
+    if (!hurryRunning || hurryPaused || isLoading || !hurryMode || !gameRunning || isPaused || projectiles.length === 1 || gameOver || gameWin || winPending || conversionQueue.length > 0) return;
+    hurryAccumulator += dt;
+    if (hurryAccumulator >= 1000) {
+        hurryIdleSeconds++;
+        hurryAccumulator = 0;
+    }
+    
+    console.log(hurryIdleSeconds, hurryWarningSeconds, hurryAccumulator, hurryAccumulator1)
     // ⚠️ warning phase
     if (hurryIdleSeconds === 10) {
         hurryWarningActive = true;
         hurryWarningSeconds = 10;
+        sounds.play("tick");
         refreshFavicon();
     }
-
+    
     // ⏱️ countdown
     if (hurryWarningActive && hurryWarningSeconds !== null) {
+        hurryAccumulator1 += dt;
+        if (hurryAccumulator1 >= 1000) {
         hurryWarningSeconds--;
         sounds.play("tick");
-		
+        hurryAccumulator1 = 0;
+    }
         if (hurryWarningSeconds <= 0) {
             hurryWarningSeconds = 0;
         }
@@ -5982,13 +6068,21 @@ function drawDebugOverlay() {
 
     panel.textContent = lines.join("\n");
 }
-function gameLoop() {
-     if (gameRunning) {
-         draw();
-         update();
-         animationId = requestAnimationFrame(gameLoop); 
-        }
-    }
+function gameLoop(now) {
+    requestAnimationFrame(gameLoop);
+
+    if (!gameRunning) return;
+
+    const delta = now - lastFrameTime;
+
+    if (delta < frameInterval) return;
+
+    lastFrameTime = now - (delta % frameInterval);
+
+    update();
+    hurryTick(delta);
+    draw();
+}
 
 function initializeAmmo(type, savedAmmo = null) {
 
@@ -6147,7 +6241,7 @@ suppressAutosaveOnce = false; // always clear after startMode
 
 
     if (animationId) cancelAnimationFrame(animationId);
-    gameLoop();
+    requestAnimationFrame(gameLoop);
     }
     refreshFavicon();
 
@@ -6176,7 +6270,7 @@ document.getElementById('percentText').style.display = 'none';
     if (animationId) cancelAnimationFrame(animationId);
     drawGridOverlay();
     drawDeadlineGridRow();
-    gameLoop();
+    requestAnimationFrame(gameLoop);
     stopHurryTimer();
 });
 }
@@ -7120,7 +7214,7 @@ function openSfxMenu() {
         row.style.alignItems = 'center';
 
         const label = document.createElement('span');
-        label.innerText = type.toUpperCase();
+        label.innerText = type;
         label.style.flex = '1';
 
         const btn = document.createElement('button');
@@ -7175,6 +7269,9 @@ async function exitToMenu() {
     document.getElementById('mobileControls').style.display = 'none';
     canvas.style.display = 'none';
     perfectStreak = 0;     // ✅ Reset run-state
+    streakTimer = 0;
+    hurryAccumulator = 0;
+    hurryAccumulator1 = 0;
     lives = DEFAULT_LIVES;
     updateLivesUI();
     updateStatsBoard();
@@ -7198,6 +7295,7 @@ secretSequenceActive = false;
 }
 updateStatsBoard();
 updateFavicon();
+updateFPSWarning();
 addSfxButtonToMenu();
 </script>
     <div id="customSavePopup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;">
@@ -7213,11 +7311,12 @@ addSfxButtonToMenu();
     <button onclick="confirmCustomSave()" style="margin-top:10px;background:#00ffcc;color:#000;font-weight:bold;">
       CONFIRM SAVE
     </button>
-  </div>
-        <button onclick="closeCustomSavePopup()" 
+    <button onclick="closeCustomSavePopup()" 
     style="background:#ff5555;color:#fff;font-weight:bold; padding:8px 18px;">
     CANCEL
   </button>
+  </div>
+        
 </div>
 </div>
     <div id="sfxMenu" style="
@@ -7271,4 +7370,3 @@ justify-content:center;
 <div id="secretOverlay"></div>
 </body>
 </html>
-<!--Note: This game was made with a help of ChatGPT and Gemini. (Don't judge me.) lol-->
