@@ -4823,9 +4823,6 @@ if (
     triggerWin();
 	unlockAchievement("WIN_SCREEN_DELAY");
 }
-if (isDailyPuzzle) {
-    document.getElementById("levelDisplay").innerText = "Level: Daily Puzzle";
-}
 const CONVERSIONS_PER_FRAME = 1;
 
 let convertedThisFrame = 0;
@@ -5838,6 +5835,7 @@ if (isCampaignMode) levelText = `${campaignLevel}/${CAMPAIGN_TOTAL_LEVELS}`;
 else if (isPlaytesting && customLevelName && customAuthorName) levelText = `Custom Level (${customLevelName} by ${customAuthorName})`;
 else if (mode === 'custom') levelText = "Custom Level";
 else if (isSecretLevel) levelText = "Secret Level";
+else if (isDailyPuzzle) levelText = "Daily Puzzle";
 else levelText = fmt(level);
 
 document.getElementById('levelDisplay').innerText = `Level: ${levelText}`;
@@ -6023,6 +6021,8 @@ function drawDebugOverlay() {
         `hurryTimer: ${hurryTimer}`,
         `hurryIdleSeconds: ${hurryIdleSeconds}`,
         `hurryWarningSeconds: ${hurryWarningSeconds}`,
+		`hurryAccumulator: ${fmt(hurryAccumulator.toFixed(1))}`,
+		`hurryAccumulator1: ${fmt(hurryAccumulator1.toFixed(1))}`,
         `winPending: ${winPending}`,
         `campaignTimer: ${campaignTimer}`,
         `campaignTimerAcc: ${campaignTimerAcc.toFixed(1)}`,
@@ -7154,6 +7154,11 @@ function loadGame(e) {
         updateAmmo(false);
         updateProgressBar();
         refreshFavicon();
+        hurryAccumulator = 0;
+        hurryAccumulator1 = 0;
+        hurryIdleSeconds = 0;
+        hurryWarningSeconds = null;
+        startHurryTimer();
         console.log(`Save file loaded. ("${file.name}")`)
     });
     };
@@ -7260,7 +7265,7 @@ async function exitToMenu() {
  showSecretText('Loading: Main Menu...', 2500)   
     fadeTransition(() => {
 
-    
+    console.clear();
     setBrowserTitle("⭐ SK's Bubble Shooter");
     gameRunning = false;
     document.getElementById('mainMenu').style.display = 'block';
@@ -7272,6 +7277,7 @@ async function exitToMenu() {
     streakTimer = 0;
     hurryAccumulator = 0;
     hurryAccumulator1 = 0;
+    streakCount = 0;
     lives = DEFAULT_LIVES;
     updateLivesUI();
     updateStatsBoard();
