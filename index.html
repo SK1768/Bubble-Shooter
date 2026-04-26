@@ -4101,6 +4101,8 @@ function setPause(state) {
         resumeHurryTimer();
     }
     campaignTimerAcc = 0;
+    hurryAccumulator = 0;
+    hurryAccumulator1 = 0;
 }
 function togglePause() { if(!gameRunning || gameOver || gameWin || winPending) return; setPause(!isPaused);}
 
@@ -5173,16 +5175,13 @@ function startHurryTimer() {
 
 function pauseHurryTimer() {
     hurryPaused = true;
+    hurryRunning = false;
 }
 
 function resumeHurryTimer() {
     if (!hurryMode || !gameRunning) return;
-
-    if (!hurryTimer) {
-        startHurryTimer();
-    }
-
     hurryPaused = false;
+    startHurryTimer();
 }
 
 function stopHurryTimer() {
@@ -6021,7 +6020,7 @@ function drawDebugOverlay() {
         `hurryTimer: ${hurryTimer}`,
         `hurryIdleSeconds: ${hurryIdleSeconds}`,
         `hurryWarningSeconds: ${hurryWarningSeconds}`,
-		`hurryAccumulator: ${fmt(hurryAccumulator.toFixed(1))}`,
+        `hurryAccumulator: ${fmt(hurryAccumulator.toFixed(1))}`,
 		`hurryAccumulator1: ${fmt(hurryAccumulator1.toFixed(1))}`,
         `winPending: ${winPending}`,
         `campaignTimer: ${campaignTimer}`,
