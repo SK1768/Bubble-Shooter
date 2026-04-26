@@ -5197,6 +5197,8 @@ function resetHurryTimer() {
     hurryIdleSeconds = 0;
     hurryWarningActive = false;
     hurryWarningSeconds = null;
+	hurryAccumulator = 0;
+	hurryAccumulator1 = 0;
 
     if (hurryMode && gameRunning && !isPaused) {
         resumeHurryTimer();
