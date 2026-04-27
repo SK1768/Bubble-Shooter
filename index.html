@@ -7064,10 +7064,10 @@ function loadGame(e) {
 
         try {
             s = JSON.parse(ev.target.result);
-        } catch (e) {
+        } catch (ex) {
             isLoadingSave = false;
-            alert(`${file.name} is not a valid save file. It must end with ".bubblesav"`);
-            logError(e)
+            alert(ex);
+            logError(ex)
             return;
         }
         showSecretText(`Loading: ${file.name}...`, 2500)   
