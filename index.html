@@ -675,7 +675,7 @@ button.danger {
     <div class="achievement-name"></div>
     <div class="achievement-desc"></div>
 </div>
-    <div class="menu" id="mainMenu">
+    <div class="menu" id="mainMenu" style="display: none;">
         <h1>SK's Bubble Shooter</h1>
         <p id="authorName">Made by SK1768 :)</p>
         <button onclick="startPuzzleMode()" style="font-size: 1.5em; background: #00ffcc; color: #000;" onmouseenter="setMenuDesc('Puzzle Mode: Clear all bubbles using limited ammo.')" onmouseleave="clearMenuDesc()">🧩 PUZZLE MODE</button>
@@ -840,7 +840,7 @@ button.danger {
     <button class="mobile-btn" id="colorblindToggle" onclick="toggleColorblind()">👁️</button>
     <button class="mobile-btn" id="aimToggle" onclick="toggleAim()">🎯</button>
 </div>
-        <div id="musicPanel">
+        <div id="musicPanel" style="display: none;">
   <div id="musicHeader">🎵 Music Player</div>
     <div id="trackState">Stopped</div>
     <div id="trackTime">0:00 / 0:00</div>
@@ -2151,19 +2151,45 @@ function loadStats() {
 function saveStats() {
     localStorage.setItem("bubbleShooterStats", JSON.stringify(stats));
 }
-
+function logInfo(msg) {
+    console.log(`%c${msg}`,
+        "color: #ffffff; font-size: 16px; font-family: Storopia; font-weight: bold;"
+    )
+}
+function logSuccess(msg) {
+    console.log(`%c${msg}`,
+        "color: #00ff00; font-size: 16px; font-family: Storopia; font-weight: bold;"
+    )
+}
+function logWarning(msg) {
+    console.warn(`%c${msg}`,
+        "color: #ffff00; font-size: 16px; font-family: Storopia; font-weight: bold;"
+    )
+}
+function logError(msg) {
+    console.error(`%c${msg}`,
+        "color: #ff4444; font-size: 16px; font-family: Storopia; font-weight: bold;"
+    )
+}
 let stats = loadStats();
 	window.addEventListener("DOMContentLoaded", updateStatsBoard);
     window.addEventListener('DOMContentLoaded', () => {
+    document.getElementById("mainMenu").style.display = "none"
+    document.getElementById("musicPanel").style.display = "none"
+    setFaviconEmoji("🕒");
         showSecretText('Initialising...', 2500)
 fadeTransition(() => {
-        console.log(
-            "%cWelcome to SK's Bubble Shooter HTML game!",
-            "color: #00ffcc; font-size: 16px; font-weight: bold;"
+        logInfo(
+            "Welcome to SK's Bubble Shooter HTML game!"
         );
+        if (musicPlayerVisible) {
+            document.getElementById("musicPanel").style.display = "block"
+        }
+        document.getElementById("mainMenu").style.display = "block"
         updateHurryButton();
         gameRunning = false;
         stopHurryTimer();
+        refreshFavicon();
     });
 
     });
@@ -2181,7 +2207,7 @@ function resetStats() {
     saveStats();
     updateStatsBoard();
 
-    console.log("Player stats reset.");
+    logInfo("Player stats reset.");
 });
 }
     document.fonts.load("20px Storopia");
@@ -3351,7 +3377,7 @@ document.getElementById('debugInput').addEventListener('keydown', async (e) => {
         }
 else if (cmd === '!setperfectstreak' && !isNaN(val)) {
     perfectStreak = Math.max(0, val);
-    console.log(`Perfect streak set to x${perfectStreak}`);
+    logInfo(`Perfect streak set to x${perfectStreak}`);
 }
 
 else if (cmd === '!addcampaigntime' && !isNaN(val)) {
@@ -3372,7 +3398,7 @@ else if (cmd === '!addcampaigntime' && !isNaN(val)) {
     // 🔔 Reset tick state so warning sounds/glow resync properly
     lastTickSecond = null;
 
-    console.log(`Campaign time adjusted by ${val}s. New time: ${Math.ceil(campaignTimer)}s`);
+    logInfo(`Campaign time adjusted by ${val}s. New time: ${Math.ceil(campaignTimer)}s`);
 	
 }
 else if (cmd === '!setcurrentbubble') {
@@ -3420,7 +3446,7 @@ else if (cmd === '!visualisebubblecolour') {
     else if (cmd === '!setlives' && !isNaN(val)) {
     lives = Math.max(0, Math.min(MAX_LIVES, val));
     updateLivesUI();
-    console.log(`Lives set to ${lives}`);
+    logInfo(`Lives set to ${lives}`);
     }
     else if (cmd === '!dragbubbles') {
     if (arg !== 'true' && arg !== 'false') {
@@ -3440,12 +3466,12 @@ else if (cmd === '!visualisebubblecolour') {
     else if (cmd === '!absorbfallingbubbles') {
     if (arg === 'true') {
         absorbFallingBubbles = true;
-        console.log('Absorb falling bubbles: ENABLED');
+        logInfo('Absorb falling bubbles: ENABLED');
     } else if (arg === 'false') {
         absorbFallingBubbles = false;
-        console.log('Absorb falling bubbles: DISABLED');
+        logInfo('Absorb falling bubbles: DISABLED');
     } else {
-        console.log('Usage: !absorbfallingbubbles true/false');
+        logInfo('Usage: !absorbfallingbubbles true/false');
     }
     
     
@@ -3497,14 +3523,14 @@ else if (cmd === "!showdebug") {
 
     if (arg === "true") {
         showDebugOverlay = true;
-        console.log("Debug overlay enabled.");
+        logInfo("Debug overlay enabled.");
     }
     else if (arg === "false") {
         showDebugOverlay = false;
-        console.log("Debug overlay disabled.");
+        logInfo("Debug overlay disabled.");
     }
     else {
-        console.log("Usage: !showdebug true/false");
+        logInfo("Usage: !showdebug true/false");
     }
 
 
@@ -3557,7 +3583,7 @@ function drawGridOverlay() {
     ctx.save();
     ctx.strokeStyle = "rgba(0, 255, 204, 0.25)";
     ctx.lineWidth = 1;
-console.log("GRID DRAW", { showGrid, isCustomMode });
+logInfo(`"GRID DRAW" { showGrid: ${showGrid} isCustomMode: ${isCustomMode} }`);
     // horizontal rows
     for (let r = 0; r < 15; r++) {
         const y = RADIUS + r * ROW_HEIGHT;
@@ -4440,7 +4466,7 @@ if (bubbles.length === 0) {
     ctx.fillText("WAIT...", canvas.width / 2, 280);
 
     ctx.restore();
-    console.log("WAIT")
+    logInfo("WAIT")
     winPending = true;
     campaignTimerAcc = 0;
 }
@@ -4696,7 +4722,7 @@ function autoShootCurrentBubble() {
     {
       hurryWarningActive = false;
       hurryWarningSeconds = null;
-      console.error("Auto shoot cancelled.")
+      logError("Auto shoot cancelled.")
       return;
     }
     
@@ -5213,7 +5239,7 @@ function hurryTick(dt) {
         hurryAccumulator = 0;
     }
     
-    console.log(hurryIdleSeconds, hurryWarningSeconds, hurryAccumulator, hurryAccumulator1)
+    logInfo(`${hurryIdleSeconds} ${hurryWarningSeconds} ${hurryAccumulator} ${hurryAccumulator1}`)
     // ⚠️ warning phase
     if (hurryIdleSeconds === 10) {
         hurryWarningActive = true;
@@ -6772,7 +6798,6 @@ function updatePaletteUI() {
         fadeOverlayOut();
         return;
     }
-
     const ts = getSaveTimestamp();
 
     const saveData = {
@@ -7030,7 +7055,7 @@ function loadGame(e) {
     isFileDialogOpen = false;
     const file = e.target.files[0];
     if (!file) return;
-    console.log(`Loading save file. ("${file.name}")`)
+    logInfo(`Loading save file. ("${file.name}")`)
     const reader = new FileReader();
     isLoadingSave = true;
 
@@ -7039,10 +7064,10 @@ function loadGame(e) {
 
         try {
             s = JSON.parse(ev.target.result);
-        } catch {
+        } catch (e) {
             isLoadingSave = false;
             alert(`${file.name} is not a valid save file. It must end with ".bubblesav"`);
-            console.error(`Attempted to load an invalid save file. Loading blocked. ("${file.name}")`)
+            logError(e)
             return;
         }
         showSecretText(`Loading: ${file.name}...`, 2500)   
@@ -7054,7 +7079,7 @@ function loadGame(e) {
         if (meta.isSaveFileProtected) {
             isLoadingSave = false;
             alert(`${file.name} is protected and cannot be loaded.`);
-            console.warn(`Attempted to load a protected save file. Loading blocked. ("${file.name}")`)
+            logWarning(`Attempted to load a protected save file. Loading blocked. ("${file.name}")`)
             return;
         }
 
@@ -7160,7 +7185,7 @@ function loadGame(e) {
         hurryIdleSeconds = 0;
         hurryWarningSeconds = null;
         startHurryTimer();
-        console.log(`Save file loaded. ("${file.name}")`)
+        logSuccess(`Save file loaded. ("${file.name}")`)
     });
     };
 
