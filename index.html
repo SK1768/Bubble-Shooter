@@ -666,15 +666,19 @@ button.danger {
         opacity: 0;
     }
 }
-
+.unsupportedBrowserMessage {
+color: #ff0000;
+}
     </style>
 </head>
+<div class="unsupportedBrowserMessage" id="unsupportedBrowserMessage" style="display: block;"><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>Sorry, your browser doesn't support JavaScript (HTML5 version). This will cause the game to not run. Try using a different browser like Chrome, Firefox or Safari.<br>(If this text fades away then that means that your browser does support JavaScript (HTML5 version) so you can play this game.</div>
 <body oncontextmenu="return false;">
 <div id="achievementPopup" class="achievement-popup hidden">
     <div class="achievement-title">ACHIEVEMENT UNLOCKED!</div>
     <div class="achievement-name"></div>
     <div class="achievement-desc"></div>
 </div>
+
     <div class="menu" id="mainMenu" style="display: none;">
         <h1>SK's Bubble Shooter</h1>
         <p id="authorName">Made by SK1768 :)</p>
@@ -2153,22 +2157,22 @@ function saveStats() {
 }
 function logInfo(msg) {
     console.log(`%c${msg}`,
-        "color: #ffffff; font-size: 16px; font-family: Storopia; font-weight: bold;"
+        "color: #ffffff; font-size: 16px; font-family: ./fonts/Storopia; font-weight: bold;"
     )
 }
 function logSuccess(msg) {
     console.log(`%c${msg}`,
-        "color: #00ff00; font-size: 16px; font-family: Storopia; font-weight: bold;"
+        "color: #00ff00; font-size: 16px; font-family: ./fonts/Storopia.ttf; font-weight: bold;"
     )
 }
 function logWarning(msg) {
     console.warn(`%c${msg}`,
-        "color: #ffff00; font-size: 16px; font-family: Storopia; font-weight: bold;"
+        "color: #ffff00; font-size: 16px; font-family: ./fonts/Storopia.ttf; font-weight: bold;"
     )
 }
 function logError(msg) {
     console.error(`%c${msg}`,
-        "color: #ff4444; font-size: 16px; font-family: Storopia; font-weight: bold;"
+        "color: #ff4444; font-size: 16px; font-family: ./fonts/Storopia.ttf; font-weight: bold;"
     )
 }
 let stats = loadStats();
@@ -2186,10 +2190,12 @@ fadeTransition(() => {
             document.getElementById("musicPanel").style.display = "block"
         }
         document.getElementById("mainMenu").style.display = "block"
+        document.getElementById("unsupportedBrowserMessage").style.display = "none"
         updateHurryButton();
         gameRunning = false;
         stopHurryTimer();
         refreshFavicon();
+       
     });
 
     });
@@ -7064,10 +7070,10 @@ function loadGame(e) {
 
         try {
             s = JSON.parse(ev.target.result);
-        } catch (ex) {
+        } catch (e) {
             isLoadingSave = false;
-            alert(ex);
-            logError(ex)
+            alert(e);
+            logError(e)
             return;
         }
         showSecretText(`Loading: ${file.name}...`, 2500)   
