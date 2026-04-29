@@ -666,12 +666,58 @@ button.danger {
         opacity: 0;
     }
 }
-.unsupportedBrowserMessage {
-color: #ff0000;
+#unsupportedBrowserMessage{
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    background:#000;
+    color:#ff4444;
+    font-family:Storopia,sans-serif;
+    text-align:center;
+}
+
+#unsupportedBrowserMessage h1{
+    font-size:80px;
+    margin:150px;
+    text-shadow:0 0 20px red;
+}
+#unsupportedBrowserMessage author{
+    font-size:20px;
+    margin-top:-100px;
+    text-shadow:0 0 20px red;
+}
+#unsupportedBrowserMessage h2{
+    font-size:50px;
+    margin:10px;
+    text-shadow:0 0 20px red;
+}
+#unsupportedBrowserMessage p{
+    font-size:20px;
+    margin:8px 0;
+    text-shadow:0 0 20px red;
+}
+
+#unsupportedBrowserMessage small{
+    margin-top:12px;
+    text-shadow:0 0 20px red;
+}
+#unsupportedBrowserMessage hint{
+    margin-top:10px;
+    text-shadow:0 0 20px red;
 }
     </style>
 </head>
-<div class="unsupportedBrowserMessage" id="unsupportedBrowserMessage" style="display: block;"><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>Sorry, your browser doesn't support JavaScript (HTML5 version). This will cause the game to not run. Try using a different browser like Chrome, Firefox or Safari.<br>(If this text fades away then that means that your browser does support JavaScript (HTML5 version) so you can play this game.</div>
+<div id="unsupportedBrowserMessage">
+    <h1>SK's Bubble Shooter</h1>
+    <author>Made by SK1768 :)<br><br><br><br></author>
+    <h2>⚠️ Unsupported Browser</h2>
+    <p>Your browser doesn't support JavaScript / HTML5.</p>
+    <p>This game cannot run properly.</p>
+    <small>Try Chrome, Firefox, Edge or Safari.</small>
+    <hint>(If this text fades away then your browser supports JavaScript / HTML5 and you can play the game.)</hint>
+</div>
 <body oncontextmenu="return false;">
 <div id="achievementPopup" class="achievement-popup hidden">
     <div class="achievement-title">ACHIEVEMENT UNLOCKED!</div>
@@ -2157,7 +2203,7 @@ function saveStats() {
 }
 function logInfo(msg) {
     console.log(`%c${msg}`,
-        "color: #ffffff; font-size: 16px; font-family: ./fonts/Storopia; font-weight: bold;"
+        "color: #ffffff; font-size: 16px; font-family: ./fonts/Storopia.ttf; font-weight: bold;"
     )
 }
 function logSuccess(msg) {
@@ -7072,7 +7118,7 @@ function loadGame(e) {
             s = JSON.parse(ev.target.result);
         } catch (e) {
             isLoadingSave = false;
-            alert(e);
+            alert(`An error occurred while trying to load ${file.name}. Check the console for details.`);
             logError(e)
             return;
         }
