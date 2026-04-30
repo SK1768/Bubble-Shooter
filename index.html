@@ -2350,6 +2350,8 @@ let playerName = localStorage.getItem("playerName") || "Player";
 let cheatCount = Number(localStorage.getItem("cheatCount")) || 0;
 let isBannedFromDebugCommands = localStorage.getItem("isBannedFromDebugCommands") === "true";
 let hurryRunning = false;
+const RANDOMISE_LAYOUT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+let lastRandomiseLayoutTime = 0;
 document.getElementById("authorName").onclick = async () => {
     if (secretLevelCompleted || secretSequenceActive) return;
 
@@ -3427,6 +3429,32 @@ document.getElementById('debugInput').addEventListener('keydown', async (e) => {
             suppressAutosaveOnce = true;
             startMode('puzzle', false, true);
         }
+        else if (cmd === '!randomiselayout') {
+    const now = Date.now();
+    const timeLeft = RANDOMISE_LAYOUT_COOLDOWN_MS - (now - lastRandomiseLayoutTime);
+
+    if (timeLeft > 0) {
+        const minutesLeft = Math.ceil(timeLeft / 60000);
+        alert(`Wait ${formatCooldownMS(timeLeft)} to use this command again.`);
+        return;
+    }
+
+    const confirmed = confirm(
+        "Are you sure you want to randomise the bubble layout? " +
+        "(Note: This command will have a 5 minute cooldown.)"
+    );
+
+    if (!confirmed) {
+        logError("Random layout cancelled.");
+        return;
+    }
+    
+    showSecretText("Randomising the bubble layout...", 2500);
+    fadeTransition(() => {
+    randomiseBubbleLayout();
+    lastRandomiseLayoutTime = Date.now();
+    });
+}
 else if (cmd === '!setperfectstreak' && !isNaN(val)) {
     perfectStreak = Math.max(0, val);
     logInfo(`Perfect streak set to x${perfectStreak}`);
@@ -6057,7 +6085,13 @@ function drawDebugOverlay() {
     panel.style.display = "block";
 
     let mode = "PUZZLE";
+    const now = Date.now();
+    const timeLeft = Math.max(
+    0,
+    RANDOMISE_LAYOUT_COOLDOWN_MS - (now - lastRandomiseLayoutTime)
+);
 
+const randomiseLayoutCooldownText = formatCooldownMS(timeLeft);
     let trueGameOver = lives === 0;
 
     if (isCampaignMode) mode = "CAMPAIGN";
@@ -6122,6 +6156,7 @@ function drawDebugOverlay() {
         `visualiseBubbleColour: ${visualiseBubbleColour}`,
         `streakFrozen: ${streakFrozen}`,
         `showBubbleHitBox: ${showBubbleHitBox}`,
+        `randomiseLayoutCooldown: ${randomiseLayoutCooldownText}`,
         ``,
         `--- MAIN MENU SETTINGS ---`,
         `autoSaveEnabled: ${autosaveEnabled}`,
@@ -6146,6 +6181,15 @@ function drawDebugOverlay() {
     }
 
     panel.textContent = lines.join("\n");
+}
+function formatCooldownMS(ms) {
+    ms = Math.max(0, ms); // stops negative numbers
+
+    const totalSeconds = Math.ceil(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 function gameLoop(now) {
     requestAnimationFrame(gameLoop);
@@ -6251,7 +6295,44 @@ function hideCampaignTimer() {
         timerSpan.style.display = "none";
     }
 }
+function randomiseBubbleLayout() {
+    
+    if (!gameRunning || gameOver || gameWin) {
+        alert("You must be the game to use this command.");
+        return;
+    }
 
+    if (!bubbles || bubbles.length === 0) {
+        alert("There are no bubbles to randomise.");
+        return;
+    }
+
+    // Clear active moving stuff so the randomised layout doesn't bug projectiles/falling bubbles
+    projectiles = [];
+    fallingBubbles = [];
+    particles = [];
+
+    // Keep roughly the same amount of rows as the current layout
+    const maxRow = Math.max(...bubbles.map(b => b.row));
+    const rowCount = Math.min(maxRow + 1, 8);
+
+    // Rebuild the layout with a new random pattern
+    bubbles = [];
+    levelPattern = Math.floor(Math.random() * 100);
+
+    for (let r = 0; r < rowCount; r++) {
+        createRow(r);
+    }
+
+    // Reset progress base so the progress bar doesn't instantly become weird
+    initialBubbleCount = bubbles.length;
+
+    updateProgressBar();
+    updateAmmo();
+    draw();
+
+    logSuccess("Bubble layout randomised.");
+}
 function startMode(m, isLoad = false, isNextLevel = false) {
     mode = m;
     deathSfxPlayed = false; 
