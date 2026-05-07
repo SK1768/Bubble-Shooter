@@ -4402,8 +4402,6 @@ if (nb.color != COLORLESS && colorlessNeighbors.length >= 2) {
 
     if (m.length >= 3) {
         lastShotWasMatch = true;
-        streakCount++;
-        streakTimer = STREAK_DURATION;
         popBubbles(m);
     } else {
         lastShotWasMatch = false;
@@ -4518,6 +4516,8 @@ function spawnProjectileTrail(x, y, color, vx, vy, t = 0) {
 function popBubbles(m) {
     const beforePct = calcProgressPercent(bubbles.length, initialBubbleCount);
     startHurryTimer();
+    streakCount++;
+    streakTimer = STREAK_DURATION;
     sounds.play('pop');
 	stats.bubblesPopped += m.length;
     checkProgressAchievements();
