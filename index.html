@@ -5296,13 +5296,8 @@ const streakBar = document.getElementById("streakBar");
 const streakTimerText = document.getElementById("streakTimerText");
 
 streakBar.style.width = (streakCount > 1 ? streakPct : 0) + "%";
-
-if (streakCount > 1 && streakTimer > 0) {
     streakTimerText.innerText = streakTimer;
     streakTimerText.style.display = "inline";
-} else {
-    streakTimerText.style.display = "none";
-}
 
         projectiles.forEach((p, i) => {
 
