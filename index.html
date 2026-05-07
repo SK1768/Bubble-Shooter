@@ -331,14 +331,14 @@
             }
 
             #progressContainer {
-                width: 400px;
-                height: 12px;
-                background: #333;
-                border-radius: 6px;
-                display: none;
-                overflow: hidden;
-                border: 1px solid #444;
-            }
+    width: 400px;
+    height: 12px;
+    background: #333;
+    border-radius: 999px;
+    display: none;
+    overflow: hidden;
+    border: 1px solid #444;
+}
             #bubbleHexOverlay {
             position: fixed;
             pointer-events: none;
@@ -364,28 +364,35 @@ canvas {
     transition: box-shadow 0.2s ease;
 }
 
+#progressBar {
+    height: 100%;
+    width: 0%;
+    background: #ff3333;
+    border-radius: 999px;
+    transition:
+        width 0.3s ease,
+        background 0.3s ease,
+        box-shadow 0.3s ease;
+}
 
-            #progressBar {
-                height: 100%;
-                width: 0%;
-                background: linear-gradient(90deg, #00ffcc, #00e5ff);
-                transition: width 0.3s ease;
-            }
-
-            #percentText {
-                font-weight: bold;
-                color: #00ffcc;
-                position: absolute;
-                left: calc(50% + 210px);
-                display: none;
-                white-space: nowrap;
-            }
+#percentText {
+    font-weight: bold;
+    color: #00ffcc;
+    position: absolute;
+    left: calc(50% + 210px);
+    display: none;
+    white-space: nowrap;
+    transition:
+        color 0.3s ease,
+        text-shadow 0.3s ease,
+        transform 0.15s ease;
+}
 
             #streakContainer {
                 width: 300px;
                 height: 6px;
                 background: #222;
-                border-radius: 3px;
+                border-radius: 999px;
                 display: none;
                 overflow: hidden;
                 border: 1px solid #333;
@@ -396,6 +403,7 @@ canvas {
                 height: 100%;
                 width: 0%;
                 background: #00e5ff;
+                border-radius: 999px;
                 box-shadow: 0 0 8px #00e5ff;
                 transition: width 0.1s linear;
             }
@@ -707,6 +715,23 @@ button.danger {
     margin-top:10px;
     text-shadow:0 0 20px red;
 }
+.streak-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 5px;
+}
+
+#streakTimerText {
+    display: none;
+    color: #00e5ff;
+    font-size: 12px;
+    font-weight: bold;
+    min-width: 36px;
+    text-align: left;
+    text-shadow: 0 0 8px #00e5ff;
+}
     </style>
 </head>
 <div id="unsupportedBrowserMessage">
@@ -867,7 +892,12 @@ button.danger {
             </div>
                 <span id="percentText">0.0%</span>
             </div>
-            <div id="streakContainer"><div id="streakBar"></div></div>
+            <div class="streak-wrapper">
+    <div id="streakContainer">
+        <div id="streakBar"></div>
+    </div>
+    <span id="streakTimerText">0:00</span>
+</div>
         </div>
         <button class="back-btn" onclick="exitToMenu()">⬅️ MENU</button> |
         <button onclick="saveGame()" style="background:#4CAF50;">SAVE</button>
@@ -2352,6 +2382,8 @@ let isBannedFromDebugCommands = localStorage.getItem("isBannedFromDebugCommands"
 let hurryRunning = false;
 const RANDOMISE_LAYOUT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 let lastRandomiseLayoutTime = 0;
+let displayedProgressPercent = 0;
+let progressTextAnim = null;
 document.getElementById("authorName").onclick = async () => {
     if (secretLevelCompleted || secretSequenceActive) return;
 
@@ -4764,7 +4796,6 @@ function getProgress() {
 }
 
 function updateProgressBar() {
-
     let progressStr;
 
     if (loadedProgressOverride !== null) {
@@ -4773,8 +4804,74 @@ function updateProgressBar() {
         progressStr = getProgress();
     }
 
-    document.getElementById('progressBar').style.width = progressStr;
-    document.getElementById('percentText').innerText = progressStr;
+    const progressValue = parseFloat(progressStr) || 0;
+    const progressBar = document.getElementById("progressBar");
+    const percentText = document.getElementById("percentText");
+
+    progressBar.style.width = `${progressValue}%`;
+
+    if (progressValue > 50) {
+        progressBar.style.background = "#22ff55";
+        progressBar.style.boxShadow = "0 0 10px #22ff55";
+        percentText.style.color = "#22ff55";
+        percentText.style.textShadow = "0 0 10px #22ff55";
+    } 
+    else if (progressValue >= 40) {
+        progressBar.style.background = "#ffcc00";
+        progressBar.style.boxShadow = "0 0 10px #ffcc00";
+        percentText.style.color = "#ffcc00";
+        percentText.style.textShadow = "0 0 10px #ffcc00";
+    } 
+    else if (progressValue >= 20) {
+        progressBar.style.background = "#ff3333";
+        progressBar.style.boxShadow = "0 0 10px #ff3333";
+        percentText.style.color = "#ff3333";
+        percentText.style.textShadow = "0 0 10px #ff3333";
+    } 
+    else {
+        progressBar.style.background = "#8b0000";
+        progressBar.style.boxShadow = "0 0 8px #8b0000";
+        percentText.style.color = "#8b0000";
+        percentText.style.textShadow = "0 0 8px #8b0000";
+    }
+
+    animateProgressText(progressValue);
+}
+function animateProgressText(targetPercent) {
+    const percentText = document.getElementById("percentText");
+
+    if (progressTextAnim) {
+        cancelAnimationFrame(progressTextAnim);
+    }
+
+    const startPercent = displayedProgressPercent;
+    const difference = targetPercent - startPercent;
+    const duration = 350;
+    const startTime = performance.now();
+
+    percentText.style.transform = "scale(1.2)";
+
+    function step(now) {
+        const elapsed = now - startTime;
+        const t = Math.min(elapsed / duration, 1);
+
+        // smooth easing
+        const eased = 1 - Math.pow(1 - t, 3);
+
+        displayedProgressPercent = startPercent + difference * eased;
+        percentText.innerText = `${displayedProgressPercent.toFixed(1)}%`;
+
+        if (t < 1) {
+            progressTextAnim = requestAnimationFrame(step);
+        } else {
+            displayedProgressPercent = targetPercent;
+            percentText.innerText = `${targetPercent.toFixed(1)}%`;
+            percentText.style.transform = "scale(1)";
+            progressTextAnim = null;
+        }
+    }
+
+    progressTextAnim = requestAnimationFrame(step);
 }
 function drawHurryWarning(sec) {
     ctx.save();
@@ -5195,7 +5292,17 @@ if (inner) {
             if (streakTimer <= 0) streakCount = 1; 
         }
         const streakPct = (streakTimer / STREAK_DURATION) * 100;
-        document.getElementById('streakBar').style.width = (streakCount > 1 ? streakPct : 0) + "%";
+const streakBar = document.getElementById("streakBar");
+const streakTimerText = document.getElementById("streakTimerText");
+
+streakBar.style.width = (streakCount > 1 ? streakPct : 0) + "%";
+
+if (streakCount > 1 && streakTimer > 0) {
+    streakTimerText.innerText = streakTimer;
+    streakTimerText.style.display = "inline";
+} else {
+    streakTimerText.style.display = "none";
+}
 
         projectiles.forEach((p, i) => {
 
@@ -7424,13 +7531,16 @@ function closeSfxMenu() {
     initialBubbleCount = 0;
 
     document.getElementById('progressBar').style.width = "0%";
-    document.getElementById('percentText').innerText = "0.0%";
+    displayedProgressPercent = 0;
+document.getElementById('percentText').innerText = "0.0%";
 
     document.getElementById('progressContainer').style.display = "none";
     document.getElementById('percentText').style.display = "none";
 }
 function clearEditor() { if(confirm("Clear level?")) bubbles = []; }
 async function exitToMenu() {
+    if (winPending) return;
+
     if (isSecretLevel)
     {  
         fadeOverlayIn();
@@ -7438,7 +7548,11 @@ async function exitToMenu() {
         fadeOverlayOut();
         return;
     }
-
+if (!autosaveEnabled && gameRunning && !gameOver && !gameWin && !isCustomMode && !isPlaytesting && !isDailyPuzzle) {
+    if (confirm("Autosave is off.\nDo you want to save your progress before exiting to the main menu?")) {
+        saveGame(false);
+    }
+}
  showSecretText('Loading: Main Menu...', 2500)   
     fadeTransition(() => {
 
