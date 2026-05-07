@@ -4907,6 +4907,38 @@ function drawFloatingTexts(ctx) {
 
     ctx.restore();
 }
+function drawBubbleHitboxes() {
+    if (!showBubbleHitBox) return;
+
+    ctx.save();
+    ctx.lineWidth = 2;
+
+    // normal bubbles
+    ctx.strokeStyle = "red";
+    for (const b of bubbles) {
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, RADIUS * RADIUS_OFFSET, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    // falling bubbles
+    ctx.strokeStyle = "orange";
+    for (const f of fallingBubbles) {
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, RADIUS * RADIUS_OFFSET, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    // fired bubbles
+    ctx.strokeStyle = "lime";
+    for (const p of projectiles) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, RADIUS * RADIUS_OFFSET, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
 function update() {
 if (isPaused || isLoading) return;
 if (isDailyPuzzle)
@@ -5169,13 +5201,7 @@ if (inner) {
 
             particles.push({ x: p.x, y: p.y, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2, life: 0.5, color: p.color, size: Math.random()*4+2 });
             p.x += p.dx; p.y += p.dy;
-            if (showBubbleHitBox){
-            ctx.beginPath();
-ctx.strokeStyle = "lime";
-ctx.lineWidth = 2;
-ctx.arc(p.x, p.y, RADIUS * RADIUS_OFFSET, 0, Math.PI * 2);
-ctx.stroke();
-}                        // every few frames only (cheap)
+                                  // every few frames only (cheap)
 p.trailTime = (p.trailTime || 0) + 0.1;
 
 spawnProjectileTrail(
@@ -5206,15 +5232,6 @@ if (p.y < RADIUS) {
     projectiles.splice(i, 1); }
             else {
  for (let b of bubbles) {
-   if (showBubbleHitBox)
-   {
-    ctx.beginPath();
-    ctx.strokeStyle = "red";
-    ctx.lineWidth = 2;
-    ctx.arc(b.x, b.y, RADIUS * RADIUS_OFFSET, 0, Math.PI * 2);
-    ctx.stroke();
-}
-
     const dx = p.x - b.x;
     const dy = p.y - b.y;
     const dist = Math.hypot(dx, dy);
@@ -6070,6 +6087,7 @@ if (showDebugOverlay && isInGameCanvas) {
 } else {
     canvas.style.cursor = dragBubblesEnabled ? "none" : "cell";
 }
+drawBubbleHitboxes();
 }
 function debugBubbleName(b) {
     return b === COLORLESS ? "COLORLESS" : b;
