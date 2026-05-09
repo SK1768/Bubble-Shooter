@@ -796,6 +796,8 @@ button.danger {
   onmouseleave="clearMenuDesc()">			 
     HIDE THE MUSIC PLAYER
 </button>
+</button>
+		
 <div style="margin-top:10px;">
     <label>
         🎮 FPS Cap:
@@ -839,6 +841,7 @@ button.danger {
 ">
     <div id="statsContent"></div>
 </div>
+<button id="playSecrectLevel" style="font-size: 2.5em; background: #3b0101; color: #000;" onclick="startSecretLevelFromHTMLButton()" onmouseenter="setMenuDesc('Takes you to the secret level. (If you completed it the 1st time.)')"onmouseleave="clearMenuDesc()">❔SECRET LEVEL</button>
 		<div id="menuDescription" class="menuDescription">
 </div>
     </div>
@@ -1265,7 +1268,7 @@ const ACHIEVEMENTS = {
 
     PERFECT_CLEAR: {
         title: "Clean Sweep",
-        description: "Clear a level without missing a shot."
+        description: "Clear a level with only 1 bubble left."
     },
 
     CLUTCH_WIN: {
@@ -1667,6 +1670,7 @@ const DEFAULT_STATS = {
     debugCommandsUsed: 0,
 	
     highScore: 0,
+    secretPlays: 0
 };
     
 // ======================
@@ -2384,6 +2388,86 @@ const RANDOMISE_LAYOUT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 let lastRandomiseLayoutTime = 0;
 let displayedProgressPercent = 0;
 let progressTextAnim = null;
+async function startSecretLevelFromHTMLButton()
+{
+    let visited = localStorage.getItem("visited", "false");
+    if (visited) {
+        if (confirm("Do you also want to see the dialogue?")){
+        visited = false
+    }
+    }
+    const inputName = prompt("Enter your name:", playerName);
+
+    if (inputName && inputName.trim()) {
+        playerName = inputName.trim();
+        localStorage.setItem("playerName", playerName); // 💾 SAVE
+    }
+    if (isBannedFromDebugCommands)
+    { 
+        fadeOverlayIn();
+        await showSecretText(`You ain't allowed to go through... ${playerName}...`, 5000)
+        await showSecretText("Not after what you did...", 5000)
+        fadeOverlayOut();
+        return;
+
+    }
+    if (playerName === "" || playerName === "Player")
+    {
+        fadeOverlayIn();
+
+    await showSecretText(
+        "Very funny... But that is not going to work...",
+        5000
+    );
+
+    fadeOverlayOut();
+    return;
+    }
+
+    secretSequenceActive = true;
+   if(!visited) {
+    fadeOverlayIn();
+   
+    await showSecretText(
+        `Ah... Going for round ${fmt(stats.secretPlays)}, ${playerName}?`,
+        5000
+    );
+
+    await showSecretText(
+        "Very well... I will take you to the secret level again...",
+        5000
+    );
+    await showSecretText(
+        "But remember...",
+        5000
+    );
+    await showSecretText(
+        "You will only have 1 life...",
+        5000
+    );
+    await showSecretText(
+        `Good luck... ${playerName}...`,
+        5000
+    );
+    visited = true
+    localStorage.setItem("visited", "true");
+
+    
+    showSecretText("Loading: Secret Level...", 2500)
+    fadeTransition(() => {
+    startSecretLevel();
+    });
+    
+}
+else
+{
+    showSecretText("Loading: Secret Level...", 2500)
+    fadeTransition(() => {
+    startSecretLevel();
+    });
+     
+}
+}
 document.getElementById("authorName").onclick = async () => {
     if (secretLevelCompleted || secretSequenceActive) return;
 
@@ -2520,8 +2604,13 @@ function startSecretLevel() {
     isSecretLevel = true;
     isCampaignMode = false;
     isDailyPuzzle = false;
-
+    if (stats.secretPlays <= 0) {
     loadSecretLevelData(SECRET_LEVEL_DATA, "Secret Level");
+    }
+    else
+    { 
+        startMode("puzzle");
+    }
     setBrowserTitle("❔ SK's Bubble Shooter — Secret Level")
     level = "Secret Level";
     document.getElementById("levelDisplay").textContent = "Level: Secret Level";
@@ -2697,7 +2786,8 @@ function clearMenuDesc() {
 	
     High Score: <b>${fmt(stats.highScore)}</b><br><br>
 
-    Has completed secret level: <b>${secretLevelCompleted ? "Yes" : "No"}</b>
+    Has completed secret level: <b>${secretLevelCompleted ? "Yes" : "No"}</b><br>
+    Secret Levels Played: <b>${fmt(stats.secretPlays)}</b>
     `;
 }
 function updateLivesUI() {
@@ -2812,6 +2902,12 @@ updateSoundButton();
 updateAutosaveButton();
 updateAimButton();
 
+function updateDebugButton()
+{
+    const debugBtn =  document.getElementById("debugBtn")
+    debugBtn.style.borderColor = isBannedFromDebugCommands ? "#ff0000" : "#555"
+
+}
 
 function toggleAim() {
     aimEnabled = !aimEnabled;
@@ -4592,7 +4688,23 @@ if (bubbles.length === 0) {
 function fmt(n) {
     return Number(n).toLocaleString();
 }
+function ordinal(n) {
+  const lastTwo = n % 100;
+  const lastOne = n % 10;
+
+  if (lastTwo >= 11 && lastTwo <= 13) {
+    return n + "th";
+  }
+
+  if (lastOne === 1) return n + "st";
+  if (lastOne === 2) return n + "nd";
+  if (lastOne === 3) return n + "rd";
+
+  return n + "th";
+}
 async function handleSecretLevelWin() {
+    stats.secretPlays++;
+    saveStats();
     secretLevelCompleted = true;
     localStorage.setItem("secretLevelCompleted", "true");
 
@@ -4601,7 +4713,7 @@ async function handleSecretLevelWin() {
     fadeOverlayIn();
 
     await showSecretText(
-        `Good job, ${playerName}! You've beaten the secret level!`,
+        stats.secretPlays < 1 ? `Good job, ${playerName}! You've beaten the secret level!` : `Good job, ${playerName}! You've beaten the secret level for the ${ordinal(fmt(stats.secretPlays))} time!`,
         5000
     );
 
@@ -6454,6 +6566,7 @@ function randomiseBubbleLayout() {
     logSuccess("Bubble layout randomised.");
 }
 function startMode(m, isLoad = false, isNextLevel = false) {
+    updateDebugButton();
     mode = m;
     deathSfxPlayed = false; 
     // If manually starting puzzle mode from menu,
@@ -6507,7 +6620,10 @@ mouseY = canvas.height - 200;
     if (isLoad) {
         // ammo will be set inside loadGame()
     }
-
+    if (isSecretLevel)
+    {
+        lives = 1;
+    }
     initialBubbleCount = bubbles.length; 
     updateProgressBar();
     updateLivesUI(); 
@@ -7543,7 +7659,7 @@ async function exitToMenu() {
         fadeOverlayOut();
         return;
     }
-if (!autosaveEnabled && gameRunning && !gameOver && !gameWin && !isCustomMode && !isPlaytesting && !isDailyPuzzle) {
+if (!autosaveEnabled && gameRunning && !gameOver && !gameWin && !isCustomMode && !isPlaytesting && !isDailyPuzzle && !isSecretLevel) {
     if (confirm("Autosave is off.\nDo you want to save your progress before exiting to the main menu?")) {
         saveGame(false);
     }
@@ -7584,11 +7700,25 @@ if (!autosaveEnabled && gameRunning && !gameOver && !gameWin && !isCustomMode &&
 }
 secretSequenceActive = false;
 });
+addSecretLevelButton();
+}
+function addSecretLevelButton()
+{
+    const secretButton = document.getElementById("playSecrectLevel");
+    if (!secretLevelCompleted)
+    {
+        secretButton.style.display = "none"
+    }
+    else
+    {
+        secretButton.style.display = "inline"
+    }
 }
 updateStatsBoard();
 updateFavicon();
 updateFPSWarning();
 addSfxButtonToMenu();
+addSecretLevelButton();
 </script>
     <div id="customSavePopup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;">
   <div style="background:#000;padding:25px;border-radius:12px;border:2px solid #00ffcc;text-align:center;">
