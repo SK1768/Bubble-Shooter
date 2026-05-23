@@ -753,6 +753,17 @@ button.danger {
     <div class="menu" id="mainMenu" style="display: none;">
         <h1>SK's Bubble Shooter</h1>
         <p id="authorName">Made by SK1768 :)</p>
+		<p id="githubDownloadText" style="color:#00ffcc; font-size:14px; margin-top:10px;">
+    This is the GitHub version.
+    <button
+        onclick="downloadOfflineHtmlVersion()"
+        style="color:#00ffcc; background:none; border:none; font-weight:bold; text-decoration:underline; cursor:pointer;"
+        onmouseenter="setMenuDesc('Downloads the HTML version of the game.')"
+        onmouseleave="clearMenuDesc()"
+    >
+        Click here to download the HTML version
+    </button>
+</p>
         <button onclick="startPuzzleMode()" style="font-size: 1.5em; background: #00ffcc; color: #000;" onmouseenter="setMenuDesc('Puzzle Mode: Clear all bubbles using limited ammo.')" onmouseleave="clearMenuDesc()">🧩 PUZZLE MODE</button>
         <br>
         <button id="dailyPuzzleBtn"onclick="startDailyPuzzleMode()"onmouseenter="setMenuDesc('Daily Puzzle Mode: Provides you with daily puzzles to complete with no limited ammos.')"onmouseleave="clearMenuDesc()"style="font-size:1.2em; background:#00ff88; color:#000;">🧩 DAILY PUZZLE MODE</button>
@@ -1011,6 +1022,38 @@ const fpsWarnValue = document.getElementById("fpsWarnValue");
 // load saved value
 fpsSlider.value = fpsCap;
 fpsValue.textContent = fpsCap;
+	function downloadOfflineHtmlVersion() {
+    // Get the current page HTML
+    const html = document.documentElement.outerHTML;
+
+    // Parse it so we can edit it safely
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    // Remove the GitHub download text/link from the downloaded version
+    const githubDownloadText = doc.getElementById("githubDownloadText");
+    if (githubDownloadText) {
+        githubDownloadText.remove();
+    }
+
+    // Optional: change the title so you can tell it is the downloaded version
+    doc.title = "⭐ SK's Bubble Shooter - HTML Version";
+
+    // Build the downloadable file
+    const finalHtml = "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
+    const blob = new Blob([finalHtml], { type: "text/html" });
+
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "SKs_Bubble_Shooter.html";
+    document.body.appendChild(a);
+    a.click();
+
+    a.remove();
+    URL.revokeObjectURL(url);
+}
 function updateFPSWarning() {
     // 🟥 LOW FPS WARNING
     if (fpsCap < 20) {
