@@ -145,14 +145,15 @@ body {
 }
 
 .game-container {
-    position: relative; /* ✅ makes mobile controls position from the game area */
+    position: relative; /* ✅ anchors side rings + mobile controls to the canvas */
 
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 10px;
 
-    width: 100%;
+    /* ✅ keep the canvas itself centered instead of letting the side rings affect centering */
+    width: fit-content;
+    margin: 0 auto;
 }
 #debugOverlayPanel {
     width: min(530px, calc(100vw - 30px));
@@ -214,6 +215,13 @@ body {
                 max-width: 600px;
             }
 
+            /* ✅ gameplay controls line up with the centred canvas */
+            #gameUI {
+                max-width: 440px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+
             button {
                 padding: 10px 20px;
                 cursor: pointer;
@@ -242,9 +250,9 @@ body {
             #mobileControls {
     position: absolute;
 
-    /* center vertically beside the canvas */
+    /* ✅ center vertically on the RIGHT side of the canvas */
     top: 50%;
-    left: calc(50% + 270px);
+    left: calc(100% + 24px);
     transform: translateY(-50%);
 
     display: none;
@@ -344,24 +352,44 @@ body {
         }
             /* Circular Progress & Streak Rings */
             .bars-container {
-                width: min(440px, 100%);
-                margin: 0 auto 14px auto;
-                display: flex;
+                width: 112px;
+                margin: 0;
+                display: none;
                 flex-direction: column;
                 align-items: center;
-                justify-content: center;
-                gap: 7px;
-                position: relative;
+                justify-content: flex-start;
+                gap: 12px;
+                position: absolute;
+
+                /* ✅ sits to the LEFT of the canvas without pushing the canvas off-centre */
+                top: 0;
+                right: calc(100% + 14px);
+
                 box-sizing: border-box;
+                z-index: 12;
             }
 
             .meters-row {
                 width: 100%;
                 display: flex;
-                flex-direction: row;
-                align-items: flex-start;
-                justify-content: center;
-                gap: 22px;
+                flex-direction: column;
+                align-items: center;
+                justify-content: flex-start;
+                gap: 14px;
+            }
+
+            @media (max-width: 760px) {
+                .game-container {
+                    /* ✅ keep the gameplay area centred better on smaller screens */
+                    max-width: calc(100vw - 132px);
+                    margin-left: 122px;
+                    margin-right: auto;
+                }
+
+                .bars-container {
+                    right: calc(100% + 8px);
+                    top: 0;
+                }
             }
 
             .lives-wrapper,
@@ -999,6 +1027,18 @@ button.danger {
     </div>
 
     <div id="gameUI" class="ui" style="display:none">
+        <button class="back-btn" onclick="exitToMenu()">⬅️ MENU</button> |
+        <button onclick="saveGame()" style="background:#4CAF50;">SAVE</button>
+        <button id="loadBtn" onclick="handleLoadClick()" style="background:#2196F3;">LOAD</button>
+|
+        <button id="pauseBtn" onclick="togglePause()" style="background:#ffcc00; color:#000;">PAUSE</button><br><br>
+        <span id="levelDisplay">Level: 1</span> |
+        <span id="scoreDisplay">Score: 0</span> |
+        <span id="streakDisplay" style="color:#00e5ff; font-weight:bold;">Streak: x1</span>
+
+    </div>
+
+    <div class="game-container">    
         <div class="bars-container">
             <div class="meters-row">
                 <div class="lives-wrapper">
@@ -1046,18 +1086,6 @@ button.danger {
                 </div>
             </div>
         </div>
-        <button class="back-btn" onclick="exitToMenu()">⬅️ MENU</button> |
-        <button onclick="saveGame()" style="background:#4CAF50;">SAVE</button>
-        <button id="loadBtn" onclick="handleLoadClick()" style="background:#2196F3;">LOAD</button>
-|
-        <button id="pauseBtn" onclick="togglePause()" style="background:#ffcc00; color:#000;">PAUSE</button><br><br>
-        <span id="levelDisplay">Level: 1</span> |
-        <span id="scoreDisplay">Score: 0</span> |
-        <span id="streakDisplay" style="color:#00e5ff; font-weight:bold;">Streak: x1</span>
-
-    </div>
-
-    <div class="game-container">    
     <canvas id="gameCanvas" width="440" height="640"></canvas>
 		<div id="bubbleHexOverlay"></div>
         <div id="mobileControls">
@@ -2966,7 +2994,7 @@ function updateLivesUI() {
         livesColor = "#ffcc00";
     } else {
         inner.innerText = `❤️${lives}`;
-        livesColor = lives < 4 ? "#ff0000" : "#00ff00";
+        livesColor = lives < 2 ? "#8b0000" : lives < 4 ? "#ff0000" :  "#00ff00";
     }
 
     outer.style.color = livesColor;
@@ -6632,7 +6660,12 @@ function initializeAmmo(type, savedAmmo = null) {
 
         updateAmmo();
     }
-        function startPuzzleMode() {
+        
+function setSideRingsVisible(visible) {
+    const barsContainer = document.querySelector('.game-container .bars-container');
+    if (barsContainer) barsContainer.style.display = visible ? 'flex' : 'none';
+}
+function startPuzzleMode() {
         showSecretText(isDailyPuzzle ? 'Loading: Daily Puzzle Mode...' : isSecretLevel ? 'Loading: Secret Level...' : 'Loading: Puzzle Mode...', 2500)   
         fadeTransition(() => {    
         lives = DEFAULT_LIVES;
@@ -6775,6 +6808,7 @@ mouseX = canvas.width / 2;
 mouseY = canvas.height - 200;
 
     document.getElementById('mobileControls').style.display = 'flex';
+    setSideRingsVisible(true);
     document.getElementById('livesContainer').style.display = 'block';
     document.getElementById('progressContainer').style.display = 'block';
     document.getElementById('streakContainer').style.display = 'block';
@@ -6831,6 +6865,7 @@ mouseX = canvas.width / 2;
 mouseY = canvas.height - 200;
 
     document.getElementById('gameUI').style.display = 'none';
+    setSideRingsVisible(false);
     document.getElementById('mobileControls').style.display = 'none';
     document.getElementById('livesContainer').style.display = 'none';
     document.getElementById('progressContainer').style.display = 'none';
@@ -6916,8 +6951,10 @@ setBrowserTitle("▶️ SK's Bubble Shooter — Playtesting");
 
     document.getElementById('customUI').style.display = 'none';
     document.getElementById('gameUI').style.display = 'block';
+    setSideRingsVisible(true);
     document.getElementById('streakContainer').style.display = 'block';
     document.getElementById('mobileControls').style.display = 'flex';
+    setSideRingsVisible(true);
     // ✅ SHOW PROGRESS BAR
     document.getElementById('livesContainer').style.display = 'block';
     document.getElementById('progressContainer').style.display = 'block';
@@ -7836,6 +7873,7 @@ document.getElementById('streakTimerText').innerText = "0s";
     document.getElementById('livesDisplay').style.display = "none";
     document.getElementById('percentText').style.display = "none";
     document.getElementById('streakTimerText').style.display = "none";
+    setSideRingsVisible(false);
 }
 function clearEditor() { if(confirm("Clear level?")) bubbles = []; }
 async function exitToMenu() {
