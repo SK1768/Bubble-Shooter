@@ -120,32 +120,58 @@
             font-family: 'Storopia', sans-serif;
         }
 
-        body {
-            background: #000000;
-            color: white;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
+        html, body {
+    width: 100%;
+    min-height: 100vh;
+    margin: 0;
+}
+
+body {
+    background: #000000;
+    color: white;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center; /* vertical center */
+    align-items: center;     /* horizontal center */
+
+    min-height: 100vh;
+}
+
+/* Center the main menu */
+#mainMenu {
+    margin: 0 auto;
+    text-align: center;
+}
+
+.game-container {
+    position: relative; /* ✅ makes mobile controls position from the game area */
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+
+    width: 100%;
+}
 #debugOverlayPanel {
-    width: 530px;
-    min-height: 640px;
+    width: min(530px, calc(100vw - 30px));
+    max-width: 530px;
+
+    height: min(640px, calc(100vh - 30px));
+    max-height: calc(100vh - 30px);
+
     background: rgba(0, 0, 0, 0.85);
     border: 2px solid #00ffcc;
     color: #00ffcc;
     font-family: Storopia;
     font-size: 13px;
     padding: 10px;
-    overflow-y: auto;
-    display: none;
-    white-space: pre;
-}
 
-.game-container {
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    gap: 10px;
+    overflow: auto;
+    display: none;
+    white-space: pre-wrap;
+    box-sizing: border-box;
 }
 
             canvas {
@@ -214,14 +240,18 @@
             }
 
             #mobileControls {
-                position: absolute;
-                top: 140px; /* adjust if you want */
-                left: 50%;
-                transform: translateX(240px); /* ✅ puts it to the RIGHT of centered canvas */
-                display: none;
-                flex-direction: column;
-                gap: 10px;
-            }
+    position: absolute;
+
+    /* center vertically beside the canvas */
+    top: 50%;
+    left: calc(50% + 270px);
+    transform: translateY(-50%);
+
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
 
             .mobile-btn {
                 width: 60px;
@@ -312,33 +342,190 @@
             font-family: 'Storopia', monospace;
             outline: none;
         }
-            /* Centered Progress & Streak Bars */
+            /* Circular Progress & Streak Rings */
             .bars-container {
+                width: min(440px, 100%);
+                margin: 0 auto 14px auto;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
+                justify-content: center;
+                gap: 7px;
+                position: relative;
+                box-sizing: border-box;
+            }
+
+            .meters-row {
                 width: 100%;
-                margin-bottom: 10px;
+                display: flex;
+                flex-direction: row;
+                align-items: flex-start;
+                justify-content: center;
+                gap: 22px;
+            }
+
+            .lives-wrapper,
+            .progress-wrapper,
+            .streak-wrapper {
+                width: 96px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: flex-start;
+                gap: 5px;
                 position: relative;
             }
 
-            .progress-wrapper {
-                display: flex;
+            .meter-label {
+                width: 100%;
+                font-size: 10px;
+                font-weight: bold;
+                letter-spacing: 0.08em;
+                line-height: 1;
+                text-align: center;
+                opacity: 0.95;
+                text-shadow: 0 0 8px currentColor;
+                pointer-events: none;
+                user-select: none;
+            }
+
+            .lives-wrapper .meter-label {
+                color: var(--lives-label-color, #00ff00);
+            }
+
+            .progress-wrapper .meter-label {
+                color: var(--progress-label-color, #8b0000);
+            }
+
+            .streak-wrapper .meter-label {
+                color: #00e5ff;
+            }
+
+            #livesContainer,
+            #progressContainer,
+            #streakContainer {
+                width: 82px;
+                height: 82px;
+                border-radius: 50%;
+                display: none;
+                position: relative;
+                overflow: visible;
+                isolation: isolate;
+            }
+
+            /* Lives ring only beats when JS adds this class, so it syncs with the emoji/number pulse. */
+            #livesContainer.life-ring-beat .meter-svg {
+                animation: livesRingBeat 0.25s ease-out;
+                transform-origin: center;
+            }
+
+            .meter-svg {
+                position: absolute;
+                inset: 0;
+                width: 82px;
+                height: 82px;
+                overflow: visible;
+            }
+
+            .meter-track {
+                fill: none;
+                stroke: #202020;
+                stroke-width: 11;
+            }
+
+            .meter-fill {
+                fill: none;
+                stroke-width: 11;
+                stroke-linecap: round;
+                stroke-dasharray: 188.4956;
+                stroke-dashoffset: 188.4956;
+                transition:
+                    stroke-dashoffset 0.28s linear,
+                    stroke 0.25s ease,
+                    filter 0.25s ease;
+            }
+
+            #livesFill {
+                stroke: #00ff00;
+                filter: drop-shadow(0 0 7px #00ff00);
+            }
+
+            #progressFill {
+                stroke: #8b0000;
+                filter: drop-shadow(0 0 7px #8b0000);
+            }
+
+            #streakFill {
+                stroke: #00e5ff;
+                filter: drop-shadow(0 0 7px #00e5ff);
+                transition: stroke-dashoffset 0.12s linear;
+            }
+
+            .meter-core {
+                position: absolute;
+                inset: 15px;
+                border-radius: 50%;
+                background: radial-gradient(circle at 35% 30%, #171717 0%, #080808 68%, #030303 100%);
+                box-shadow:
+                    inset 0 0 12px rgba(255,255,255,0.06),
+                    inset 0 0 20px rgba(0,0,0,0.9);
+                z-index: 1;
+            }
+
+            #livesDisplay,
+            #percentText,
+            #streakTimerText {
+                position: absolute;
+                inset: 0;
+                z-index: 2;
+                display: none;
                 align-items: center;
                 justify-content: center;
-                width: 100%;
-                position: relative;
+                text-align: center;
+                white-space: nowrap;
+                font-size: 12px;
+                line-height: 1;
+                font-weight: bold;
+                pointer-events: none;
+                transition:
+                    color 0.3s ease,
+                    text-shadow 0.3s ease,
+                    transform 0.15s ease;
             }
 
-            #progressContainer {
-    width: 400px;
-    height: 12px;
-    background: #333;
-    border-radius: 999px;
-    display: none;
-    overflow: hidden;
-    border: 1px solid #444;
-}
+            #livesDisplay {
+                color: #00ff00;
+                text-shadow: 0 0 8px #00ff00;
+                font-size: 18px;
+            }
+
+            #percentText {
+                color: #8b0000;
+                text-shadow: 0 0 8px #8b0000;
+            }
+
+            #streakTimerText {
+                color: #00e5ff;
+                text-shadow: 0 0 8px #00e5ff;
+            }
+
+            @keyframes livesRingBeat {
+                0% {
+                    transform: scale(1);
+                    filter: brightness(1);
+                }
+                40% {
+                    transform: scale(1.12);
+                    filter: brightness(1.4);
+                }
+                100% {
+                    transform: scale(1);
+                    filter: brightness(1);
+                }
+            }
+
+            
+
             #bubbleHexOverlay {
             position: fixed;
             pointer-events: none;
@@ -364,49 +551,10 @@ canvas {
     transition: box-shadow 0.2s ease;
 }
 
-#progressBar {
-    height: 100%;
-    width: 0%;
-    background: #ff3333;
-    border-radius: 999px;
-    transition:
-        width 0.3s ease,
-        background 0.3s ease,
-        box-shadow 0.3s ease;
-}
-
-#percentText {
-    font-weight: bold;
-    color: #00ffcc;
-    position: absolute;
-    left: calc(50% + 210px);
+#progressBar,
+#streakBar {
     display: none;
-    white-space: nowrap;
-    transition:
-        color 0.3s ease,
-        text-shadow 0.3s ease,
-        transform 0.15s ease;
 }
-
-            #streakContainer {
-                width: 300px;
-                height: 6px;
-                background: #222;
-                border-radius: 999px;
-                display: none;
-                overflow: hidden;
-                border: 1px solid #333;
-                margin-top: 5px;
-            }
-
-            #streakBar {
-                height: 100%;
-                width: 0%;
-                background: #00e5ff;
-                border-radius: 999px;
-                box-shadow: 0 0 8px #00e5ff;
-                transition: width 0.1s linear;
-            }
 
             #customUI {
                 display: none;
@@ -715,23 +863,6 @@ button.danger {
     margin-top:10px;
     text-shadow:0 0 20px red;
 }
-.streak-wrapper {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    margin-top: 5px;
-}
-
-#streakTimerText {
-    display: none;
-    color: #00e5ff;
-    font-size: 12px;
-    font-weight: bold;
-    min-width: 36px;
-    text-align: left;
-    text-shadow: 0 0 8px #00e5ff;
-}
     </style>
 </head>
 <div id="unsupportedBrowserMessage">
@@ -869,37 +1000,51 @@ button.danger {
 
     <div id="gameUI" class="ui" style="display:none">
         <div class="bars-container">
-            <div class="progress-wrapper">
-                <div id="progressContainer"><div id="progressBar"></div>
-            <span id="campaignTimerDisplay">
-    <span id="campaignTimerInner">05:00</span>
-</span>
-<span id="livesDisplay"
-      style="
-        position: absolute;
-        top: -34px;
-        left: 50%;
-        transform: translateX(-50%);
-        font-size: 20px;
-        font-weight: bold;
-        pointer-events: none;
-        display: none;
-        z-index: 5;
-        min-width: 60px;
-        text-align: center;
-      ">
-    <span id="livesInner">❤️5</span>
-</span>
+            <div class="meters-row">
+                <div class="lives-wrapper">
+                    <div id="livesContainer">
+                        <svg class="meter-svg" viewBox="0 0 80 80" aria-hidden="true">
+                            <circle class="meter-track" cx="40" cy="40" r="30"></circle>
+                            <circle id="livesFill" class="meter-fill" cx="40" cy="40" r="30"
+                                    transform="rotate(-90 40 40)"></circle>
+                        </svg>
+                        <div class="meter-core"></div>
+                        <span id="livesDisplay">
+                            <span id="livesInner">❤️5</span>
+                        </span>
+                    </div>
+                    <div class="meter-label">LIVES</div>
+                </div>
 
+                <div class="progress-wrapper">
+                    <div id="progressContainer">
+                        <svg class="meter-svg" viewBox="0 0 80 80" aria-hidden="true">
+                            <circle class="meter-track" cx="40" cy="40" r="30"></circle>
+                            <circle id="progressFill" class="meter-fill" cx="40" cy="40" r="30"
+                                    transform="rotate(-90 40 40)"></circle>
+                        </svg>
+                        <div class="meter-core"></div>
+                        <span id="percentText">0.0%</span>
+                    </div>
+                    <div class="meter-label">PROGRESS</div>
+                    <span id="campaignTimerDisplay">
+                        <span id="campaignTimerInner">05:00</span>
+                    </span>
+                </div>
+
+                <div class="streak-wrapper">
+                    <div id="streakContainer">
+                        <svg class="meter-svg" viewBox="0 0 80 80" aria-hidden="true">
+                            <circle class="meter-track" cx="40" cy="40" r="30"></circle>
+                            <circle id="streakFill" class="meter-fill" cx="40" cy="40" r="30"
+                                    transform="rotate(-90 40 40)"></circle>
+                        </svg>
+                        <div class="meter-core"></div>
+                        <span id="streakTimerText">0</span>
+                    </div>
+                    <div class="meter-label">STREAK TIMER</div>
+                </div>
             </div>
-                <span id="percentText">0.0%</span>
-            </div>
-            <div class="streak-wrapper">
-    <div id="streakContainer">
-        <div id="streakBar"></div>
-    </div>
-    <span id="streakTimerText">0:00</span>
-</div>
         </div>
         <button class="back-btn" onclick="exitToMenu()">⬅️ MENU</button> |
         <button onclick="saveGame()" style="background:#4CAF50;">SAVE</button>
@@ -2790,46 +2935,49 @@ function clearMenuDesc() {
     `;
 }
 function updateLivesUI() {
+    const livesContainer = document.getElementById('livesContainer');
     const outer = document.getElementById('livesDisplay');
     const inner = document.getElementById('livesInner');
-    if (!outer || !inner) return;
+    if (!livesContainer || !outer || !inner) return;
 
-    outer.style.display = "inline";
+    livesContainer.style.display = "block";
+    outer.style.display = "flex";
 
     if (isPlaytesting || isDailyPuzzle) {
         inner.innerText = "❤️-";
-        inner.style.color = "#888";
-        outer.classList.remove('low-lives');
+        outer.style.color = "#888";
+        outer.style.textShadow = "0 0 8px #888";
+        livesContainer.classList.remove('low-lives', 'life-ring-beat');
+        setCircularMeterFill("livesFill", 100, "#888");
+        document.documentElement.style.setProperty("--lives-label-color", "#888");
         return;
     }
 
-   else if (lives === 0)
-    {
+    const safeLives = Math.max(0, Math.min(lives, MAX_LIVES));
+    const livesPercent = MAX_LIVES > 0 ? (safeLives / MAX_LIVES) * 100 : 0;
+
+    let livesColor = "#00ff00";
+
+    if (lives === 0) {
         inner.innerText = `💔${lives}`;
-    }
-    else if (lives === MAX_LIVES)
-    {
-        inner.innerText = `💛${lives}`;
-    }
-    else
-    {
-    inner.innerText = `❤️${lives}`;
-    }
-    if (lives <= 1) {
-        inner.style.color = "#8b0000";
-    } else if (lives < 4) {
-        inner.style.color = "#ff0000";
+        livesColor = "#8b0000";
     } else if (lives === MAX_LIVES) {
-        inner.style.color = "#ffcc00";
-    }
-	else {
-        inner.style.color = "#00ff00";
+        inner.innerText = `💛${lives}`;
+        livesColor = "#ffcc00";
+    } else {
+        inner.innerText = `❤️${lives}`;
+        livesColor = lives < 4 ? "#ff0000" : "#00ff00";
     }
 
-    if (lives < 4) {
-        outer.classList.add('low-lives');
+    outer.style.color = livesColor;
+    outer.style.textShadow = `0 0 8px ${livesColor}`;
+    document.documentElement.style.setProperty("--lives-label-color", livesColor);
+    setCircularMeterFill("livesFill", livesPercent, livesColor);
+
+    if (lives > 0 && lives < 4) {
+        livesContainer.classList.add('low-lives');
     } else {
-        outer.classList.remove('low-lives');
+        livesContainer.classList.remove('low-lives', 'life-ring-beat');
     }
 }
 
@@ -3666,7 +3814,7 @@ else if (cmd === '!visualisebubblecolour') {
     alert(
         `Drag Bubbles: ${dragBubblesEnabled ? "ENABLED" : "DISABLED"}`
     );
-    canvas.style.cursor = dragBubblesEnabled ? "none" : "cell";
+    canvas.style.cursor = dragBubblesEnabled ? "none" : "crosshair";
     
 }
 
@@ -4906,6 +5054,25 @@ function getProgress() {
     return pct.toFixed(1) + "%";
 }
 
+
+const CIRCULAR_METER_CIRCUMFERENCE = 2 * Math.PI * 30;
+
+function setCircularMeterFill(fillId, percent, color) {
+    const fill = document.getElementById(fillId);
+    if (!fill) return;
+
+    const pct = Math.max(0, Math.min(100, Number(percent) || 0));
+    const offset = CIRCULAR_METER_CIRCUMFERENCE * (1 - pct / 100);
+
+    fill.style.strokeDasharray = `${CIRCULAR_METER_CIRCUMFERENCE}`;
+    fill.style.strokeDashoffset = `${offset}`;
+
+    if (color) {
+        fill.style.stroke = color;
+        fill.style.filter = `drop-shadow(0 0 7px ${color})`;
+    }
+}
+
 function updateProgressBar() {
     let progressStr;
 
@@ -4916,36 +5083,28 @@ function updateProgressBar() {
     }
 
     const progressValue = parseFloat(progressStr) || 0;
-    const progressBar = document.getElementById("progressBar");
+    const progressContainer = document.getElementById("progressContainer");
     const percentText = document.getElementById("percentText");
 
-    progressBar.style.width = `${progressValue}%`;
+    let ringColor = "#8b0000";
 
     if (progressValue > 50) {
-        progressBar.style.background = "#22ff55";
-        progressBar.style.boxShadow = "0 0 10px #22ff55";
-        percentText.style.color = "#22ff55";
-        percentText.style.textShadow = "0 0 10px #22ff55";
+        ringColor = "#22ff55";
     } 
     else if (progressValue >= 40) {
-        progressBar.style.background = "#ffcc00";
-        progressBar.style.boxShadow = "0 0 10px #ffcc00";
-        percentText.style.color = "#ffcc00";
-        percentText.style.textShadow = "0 0 10px #ffcc00";
+        ringColor = "#ffcc00";
     } 
     else if (progressValue >= 20) {
-        progressBar.style.background = "#ff3333";
-        progressBar.style.boxShadow = "0 0 10px #ff3333";
-        percentText.style.color = "#ff3333";
-        percentText.style.textShadow = "0 0 10px #ff3333";
-    } 
-    else {
-        progressBar.style.background = "#8b0000";
-        progressBar.style.boxShadow = "0 0 8px #8b0000";
-        percentText.style.color = "#8b0000";
-        percentText.style.textShadow = "0 0 8px #8b0000";
+        ringColor = "#ff3333";
     }
 
+    progressContainer.style.setProperty("--ring-color", ringColor);
+    document.documentElement.style.setProperty("--progress-label-color", ringColor);
+
+    percentText.style.color = ringColor;
+    percentText.style.textShadow = `0 0 10px ${ringColor}`;
+
+    setCircularMeterFill("progressFill", progressValue, ringColor);
     animateProgressText(progressValue);
 }
 function animateProgressText(targetPercent) {
@@ -5086,7 +5245,7 @@ function processConversionStep() {
 }
 function spawnPoof(x, y, color) {
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 20; i++) {
         const angle = Math.random() * Math.PI * 2;
 
         particles.push({
@@ -5294,12 +5453,23 @@ if (
     const nowSec = Math.floor(performance.now() / 1000);
 
     if (lastLifePulseSecond !== nowSec) {
+        const livesContainer = document.getElementById('livesContainer');
+
         inner.classList.remove('tick-pulse');
         void inner.offsetWidth; // force reflow
         inner.classList.add('tick-pulse');
+
+        if (livesContainer) {
+            livesContainer.classList.remove('life-ring-beat');
+            void livesContainer.offsetWidth; // force the ring beat to restart with the number
+            livesContainer.classList.add('life-ring-beat');
+        }
+
         lastLifePulseSecond = nowSec;
     }
 } else {
+    const livesContainer = document.getElementById('livesContainer');
+    if (livesContainer) livesContainer.classList.remove('life-ring-beat');
     lastLifePulseSecond = null;
 }
 
@@ -5403,12 +5573,13 @@ if (inner) {
             if (streakTimer <= 0) streakCount = 1; 
         }
         const streakPct = (streakTimer / STREAK_DURATION) * 100;
-const streakBar = document.getElementById("streakBar");
+const streakContainer = document.getElementById("streakContainer");
 const streakTimerText = document.getElementById("streakTimerText");
+const shownStreakPct = streakCount > 1 ? Math.max(0, streakPct) : 0;
 
-streakBar.style.width = (streakCount > 1 ? streakPct : 0) + "%";
-    streakTimerText.innerText = streakTimer;
-    streakTimerText.style.display = "inline";
+setCircularMeterFill("streakFill", shownStreakPct, "#00e5ff");
+streakTimerText.innerText = streakCount > 1 ? Math.ceil(streakTimer) : "0";
+streakTimerText.style.display = "flex";
 
         projectiles.forEach((p, i) => {
 
@@ -6298,7 +6469,7 @@ if (showDebugOverlay && isInGameCanvas) {
     ctx.restore();
 
 } else {
-    canvas.style.cursor = dragBubblesEnabled ? "none" : "cell";
+    canvas.style.cursor = dragBubblesEnabled ? "none" : "crosshair";
 }
 drawBubbleHitboxes();
 }
@@ -6604,9 +6775,12 @@ mouseX = canvas.width / 2;
 mouseY = canvas.height - 200;
 
     document.getElementById('mobileControls').style.display = 'flex';
+    document.getElementById('livesContainer').style.display = 'block';
     document.getElementById('progressContainer').style.display = 'block';
     document.getElementById('streakContainer').style.display = 'block';
-    document.getElementById('percentText').style.display = 'inline-block';
+    document.getElementById('livesDisplay').style.display = 'flex';
+    document.getElementById('percentText').style.display = 'flex';
+    document.getElementById('streakTimerText').style.display = 'flex';
     canvas.style.display = 'block';
     
     // Generate new level layout
@@ -6658,8 +6832,12 @@ mouseY = canvas.height - 200;
 
     document.getElementById('gameUI').style.display = 'none';
     document.getElementById('mobileControls').style.display = 'none';
+    document.getElementById('livesContainer').style.display = 'none';
     document.getElementById('progressContainer').style.display = 'none';
-document.getElementById('percentText').style.display = 'none';
+document.getElementById('livesDisplay').style.display = 'none';
+    document.getElementById('percentText').style.display = 'none';
+document.getElementById('streakContainer').style.display = 'none';
+document.getElementById('streakTimerText').style.display = 'none';
     canvas.style.display = 'block';
     updatePaletteUI();
     if (animationId) cancelAnimationFrame(animationId);
@@ -6741,8 +6919,11 @@ setBrowserTitle("▶️ SK's Bubble Shooter — Playtesting");
     document.getElementById('streakContainer').style.display = 'block';
     document.getElementById('mobileControls').style.display = 'flex';
     // ✅ SHOW PROGRESS BAR
+    document.getElementById('livesContainer').style.display = 'block';
     document.getElementById('progressContainer').style.display = 'block';
-    document.getElementById('percentText').style.display = 'inline-block';
+    document.getElementById('livesDisplay').style.display = 'flex';
+    document.getElementById('percentText').style.display = 'flex';
+    document.getElementById('streakTimerText').style.display = 'flex';
 
     initializeAmmo("customPlaytest");
 
@@ -7640,12 +7821,21 @@ function closeSfxMenu() {
     loadedProgressOverride = null;
     initialBubbleCount = 0;
 
-    document.getElementById('progressBar').style.width = "0%";
+    setCircularMeterFill("livesFill", 0, "#00ff00");
+    setCircularMeterFill("progressFill", 0, "#8b0000");
+    setCircularMeterFill("streakFill", 0, "#00e5ff");
     displayedProgressPercent = 0;
+document.getElementById('livesInner').innerText = "❤️0";
 document.getElementById('percentText').innerText = "0.0%";
+document.getElementById('streakTimerText').innerText = "0s";
 
+    document.getElementById('livesContainer').classList.remove('low-lives');
+    document.getElementById('livesContainer').style.display = "none";
     document.getElementById('progressContainer').style.display = "none";
+    document.getElementById('streakContainer').style.display = "none";
+    document.getElementById('livesDisplay').style.display = "none";
     document.getElementById('percentText').style.display = "none";
+    document.getElementById('streakTimerText').style.display = "none";
 }
 function clearEditor() { if(confirm("Clear level?")) bubbles = []; }
 async function exitToMenu() {
