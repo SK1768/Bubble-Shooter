@@ -394,7 +394,8 @@ body {
 
             .lives-wrapper,
             .progress-wrapper,
-            .streak-wrapper {
+            .streak-wrapper,
+            .campaign-wrapper {
                 width: 96px;
                 display: flex;
                 flex-direction: column;
@@ -429,9 +430,22 @@ body {
                 color: #00e5ff;
             }
 
+            .campaign-wrapper {
+                display: none;
+            }
+
+            .campaign-wrapper.is-visible {
+                display: flex;
+            }
+
+            .campaign-wrapper .meter-label {
+                color: var(--campaign-timer-color, #66ff00);
+            }
+
             #livesContainer,
             #progressContainer,
-            #streakContainer {
+            #streakContainer,
+            #campaignTimerContainer {
                 width: 82px;
                 height: 82px;
                 border-radius: 50%;
@@ -489,6 +503,11 @@ body {
                 transition: stroke-dashoffset 0.12s linear;
             }
 
+            #campaignTimerFill {
+                stroke: #66ff00;
+                filter: drop-shadow(0 0 7px #66ff00);
+            }
+
             .meter-core {
                 position: absolute;
                 inset: 15px;
@@ -502,7 +521,8 @@ body {
 
             #livesDisplay,
             #percentText,
-            #streakTimerText {
+            #streakTimerText,
+            #campaignTimerDisplay {
                 position: absolute;
                 inset: 0;
                 z-index: 2;
@@ -535,6 +555,26 @@ body {
             #streakTimerText {
                 color: #00e5ff;
                 text-shadow: 0 0 8px #00e5ff;
+            }
+
+            #campaignTimerDisplay {
+                color: var(--campaign-timer-color, #66ff00);
+                text-shadow: 0 0 8px var(--campaign-timer-color, #66ff00);
+            }
+
+            #campaignTimerContainer.timer-danger {
+                animation: campaignRingPulse 0.6s ease-in-out infinite;
+            }
+
+            @keyframes campaignRingPulse {
+                0%, 100% {
+                    transform: scale(1);
+                    filter: brightness(1);
+                }
+                50% {
+                    transform: scale(1.12);
+                    filter: brightness(1.45);
+                }
             }
 
             @keyframes livesRingBeat {
@@ -680,20 +720,6 @@ canvas {
             #autosaveToggle {
                 background: #444;
             }
-            #campaignTimerDisplay {
-    position: absolute;
-    top: 5000%;
-    left: 100.5%;
-    transform: translate(-50%, -50%);
-
-    color: #66ff00;
-    font-weight: bold;
-    font-family: Storopia;
-    font-size: 50px;
-
-    pointer-events: none; /* clicks go through */
-    display: none;
-}
 		#trackState {
     text-align: center;    /* ✅ center */
     font-weight: bold;
@@ -1067,9 +1093,6 @@ button.danger {
                         <span id="percentText">0.0%</span>
                     </div>
                     <div class="meter-label">PROGRESS</div>
-                    <span id="campaignTimerDisplay">
-                        <span id="campaignTimerInner">05:00</span>
-                    </span>
                 </div>
 
                 <div class="streak-wrapper">
@@ -1083,6 +1106,21 @@ button.danger {
                         <span id="streakTimerText">0</span>
                     </div>
                     <div class="meter-label">STREAK TIMER</div>
+                </div>
+
+                <div class="campaign-wrapper" id="campaignTimerWrapper">
+                    <div id="campaignTimerContainer">
+                        <svg class="meter-svg" viewBox="0 0 80 80" aria-hidden="true">
+                            <circle class="meter-track" cx="40" cy="40" r="30"></circle>
+                            <circle id="campaignTimerFill" class="meter-fill" cx="40" cy="40" r="30"
+                                    transform="rotate(-90 40 40)"></circle>
+                        </svg>
+                        <div class="meter-core"></div>
+                        <span id="campaignTimerDisplay">
+                            <span id="campaignTimerInner">05:00</span>
+                        </span>
+                    </div>
+                    <div class="meter-label">CAMPAIGN TIMER</div>
                 </div>
             </div>
         </div>
@@ -6336,34 +6374,7 @@ if (dragBubblesEnabled && draggedBubble) {
 document.getElementById('scoreDisplay').innerText =
     `Score: ${fmt(score)}`;
 
-const timerSpan = document.getElementById('campaignTimerDisplay');
-const inner = document.getElementById('campaignTimerInner');
-if (isCampaignMode && !isPaused && !winPending & !gameOver && !gameWin) {
-    const t = Math.ceil(campaignTimer);
-    const minutes = Math.floor(t / 60);
-    const seconds = t % 60;
-
-
-
-if (isCampaignMode && timerSpan && inner && !isPaused && !winPending & !gameOver && !gameWin) {
-    const t = Math.ceil(campaignTimer);
-    const minutes = Math.floor(t / 60);
-    const seconds = t % 60;
-
-    timerSpan.style.display = "inline";
-    inner.innerText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-
-    if (t <= 20) {
-        inner.style.color = "#ff3333";
-    } else if (t <= 60) {
-        inner.style.color = "#ffcc00";
-    } else {
-        inner.style.color = "#66ff00";
-    }
-} else if (timerSpan) {
-    timerSpan.style.display = "none";
-}
-}
+updateCampaignTimerRing();
 
 // ---- Level Display Update ----
 let levelText;
@@ -6724,11 +6735,70 @@ function endDailyPuzzle(completed) {
         suppressAutosaveOnce = true
     }
 }
-function hideCampaignTimer() {
-    const timerSpan = document.getElementById('campaignTimerDisplay');
-    if (timerSpan) {
-        timerSpan.style.display = "none";
+function updateCampaignTimerRing() {
+    const wrapper = document.getElementById('campaignTimerWrapper');
+    const timerContainer = document.getElementById('campaignTimerContainer');
+    const timerText = document.getElementById('campaignTimerDisplay');
+    const inner = document.getElementById('campaignTimerInner');
+
+    if (!isCampaignMode) {
+        hideCampaignTimer();
+        return;
     }
+
+    const maxTime = CAMPAIGN_TIME_LIMIT || 300;
+    const secondsLeft = Math.max(0, Math.ceil(campaignTimer));
+    const minutes = Math.floor(secondsLeft / 60);
+    const seconds = secondsLeft % 60;
+    const percentLeft = Math.max(0, Math.min(100, (secondsLeft / maxTime) * 100));
+
+    let timerColor = '#66ff00';
+    if (secondsLeft <= 20) {
+        timerColor = '#ff3333';
+    } else if (secondsLeft <= 60) {
+        timerColor = '#ffcc00';
+    }
+
+    document.documentElement.style.setProperty('--campaign-timer-color', timerColor);
+
+    if (wrapper) wrapper.classList.add('is-visible');
+
+    if (timerContainer) {
+        timerContainer.style.display = 'block';
+        timerContainer.classList.toggle('timer-danger', secondsLeft <= 20 && !isPaused && !gameOver && !gameWin && !winPending);
+    }
+
+    if (timerText) {
+        timerText.style.display = 'flex';
+        timerText.style.color = timerColor;
+        timerText.style.textShadow = `0 0 10px ${timerColor}`;
+    }
+
+    if (inner) {
+        inner.innerText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    setCircularMeterFill('campaignTimerFill', percentLeft, timerColor);
+}
+
+function hideCampaignTimer() {
+    const wrapper = document.getElementById('campaignTimerWrapper');
+    const timerContainer = document.getElementById('campaignTimerContainer');
+    const timerText = document.getElementById('campaignTimerDisplay');
+
+    if (wrapper) wrapper.classList.remove('is-visible');
+
+    if (timerContainer) {
+        timerContainer.style.display = 'none';
+        timerContainer.classList.remove('timer-danger');
+    }
+
+    if (timerText) {
+        timerText.style.display = 'none';
+    }
+
+    document.documentElement.style.setProperty('--campaign-timer-color', '#66ff00');
+    setCircularMeterFill('campaignTimerFill', 0, '#66ff00');
 }
 function randomiseBubbleLayout() {
     
