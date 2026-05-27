@@ -1036,7 +1036,7 @@ button.danger {
         <div style="margin-bottom: 10px;">
             <button class="back-btn" onclick="exitToMenu()">⬅️ MENU</button>
             <button onclick="openCustomSavePopup()" style="background:#4CAF50;">SAVE FILE</button>
-            <button onclick="document.getElementById('fileInput').click()" style="background:#2196F3;">LOAD FILE</button>
+            <button onclick="handleLoadClick()" style="background:#2196F3;">LOAD</button>
             <button onclick="clearEditor()" style="background:#cc3300;">CLEAR ALL</button>
         </div>
         <div style="background: #333; padding: 10px; border-radius: 5px; display: inline-block;">
@@ -7431,32 +7431,10 @@ function updatePaletteUI() {
         p.appendChild(b);         // ✅ IMPORTANT
     });
 }
-    async function saveGame(isAuto = false, forceSave = false) {
-    if (gameOver) return;
-
-    if (isCampaignMode) {
-        alert("Cannot create a save file in campaign mode.");
-        return;
-    }
-
-    if (isPlaytesting) {
-        alert("Cannot create a save file in playtest mode.");
-        return;
-    }
-		if (isDailyPuzzle) {
-        alert("Cannot create a save file in daily puzzle mode.");
-        return;
-    }
-     if (isSecretLevel)
-    {  
-        fadeOverlayIn();
-        await showSecretText(`I'm afraid you can't do that, ${playerName}.`, 5000);
-        fadeOverlayOut();
-        return;
-    }
+    function buildSaveData(isAuto = false) {
     const ts = getSaveTimestamp();
 
-    const saveData = {
+    return {
         _metadata: {
             timestamp: ts.readable,
             epoch: ts.epoch,
@@ -7483,37 +7461,351 @@ function updatePaletteUI() {
             ? "0.0%"
             : getProgress(),
 
-        // save board state only
         bubbles: bubbles.map(b => ({
             row: b.row,
             col: b.col,
             color: b.color ?? null
         })),
 
-        // save shooter state
         currentBubble: currentBall ?? null,
         nextBubble: nextBall ?? null
     };
+}
 
-    const blob = new Blob(
-        [JSON.stringify(saveData, null, 2)],
-        { type: 'text/plain' }
-    );
+function getSaveFileName(saveData, slotId = null) {
+    const meta = saveData?._metadata || {};
 
-    const a = document.createElement('a');
-
-    if (mode === 'custom' || isPlaytesting) {
-        const safeLevel = (customLevelName || "Untitled").replace(/[\\\/:*?"<>|]/g, "_");
-        const safeAuthor = (customAuthorName || "Unknown").replace(/[\\\/:*?"<>|]/g, "_");
-        a.download = `customModeLevel_${safeLevel}_${safeAuthor}.bubblesav`;
-    } else {
-        const prefix = isAuto ? "(AUTOSAVE) " : "";
-        a.download = `${prefix}puzzleModeLevel_${fmt(level)}.bubblesav`;
+    if (saveData?.level === "CUSTOM LEVEL") {
+        const safeLevel = (saveData.levelName || customLevelName || "Untitled").replace(/[\\\/:*?"<>|]/g, "_");
+        const safeAuthor = (saveData.authorName || customAuthorName || "Unknown").replace(/[\\\/:*?"<>|]/g, "_");
+        return `customModeLevel_${safeLevel}_${safeAuthor}.bubblesav`;
     }
 
+    const prefix = meta.saveMethod === "AUTO" || slotId === "autosave" ? "(AUTOSAVE) " : "";
+    return `${prefix}puzzleModeLevel_${fmt(saveData?.level ?? level)}.bubblesav`;
+}
+
+const BUBBLE_SAVE_DB_NAME = "SKBubbleShooterSaveFiles";
+const BUBBLE_SAVE_STORE = "saveSlots";
+const SAVE_SLOT_IDS = ["autosave", "slot1", "slot2", "slot3", "slot4", "slot5", "slot6", "slot7", "slot8", "slot9", "slot10"];
+let pendingSaveDataForSlot = null;
+let savePopupMode = "load";
+
+function openSaveDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(BUBBLE_SAVE_DB_NAME, 1);
+
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(BUBBLE_SAVE_STORE)) {
+                db.createObjectStore(BUBBLE_SAVE_STORE, { keyPath: "slotId" });
+            }
+        };
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function getAllSaveSlots() {
+    const db = await openSaveDB();
+
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(BUBBLE_SAVE_STORE, "readonly");
+        const store = tx.objectStore(BUBBLE_SAVE_STORE);
+        const request = store.getAll();
+
+        request.onsuccess = () => {
+            const bySlot = {};
+            for (const row of request.result || []) bySlot[row.slotId] = row;
+            db.close();
+            resolve(bySlot);
+        };
+        request.onerror = () => {
+            db.close();
+            reject(request.error);
+        };
+    });
+}
+
+async function putSaveSlot(slotId, saveData, forcedFileName = null) {
+    const db = await openSaveDB();
+    const fileName = forcedFileName || getSaveFileName(saveData, slotId);
+    const meta = saveData._metadata || {};
+    const row = {
+        slotId,
+        fileName,
+        saveData,
+        savedAt: Date.now(),
+        timestamp: meta.timestamp || new Date().toLocaleString(),
+        gameType: meta.gameType || (saveData.level === "CUSTOM LEVEL" ? "CUSTOM" : "PUZZLE")
+    };
+
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(BUBBLE_SAVE_STORE, "readwrite");
+        tx.objectStore(BUBBLE_SAVE_STORE).put(row);
+        tx.oncomplete = () => {
+            db.close();
+            resolve(row);
+        };
+        tx.onerror = () => {
+            db.close();
+            reject(tx.error);
+        };
+    });
+}
+
+async function deleteSaveSlot(slotId) {
+    const db = await openSaveDB();
+
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(BUBBLE_SAVE_STORE, "readwrite");
+        tx.objectStore(BUBBLE_SAVE_STORE).delete(slotId);
+        tx.oncomplete = () => {
+            db.close();
+            resolve();
+        };
+        tx.onerror = () => {
+            db.close();
+            reject(tx.error);
+        };
+    });
+}
+
+function saveDataToDownload(saveData, fileName) {
+    const blob = new Blob([JSON.stringify(saveData, null, 2)], { type: "text/plain" });
+    const a = document.createElement("a");
+    a.download = fileName || getSaveFileName(saveData);
     a.href = URL.createObjectURL(blob);
     a.click();
     URL.revokeObjectURL(a.href);
+}
+
+function pickSaveFileFromDevice() {
+    return new Promise((resolve) => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".bubblesav,application/json,text/plain";
+        input.style.display = "none";
+        document.body.appendChild(input);
+
+        input.onchange = () => {
+            const file = input.files && input.files[0];
+            input.remove();
+            resolve(file || null);
+        };
+
+        input.click();
+    });
+}
+
+async function importSaveToSlot(slotId, oldRow = null) {
+    if (slotId === "autosave") {
+        alert("Manual imports cannot be saved in the autosave slot.");
+        return;
+    }
+
+    const file = await pickSaveFileFromDevice();
+    if (!file) return;
+
+    let saveData;
+    try {
+        saveData = JSON.parse(await file.text());
+    } catch (e) {
+        alert("That file is not a valid .bubblesav save file.");
+        logError(e);
+        return;
+    }
+
+    const importedFileName = file.name || getSaveFileName(saveData, slotId);
+
+    if (oldRow) {
+        const slotNumber = slotId.replace("slot", "");
+        const okToOverwrite = confirm(
+            `${oldRow.fileName} already exist in save slot ${slotNumber}. Do you want overwrite it with ${importedFileName}?`
+        );
+
+        if (!okToOverwrite) return;
+    }
+
+    try {
+        await putSaveSlot(slotId, saveData, importedFileName);
+        await renderSaveSlotPopup();
+    } catch (e) {
+        alert("Could not import this save file inside the game.");
+        logError(e);
+    }
+}
+
+function getSlotLabel(slotId) {
+    return slotId === "autosave" ? "AUTOSAVE" : `SAVE SLOT ${slotId.replace("slot", "")}`;
+}
+
+async function openSaveSlotPopup(action = "load", saveData = null) {
+    savePopupMode = action;
+    pendingSaveDataForSlot = saveData;
+
+    const popup = document.getElementById("saveSlotPopup");
+    const title = document.getElementById("saveSlotPopupTitle");
+    const note = document.getElementById("saveSlotPopupNote");
+
+    title.textContent = action === "save" ? "💾 Save Files" : "📂 Load Save File";
+    note.textContent = action === "save"
+        ? "Press ADD on save slots 1-10 to save inside the game. The autosave slot is only used by autosave."
+        : "Press LOAD to load a saved file, IMPORT to add a .bubblesav from your device, EXPORT to download a backup, or DELETE to remove it.";
+
+    popup.style.display = "flex";
+    await renderSaveSlotPopup();
+}
+
+function closeSaveSlotPopup() {
+    const popup = document.getElementById("saveSlotPopup");
+    if (popup) popup.style.display = "none";
+    pendingSaveDataForSlot = null;
+
+    if (savePopupMode === "load" && !wasPausedBeforeFileDialog) {
+        togglePause(false);
+    }
+}
+
+async function renderSaveSlotPopup() {
+    const list = document.getElementById("saveSlotList");
+    if (!list) return;
+
+    list.innerHTML = `<div style="color:#00ffcc;text-align:center;padding:12px;">Loading save files...</div>`;
+
+    let slots = {};
+    try {
+        slots = await getAllSaveSlots();
+    } catch (e) {
+        list.innerHTML = `<div style="color:#ff5555;text-align:center;padding:12px;">IndexedDB save files could not be opened.</div>`;
+        logError(e);
+        return;
+    }
+
+    list.innerHTML = "";
+
+    for (const slotId of SAVE_SLOT_IDS) {
+        const row = slots[slotId];
+        const hasSave = !!row;
+        const div = document.createElement("div");
+        div.className = "save-slot-row";
+
+        const details = hasSave
+            ? `${row.fileName}<br><small>${row.gameType || "SAVE"} • ${row.timestamp || "Unknown time"}</small>`
+            : `<span style="color:#777;">Empty slot</span>`;
+
+        div.innerHTML = `
+            <div class="save-slot-info">
+                <strong>${getSlotLabel(slotId)}</strong><br>
+                ${details}
+            </div>
+            <div class="save-slot-buttons">
+                <button data-action="add" ${(savePopupMode !== "save" || slotId === "autosave") ? "disabled" : ""}>ADD</button>
+                <button data-action="load" ${!hasSave ? "disabled" : ""}>LOAD</button>
+                <button data-action="import" ${slotId === "autosave" ? "disabled" : ""}>IMPORT</button>
+                <button data-action="export" ${!hasSave ? "disabled" : ""}>EXPORT</button>
+                <button data-action="delete" class="danger" ${!hasSave ? "disabled" : ""}>DELETE</button>
+            </div>
+        `;
+
+        div.querySelector('[data-action="add"]').onclick = async () => {
+            if (slotId === "autosave") {
+                alert("Manual saves cannot be saved in the autosave slot.");
+                return;
+            }
+            if (!pendingSaveDataForSlot) return;
+
+            const newFileName = getSaveFileName(pendingSaveDataForSlot, slotId);
+
+            if (row) {
+                const slotNumber = slotId.replace("slot", "");
+                const okToOverwrite = confirm(
+                    `${row.fileName} already exist in save slot ${slotNumber}. Do you want overwrite it with ${newFileName}?`
+                );
+
+                if (!okToOverwrite) return;
+            }
+
+            try {
+                const saved = await putSaveSlot(slotId, pendingSaveDataForSlot);
+                logSuccess(`Saved inside IndexedDB. ("${saved.fileName}")`);
+                await renderSaveSlotPopup();
+            } catch (e) {
+                alert("Could not save this file inside the game.");
+                logError(e);
+            }
+        };
+
+        div.querySelector('[data-action="load"]').onclick = () => {
+            if (!row) return;
+            closeSaveSlotPopup();
+            loadSaveData(row.saveData, row.fileName);
+        };
+
+        div.querySelector('[data-action="import"]').onclick = async () => {
+            await importSaveToSlot(slotId, row || null);
+        };
+
+        div.querySelector('[data-action="export"]').onclick = () => {
+            if (!row) return;
+            saveDataToDownload(row.saveData, row.fileName);
+        };
+
+        div.querySelector('[data-action="delete"]').onclick = async () => {
+            if (!row) return;
+            if (!confirm(`Are you sure you want to delete ${row.fileName}?`)) return;
+            try {
+                await deleteSaveSlot(slotId);
+                await renderSaveSlotPopup();
+            } catch (e) {
+                alert("Could not delete this save file.");
+                logError(e);
+            }
+        };
+
+        list.appendChild(div);
+    }
+}
+
+async function saveGame(isAuto = false, forceSave = false) {
+    if (gameOver) return;
+
+    if (isCampaignMode) {
+        alert("Cannot create a save file in campaign mode.");
+        return;
+    }
+
+    if (isPlaytesting) {
+        alert("Cannot create a save file in playtest mode.");
+        return;
+    }
+
+    if (isDailyPuzzle) {
+        alert("Cannot create a save file in daily puzzle mode.");
+        return;
+    }
+
+    if (isSecretLevel) {  
+        fadeOverlayIn();
+        await showSecretText(`I'm afraid you can't do that, ${playerName}.`, 5000);
+        fadeOverlayOut();
+        return;
+    }
+
+    const saveData = buildSaveData(isAuto);
+
+    if (isAuto) {
+        try {
+            const saved = await putSaveSlot("autosave", saveData);
+            logSuccess(`Autosaved inside IndexedDB. ("${saved.fileName}")`);
+        } catch (e) {
+            logError(e);
+        }
+        return;
+    }
+
+    await openSaveSlotPopup("save", saveData);
 }
     function getSaveTimestamp() {
     const d = new Date();
@@ -7620,39 +7912,32 @@ function confirmCustomSave() {
 async function handleLoadClick() {
     if (gameOver) return;
     if (isCampaignMode) {
-    alert("Cannot load a save file in campaign mode.");
-    return;
-}
-
+        alert("Cannot load a save file in campaign mode.");
+        return;
+    }
 
     if (isPlaytesting) {
-            alert("Cannot load a save file in playtest mode.");
-            return;
-        }
-	if (isDailyPuzzle) {
+        alert("Cannot load a save file in playtest mode.");
+        return;
+    }
+
+    if (isDailyPuzzle) {
         alert("Cannot load a save file in daily puzzle mode.");
         return;
     }
-    if (isSecretLevel)
-    {  
+
+    if (isSecretLevel) {  
         fadeOverlayIn();
         await showSecretText(`I'm afraid you can't do that, ${playerName}.`, 5000);
         fadeOverlayOut();
         return;
     }
-            // remember previous pause state
+
     wasPausedBeforeFileDialog = isPaused;
+    if (!isPaused) togglePause(true);
+    await openSaveSlotPopup("load");
+}
 
-    // pause the game if not already
-    if (!isPaused) {
-        togglePause(true); // force pause
-    }
-
-    isFileDialogOpen = true;
-
-    document.getElementById("fileInput").value = ""; // reset
-        document.getElementById('fileInput').click();
-    }
 function loadSecretLevelData(s, fileName = "save file") {
     isLoadingSave = true;
     // -----------------------------
@@ -7706,83 +7991,52 @@ function loadSecretLevelData(s, fileName = "save file") {
 
     return true;
 }
-function loadGame(e) {
-    
-    isFileDialogOpen = false;
-    const file = e.target.files[0];
-    if (!file) return;
-    logInfo(`Loading save file. ("${file.name}")`)
-    const reader = new FileReader();
+function loadSaveData(s, fileName = "save file") {
     isLoadingSave = true;
+    showSecretText(`Loading: ${fileName}...`, 2500);
 
-    reader.onload = (ev) => {
-        let s;
-
-        try {
-            s = JSON.parse(ev.target.result);
-        } catch (e) {
-            isLoadingSave = false;
-            alert(`An error occurred while trying to load ${file.name}. Check the console for details.`);
-            logError(e)
-            return;
-        }
-        showSecretText(`Loading: ${file.name}...`, 2500)   
-        fadeTransition(() => {
-
-    
-        // backward-safe metadata check
+    fadeTransition(() => {
         const meta = s._metadata || {};
         if (meta.isSaveFileProtected) {
             isLoadingSave = false;
-            alert(`${file.name} is protected and cannot be loaded.`);
-            logWarning(`Attempted to load a protected save file. Loading blocked. ("${file.name}")`)
+            alert(`${fileName} is protected and cannot be loaded.`);
+            logWarning(`Attempted to load a protected save file. Loading blocked. ("${fileName}")`);
             return;
         }
 
-        // restore basic metadata
         customLevelName = s.levelName || "";
         customAuthorName = s.authorName || "";
 
-        // -----------------------------
-        // CUSTOM LEVEL LOAD
-        // -----------------------------
         if (s.level === "CUSTOM LEVEL") {
             enterCustomEditor();
 
             bubbles = [];
             (s.bubbles || []).forEach(b => {
                 const co = getGridCoords(b.row, b.col);
-                const nb = {
+                bubbles.push({
                     x: co.x,
                     y: co.y,
                     row: b.row,
                     col: b.col,
                     color: b.color ?? null
-                };
-                bubbles.push(nb);
+                });
             });
 
             ammo = s.ammo ?? 40;
             document.getElementById("customAmmoInput").value = ammo;
-
-            // reset shooter cleanly for editor/custom load
             currentBall = s.currentBubble ?? null;
             nextBall = s.nextBubble ?? null;
-
             loadedProgressOverride = null;
             initialBubbleCount = bubbles.length;
 
             isLoadingSave = false;
             updateAmmo(false);
             updateProgressBar();
-            updateAmmo(false);
             refreshFavicon();
+            logSuccess(`Save file loaded. ("${fileName}")`);
             return;
         }
 
-        // -----------------------------
-        // PUZZLE MODE LOAD
-        // -----------------------------
         level = s.level ?? 1;
         score = s.score ?? 0;
         lives = s.lives ?? 5;
@@ -7792,28 +8046,23 @@ function loadGame(e) {
         loadedProgressOverride =
             typeof s.progress === "string" ? s.progress : null;
 
-        // start loaded puzzle mode
         startMode("puzzle", true);
 
-        // NOW rebuild bubbles from the save
         bubbles = [];
         (s.bubbles || []).forEach(b => {
             const co = getGridCoords(b.row, b.col);
-            const nb = {
+            bubbles.push({
                 x: co.x,
                 y: co.y,
                 row: b.row,
                 col: b.col,
                 color: b.color ?? null
-            };
-            bubbles.push(nb);
+            });
         });
 
-        // restore core state
         ammo = s.ammo ?? ammo;
         initialBubbleCount = bubbles.length;
 
-        // restore shooter state safely
         const pool = bubbles.length > 0
             ? Array.from(new Set(bubbles.map(b => b.color).filter(c => c)))
             : ALL_COLORS;
@@ -7821,18 +8070,10 @@ function loadGame(e) {
         currentBall = s.currentBubble ?? null;
         nextBall = s.nextBubble ?? null;
 
-        // if saved colours are missing/invalid, clear them so updateAmmo can reroll
-        if (!currentBall || !pool.includes(currentBall)) {
-            currentBall = null;
-        }
-
-        if (!nextBall || !pool.includes(nextBall)) {
-            nextBall = null;
-        }
+        if (!currentBall || !pool.includes(currentBall)) currentBall = null;
+        if (!nextBall || !pool.includes(nextBall)) nextBall = null;
 
         isLoadingSave = false;
-
-        // rebuild shooter from the LOADED board only
         updateAmmo(false);
         updateProgressBar();
         refreshFavicon();
@@ -7841,21 +8082,36 @@ function loadGame(e) {
         hurryIdleSeconds = 0;
         hurryWarningSeconds = null;
         startHurryTimer();
-        logSuccess(`Save file loaded. ("${file.name}")`)
+        logSuccess(`Save file loaded. ("${fileName}")`);
     });
+}
+
+function loadGame(e) {
+    isFileDialogOpen = false;
+    const file = e.target.files[0];
+    if (!file) return;
+
+    logInfo(`Loading save file. ("${file.name}")`);
+    const reader = new FileReader();
+
+    reader.onload = (ev) => {
+        let s;
+        try {
+            s = JSON.parse(ev.target.result);
+        } catch (e) {
+            isLoadingSave = false;
+            alert(`An error occurred while trying to load ${file.name}. Check the console for details.`);
+            logError(e);
+            return;
+        }
+
+        loadSaveData(s, file.name);
     };
 
     reader.readAsText(file);
     e.target.value = "";
-
-    if (!wasPausedBeforeFileDialog) {
-        togglePause(false);
-        hurryTimer = null;
-        hurryWarningActive = false;
-        hurryWarningSeconds = null;
-    }
-
 }
+
 window.addEventListener("focus", () => {
     if (isFileDialogOpen) {
         isFileDialogOpen = false;
@@ -8017,6 +8273,65 @@ updateFPSWarning();
 addSfxButtonToMenu();
 addSecretLevelButton();
 </script>
+    <div id="saveSlotPopup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.86);z-index:10000;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;">
+  <div style="background:#050505;padding:18px;border-radius:14px;border:2px solid #00ffcc;box-shadow:0 0 30px rgba(0,255,204,0.45);width:min(780px,96vw);max-height:86vh;overflow:auto;text-align:center;color:#fff;">
+    <h2 id="saveSlotPopupTitle" style="color:#00ffcc;margin-top:0;">💾 Save Files</h2>
+    <div id="saveSlotPopupNote" style="color:#aaa;font-size:13px;margin-bottom:12px;"></div>
+    <div id="saveSlotList" style="display:flex;flex-direction:column;gap:8px;"></div>
+    <button onclick="closeSaveSlotPopup()" style="margin-top:14px;background:#ff5555;color:white;font-weight:bold;">CLOSE</button>
+  </div>
+</div>
+<style>
+.save-slot-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    text-align: left;
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 10px;
+    padding: 10px;
+}
+.save-slot-info {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: #fff;
+    font-size: 13px;
+}
+.save-slot-info strong {
+    color: #00ffcc;
+    font-size: 14px;
+}
+.save-slot-info small {
+    color: #aaa;
+}
+.save-slot-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    justify-content: flex-end;
+}
+.save-slot-buttons button {
+    padding: 7px 9px;
+    margin: 0;
+    font-size: 11px;
+}
+.save-slot-buttons button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+@media (max-width: 680px) {
+    .save-slot-row {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+    .save-slot-buttons {
+        justify-content: center;
+    }
+}
+</style>
+
     <div id="customSavePopup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;">
   <div style="background:#000;padding:25px;border-radius:12px;border:2px solid #00ffcc;text-align:center;">
     <h2 style="color:#00ffcc;">Save Custom Level</h2>
