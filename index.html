@@ -1038,7 +1038,7 @@ button.danger {
         <div style="margin-bottom: 10px;">
             <button class="back-btn" onclick="exitToMenu()">⬅️ MENU</button>
             <button onclick="openCustomSavePopup()" style="background:#4CAF50;">SAVE FILE</button>
-            <button onclick="handleLoadClick()" style="background:#2196F3;">LOAD FILE</button>
+            <button onclick="handleLoadClick()" style="background:#2196F3;">LOAD</button>
             <button onclick="clearEditor()" style="background:#cc3300;">CLEAR ALL</button>
         </div>
         <div style="background: #333; padding: 10px; border-radius: 5px; display: inline-block;">
@@ -7640,7 +7640,7 @@ async function importSaveToSlot(slotId, oldRow = null) {
 }
 
 function getSlotLabel(slotId) {
-    return slotId === "autosave" ? "AUTOSAVE" : `SAVE SLOT ${slotId.replace("slot", "")}`;
+    return slotId === "autosave" ? "AUTOSAVE SLOT" : `SAVE SLOT ${slotId.replace("slot", "")}`;
 }
 
 async function openSaveSlotPopup(action = "load", saveData = null) {
@@ -7693,8 +7693,17 @@ async function renderSaveSlotPopup() {
         const div = document.createElement("div");
         div.className = "save-slot-row";
 
+        const isProtectedSave = !!(
+            row?.saveData?.isSaveFileProtected ||
+            row?.saveData?._metadata?.isSaveFileProtected
+        );
+
+        const fileNameStyle = isProtectedSave
+            ? 'style="color:#ff4444;text-shadow:0 0 8px rgba(255,68,68,0.65);" title="Protected save file"'
+            : '';
+
         const details = hasSave
-            ? `${row.fileName}<br><small>${row.gameType || "SAVE"} • ${row.timestamp || "Unknown time"}</small>`
+            ? `<span ${fileNameStyle}>${row.fileName}</span><br><small>${row.gameType || "SAVE"} • ${row.timestamp || "Unknown time"}</small>`
             : `<span style="color:#777;">Empty slot</span>`;
 
         div.innerHTML = `
