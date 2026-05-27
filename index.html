@@ -957,6 +957,8 @@ button.danger {
         <br>
         <button onclick="openAchievements()"onmouseenter="setMenuDesc('Achievements: Opens a list of achievements you\'ve earned.')" onmouseleave="clearMenuDesc()">🏆 ACHIEVEMENTS</button>
         <br>
+        <button onclick="openSaveSlotPopup('load')" style="background:#00aaff; color:#000; font-weight:bold;" onmouseenter="setMenuDesc('Save Slots: Opens your in-game IndexedDB save files, including import and export.')" onmouseleave="clearMenuDesc()">💾 SAVE SLOTS</button>
+        <br>
         <br>
         <button id="autosaveToggle" onclick="toggleAutosave()" onmouseenter="setMenuDesc('Autosave: Creates a save file every time you complete a level in Puzzle Mode.')" onmouseleave="clearMenuDesc()">💾 Autosave: OFF</button>
         <button id="soundToggle" onclick="toggleSound()" onmouseenter="setMenuDesc('Sound: Toggles the in game\'s sound. Note: SFX Tester will not play any sound effects when the sound is off.')" onmouseleave="clearMenuDesc()">🔊 Sound: ON</button>
@@ -1036,7 +1038,7 @@ button.danger {
         <div style="margin-bottom: 10px;">
             <button class="back-btn" onclick="exitToMenu()">⬅️ MENU</button>
             <button onclick="openCustomSavePopup()" style="background:#4CAF50;">SAVE FILE</button>
-            <button onclick="handleLoadClick()" style="background:#2196F3;">LOAD</button>
+            <button onclick="handleLoadClick()" style="background:#2196F3;">LOAD FILE</button>
             <button onclick="clearEditor()" style="background:#cc3300;">CLEAR ALL</button>
         </div>
         <div style="background: #333; padding: 10px; border-radius: 5px; display: inline-block;">
