@@ -768,6 +768,21 @@ canvas {
     opacity: 0.85;
 }
 
+.achievement-popup-icon {
+    font-size: 34px;
+    line-height: 1;
+    margin-bottom: 6px;
+    filter: drop-shadow(0 0 8px rgba(255,255,255,0.7));
+}
+
+.achievement-queue-text {
+    display: none;
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: bold;
+    opacity: 0.9;
+}
+
 .hidden {
     display: none;
 }
@@ -812,6 +827,13 @@ canvas {
     background: linear-gradient(135deg, #00ffd5, #037bfc);
     color: #000;
     opacity: 1;
+}
+
+.achievement-row-icon {
+    display: inline-block;
+    min-width: 24px;
+    margin-right: 4px;
+    text-align: center;
 }
 
 .achievement-title {
@@ -913,7 +935,7 @@ button.danger {
     margin-top:12px;
     text-shadow:0 0 20px red;
 }
-#unsupportedBrowserMessage hint{
+#unsupportedBrowserMessage hint{ 
     margin-top:10px;
     text-shadow:0 0 20px red;
 }
@@ -930,9 +952,11 @@ button.danger {
 </div>
 <body oncontextmenu="return false;">
 <div id="achievementPopup" class="achievement-popup hidden">
+    <div class="achievement-popup-icon">🏆</div>
     <div class="achievement-title">ACHIEVEMENT UNLOCKED!</div>
     <div class="achievement-name"></div>
     <div class="achievement-desc"></div>
+    <div class="achievement-queue-text"></div>
 </div>
 <div class="menu" id="mainMenu" style="display: none;">
         <h1>SK's Bubble Shooter</h1>
@@ -1582,6 +1606,36 @@ FORGIVEN: {
     description: "Plead the unknown voice to unban you from using debug commands."
 },
 };
+
+const ACHIEVEMENT_ICONS = {
+    FIRST_WIN: "🎉",
+    MAX_LIVES: "❤️",
+    PERFECT_CLEAR: "✨",
+    CLUTCH_WIN: "😮",
+    CAMPAIGN_COMPLETE: "🏆",
+    DEBUG_USED: "💻",
+    CUSTOM_LEVEL_COMPLETED: "🛠️",
+    WIN_SCREEN_DELAY: "⏰",
+    HURRY_TIMER_SHOT: "⏱️",
+    BUBBLE_CONVERTER: "🔄",
+    SECRET_FINDER: "❔",
+    PROVOKER: "🚫",
+    FORGIVEN: "🙏"
+};
+
+function getAchievementIcon(id, achievement) {
+    if (ACHIEVEMENT_ICONS[id]) return ACHIEVEMENT_ICONS[id];
+    if (id.startsWith("LEVEL_")) return "⭐";
+    if (id.startsWith("SCORE_")) return "💰";
+    if (id.startsWith("STREAK_")) return "🔥";
+    if (id.startsWith("POP_")) return "🫧";
+    if (id.startsWith("DROP_")) return "⬇️";
+    if (id.startsWith("DAILY_")) return "🧩";
+    if (achievement?.stat === "score") return "💰";
+    if (achievement?.stat === "totalStreak") return "🔥";
+    return "🏅";
+}
+
 function spawnAchievementBurst() {
     const burst = document.createElement("div");
     burst.className = "achievement-burst";
@@ -1619,6 +1673,8 @@ function spawnAchievementBurst() {
 // 🏆 Achievement popup queue
 const achievementQueue = [];
 let achievementPopupActive = false;
+let achievementBatchIndex = 0;
+let achievementBatchTotal = 0;
 function checkProgressAchievements() {
     for (const id in ACHIEVEMENTS) {
         const a = ACHIEVEMENTS[id];
@@ -1665,7 +1721,7 @@ function unlockAchievement(id) {
     saveAchievements();
 
     const a = ACHIEVEMENTS[id];
-    if (a) showAchievementPopup(a.title, a.description);
+    if (a) showAchievementPopup(a.title, a.description, getAchievementIcon(id, a));
 }
 function getAchievementTimestamp() {
     const d = new Date();
@@ -1711,21 +1767,64 @@ function getAchievementTimestamp() {
 }
 let achievementTimer = null;
 
-function showAchievementPopup(title, description) {
-    achievementQueue.push({ title, description });
+function showAchievementPopup(title, description, icon = "🏆") {
+    const queueWasEmpty = achievementQueue.length === 0 && !achievementPopupActive;
+
+    achievementQueue.push({ title, description, icon });
+
+    if (queueWasEmpty) {
+        achievementBatchIndex = 0;
+        achievementBatchTotal = achievementQueue.length;
+    } else {
+        // Add this unlock to the current popup batch, even if another popup is already showing.
+        achievementBatchTotal++;
+    }
+
+    // ✅ If another achievement unlocks while the first popup is already showing,
+    // update the visible text right away so it can show 1/2 instead of hiding it.
+    updateCurrentAchievementQueueText();
+
     processAchievementQueue();
 }
+
+function updateCurrentAchievementQueueText() {
+    const popup = document.getElementById("achievementPopup");
+    if (!popup) return;
+
+    const queueText = popup.querySelector(".achievement-queue-text");
+    if (!queueText) return;
+
+    if (achievementBatchTotal > 1 && achievementBatchIndex > 0) {
+        queueText.textContent = `You have also earned ${achievementBatchIndex}/${achievementBatchTotal} achievements.`;
+        queueText.style.display = "block";
+    } else {
+        queueText.textContent = "";
+        queueText.style.display = "none";
+    }
+}
+
 function processAchievementQueue() {
     if (achievementPopupActive) return;
-    if (achievementQueue.length === 0) return;
+
+    if (achievementQueue.length === 0) {
+        achievementBatchIndex = 0;
+        achievementBatchTotal = 0;
+        return;
+    }
 
     achievementPopupActive = true;
+    achievementBatchIndex++;
 
-    const { title, description } = achievementQueue.shift();
+    const { title, description, icon } = achievementQueue.shift();
     const popup = document.getElementById("achievementPopup");
+    const queueText = popup.querySelector(".achievement-queue-text");
 
+    popup.querySelector(".achievement-popup-icon").textContent = icon;
     popup.querySelector(".achievement-name").textContent = title;
     popup.querySelector(".achievement-desc").textContent = description;
+
+    updateCurrentAchievementQueueText();
+
 spawnAchievementBurst();
 sounds.play("achievement_complete")
     popup.classList.remove("hidden");
@@ -1803,9 +1902,11 @@ document.getElementById("achievementCount").innerText =
             "achievement-row" +
             (unlocked ? " unlocked" : "");
 
+        const icon = getAchievementIcon(id, a);
+
         row.innerHTML = `
             <div class="achievement-title">
-                ${unlocked ? "✅" : "🔒"} ${title}
+                <span class="achievement-row-icon">${unlocked ? "✅" : "🔒"}</span> <span class="achievement-row-icon">${icon}</span> ${title}
             </div>
             <div class="achievement-desc">
                 ${a.description}
@@ -3137,7 +3238,7 @@ function updateAimButton() {
     btn.style.borderColor = aimEnabled ? "#00ffcc" : "#555";
 }
 
-const sounds = {
+const sounds = { // Webkit SFX
     play(type) {
         if (!soundEnabled) return;
         if (audioCtx.state === 'suspended') audioCtx.resume();
