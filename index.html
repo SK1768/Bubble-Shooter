@@ -6893,7 +6893,7 @@ function updateCampaignTimerRing() {
     }
 
     if (inner) {
-        inner.innerText = secondsLeft <= -1 ? "TIME'S UP!" : `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        inner.innerText = campaignTimer <= -1 ? "TIME'S UP!" : `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
 
     setCircularMeterFill('campaignTimerFill', percentLeft, timerColor);
