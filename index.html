@@ -1680,12 +1680,7 @@ function checkProgressAchievements() {
         const a = ACHIEVEMENTS[id];
         if (!a.stat || unlockedAchievements[id]) continue;
 
-       const value =
-    a.stat === "level"
-        ? level
-        : a.stat === "score"
-            ? score
-            : stats[a.stat];
+       const value = getAchievementStatValue(a.stat);
 
         if (value >= a.goal) {
             unlockAchievement(id);
@@ -1876,12 +1871,7 @@ document.getElementById("achievementCount").innerText =
         let value = null;
 
         if (a.stat) {
-            value =
-                a.stat === "level"
-                    ? level
-                    : a.stat === "score"
-                        ? score
-                        : stats[a.stat];
+            value = getAchievementStatValue(a.stat);
         }
 
         if (a.stat && !unlocked) {
@@ -2542,11 +2532,36 @@ function hideHexOverlay() {
 
 function loadStats() {
     const saved = localStorage.getItem("bubbleShooterStats");
-    return saved ? JSON.parse(saved) : { ...DEFAULT_STATS };
+
+    try {
+        return saved
+            ? { ...DEFAULT_STATS, ...JSON.parse(saved) }
+            : { ...DEFAULT_STATS };
+    } catch (e) {
+        console.warn("Could not load saved stats, using defaults.", e);
+        return { ...DEFAULT_STATS };
+    }
 }
 
 function saveStats() {
+    if (typeof score !== "undefined" && Number(score) > (Number(stats.highScore) || 0)) {
+        stats.highScore = Number(score);
+    }
+
     localStorage.setItem("bubbleShooterStats", JSON.stringify(stats));
+}
+
+function getAchievementStatValue(statName) {
+    if (statName === "level") return level;
+
+    // Score achievement progress must use the saved high score too.
+    // Otherwise the progress display goes back to 0 after reloading the HTML,
+    // because the normal gameplay score variable starts at 0 every page load.
+    if (statName === "score") {
+        return Math.max(Number(score) || 0, Number(stats.highScore) || 0);
+    }
+
+    return Number(stats[statName]) || 0;
 }
 function logInfo(msg) {
     console.log(`%c${msg}`,
