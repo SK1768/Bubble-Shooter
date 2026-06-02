@@ -1504,7 +1504,7 @@ const ACHIEVEMENTS = {
 
     PERFECT_CLEAR: {
         title: "Clean Sweep",
-        description: "Clear a level with only 1 bubble left."
+        description: "Clear a level with only 1 bubble left or beat a campaign level as soon as the timer hits 0."
     },
 
     CLUTCH_WIN: {
@@ -1536,6 +1536,17 @@ const ACHIEVEMENTS = {
 	title: "Bubble Converter",
 		description: "Convert one of the colourless bubbles to your representing bubble colour by hitting it with your bubble."
 	},
+
+    // ❔ COLOURLESS BUBBLE CONVERSION TIERS
+    COLORLESS_CONVERT_10: { title: "Colourless Starter", description: "Convert 10 colourless bubbles.", stat: "colourlessBubblesConverted", goal: 10 },
+    COLORLESS_CONVERT_100: { title: "Colourless Cleaner", description: "Convert 100 colourless bubbles.", stat: "colourlessBubblesConverted", goal: 100 },
+    COLORLESS_CONVERT_1K: { title: "Colourless Crusher", description: "Convert 1,000 colourless bubbles.", stat: "colourlessBubblesConverted", goal: 1_000 },
+    COLORLESS_CONVERT_10K: { title: "Colourless Storm", description: "Convert 10,000 colourless bubbles.", stat: "colourlessBubblesConverted", goal: 10_000 },
+    COLORLESS_CONVERT_100K: { title: "Colourless Wipeout", description: "Convert 100,000 colourless bubbles.", stat: "colourlessBubblesConverted", goal: 100_000 },
+    COLORLESS_CONVERT_1M: { title: "Colourless Millionaire", description: "Convert 1,000,000 colourless bubbles.", stat: "colourlessBubblesConverted", goal: 1_000_000 },
+    COLORLESS_CONVERT_10M: { title: "Colourless Overlord", description: "Convert 10,000,000 colourless bubbles.", stat: "colourlessBubblesConverted", goal: 10_000_000 },
+    COLORLESS_CONVERT_100M: { title: "Colourless Universe", description: "Convert 100,000,000 colourless bubbles.", stat: "colourlessBubblesConverted", goal: 100_000_000 },
+    COLORLESS_CONVERT_1B: { title: "Colourless God", description: "Convert 1,000,000,000 colourless bubbles.", stat: "colourlessBubblesConverted", goal: 1_000_000_000 },
 	
     // 💰 SCORE TIERS
 SCORE_1K:   { title: "Pocket Change", description: "Reach 1,000 score.", stat: "score", goal: 1_000 },
@@ -1630,6 +1641,7 @@ function getAchievementIcon(id, achievement) {
     if (id.startsWith("STREAK_")) return "🔥";
     if (id.startsWith("POP_")) return "🫧";
     if (id.startsWith("DROP_")) return "⬇️";
+    if (id.startsWith("COLORLESS_CONVERT_")) return "🔄";
     if (id.startsWith("DAILY_")) return "🧩";
     if (achievement?.stat === "score") return "💰";
     if (achievement?.stat === "totalStreak") return "🔥";
@@ -1957,6 +1969,7 @@ const DEFAULT_STATS = {
     bubblesSwapped: 0,
 	bubblesPopped: 0,
 	bubblesDropped: 0,
+    colourlessBubblesConverted: 0,
 
     totalStreak: 0,
     perfectStreak: 0,
@@ -3099,7 +3112,8 @@ function clearMenuDesc() {
     Bubbles Shot: <b>${fmt(stats.bubblesShot)}</b><br>
     Bubbles Swapped: <b>${fmt(stats.bubblesSwapped)}</b><br>
 	Bubbles Popped: <b>${fmt(stats.bubblesPopped)}</b><br>
-	Bubbles Dropped: <b>${fmt(stats.bubblesDropped)}</b><br><br>
+	Bubbles Dropped: <b>${fmt(stats.bubblesDropped)}</b><br>
+    Colourless Bubbles Converted: <b>${fmt(stats.colourlessBubblesConverted || 0)}</b><br><br>
 
     Max Streak: <b>${fmt(stats.totalStreak)}</b><br>
     Max Perfect Streak: <b>${fmt(stats.perfectStreak)}</b><br><br>
@@ -3531,7 +3545,7 @@ let mode = 'puzzle', score = 0, level = 1, angle = 0, mouseInside = false;
 let bubbles = [], fallingBubbles = [], projectiles = [], particles = [], floatingScores = [], confetti = [];
 let currentBall = '', nextBall = '', ammo = 0, initialBubbleCount = 0;
 let streakCount = 1, streakTimer = 0, streakFrozen = false;
-const STREAK_DURATION = 180;
+const STREAK_DURATION = 6;
 let gameOver = false, gameWin = false, gameRunning = false, isPaused = false;
 let gameOverReason = ""; 
 let animationId = null, isCustomMode = false, isPlaytesting = false, customLevelSnapshot = [];
@@ -5124,7 +5138,7 @@ lastClearWasPerfect = ammo === 0 || campaignTimer <= -1;
 if (
     lastClearWasPerfect &&
     mode !== "custom" &&
-    !isPlaytesting && !isDailyPuzzle && !isCampaignMode
+    !isPlaytesting && !isDailyPuzzle
 ) {
     perfectStreak++;
     stats.levelsCompletedPerfectly++;
@@ -5132,7 +5146,7 @@ if (
     const bonusScore = PERFECT_BASE_SCORE * perfectStreak;
     score += bonusScore;
     ammo += PERFECT_AMMO_BONUS;
-    lives += 10
+    lives += 9
 } else {
     perfectStreak = 0;
 }
@@ -5540,7 +5554,14 @@ while (convertedThisFrame < CONVERSIONS_PER_FRAME && conversionQueue.length > 0)
         life: 1.0
     });
     convertedThisFrame++;
+    stats.colourlessBubblesConverted = (Number(stats.colourlessBubblesConverted) || 0) + 1;
+    saveStats();
 	unlockAchievement("BUBBLE_CONVERTER");
+    checkProgressAchievements();
+}
+
+if (convertedThisFrame > 0) {
+    updateStatsBoard();
 }
 
 if (conversionQueue.length === 0) {
@@ -5753,7 +5774,7 @@ if (inner) {
     updatePanicState();
     if (!gameOver && !gameWin && !winPending) {
         if (streakTimer > 0 && !streakFrozen) { 
-            streakTimer--; 
+            streakTimer -= 0.01; 
             if (streakTimer <= 0) streakCount = 1; 
         }
         const streakPct = (streakTimer / STREAK_DURATION) * 100;
@@ -5762,7 +5783,7 @@ const streakTimerText = document.getElementById("streakTimerText");
 const shownStreakPct = streakCount > 1 ? Math.max(0, streakPct) : 0;
 
 setCircularMeterFill("streakFill", shownStreakPct, "#00e5ff");
-streakTimerText.innerText = streakCount > 1 ? Math.ceil(streakTimer) : "0";
+streakTimerText.innerText = streakCount > 1 ? `${streakTimer.toFixed(1)}s` : "0.0s";
 streakTimerText.style.display = "flex";
 
         projectiles.forEach((p, i) => {
