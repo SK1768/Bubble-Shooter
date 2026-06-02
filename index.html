@@ -395,6 +395,7 @@ body {
             .lives-wrapper,
             .progress-wrapper,
             .streak-wrapper,
+            .hurry-wrapper,
             .campaign-wrapper {
                 width: 96px;
                 display: flex;
@@ -430,12 +431,18 @@ body {
                 color: #00e5ff;
             }
 
+            .hurry-wrapper,
             .campaign-wrapper {
                 display: none;
             }
 
+            .hurry-wrapper.is-visible,
             .campaign-wrapper.is-visible {
                 display: flex;
+            }
+
+            .hurry-wrapper .meter-label {
+                color: var(--hurry-timer-color, #66ff00);
             }
 
             .campaign-wrapper .meter-label {
@@ -445,6 +452,7 @@ body {
             #livesContainer,
             #progressContainer,
             #streakContainer,
+            #hurryTimerContainer,
             #campaignTimerContainer {
                 width: 82px;
                 height: 82px;
@@ -503,6 +511,11 @@ body {
                 transition: stroke-dashoffset 0.12s linear;
             }
 
+            #hurryTimerFill {
+                stroke: #66ff00;
+                filter: drop-shadow(0 0 7px #66ff00);
+            }
+
             #campaignTimerFill {
                 stroke: #66ff00;
                 filter: drop-shadow(0 0 7px #66ff00);
@@ -522,6 +535,7 @@ body {
             #livesDisplay,
             #percentText,
             #streakTimerText,
+            #hurryTimerDisplay,
             #campaignTimerDisplay {
                 position: absolute;
                 inset: 0;
@@ -557,11 +571,23 @@ body {
                 text-shadow: 0 0 8px #00e5ff;
             }
 
+            #hurryTimerDisplay {
+                color: var(--hurry-timer-color, #66ff00);
+                text-shadow: 0 0 8px var(--hurry-timer-color, #66ff00);
+            }
+
+            #hurryTimerDisplay.full-hurry-seconds {
+                white-space: normal;
+                font-size: 8px;
+                line-height: 1.1;
+            }
+
             #campaignTimerDisplay {
                 color: var(--campaign-timer-color, #66ff00);
                 text-shadow: 0 0 8px var(--campaign-timer-color, #66ff00);
             }
 
+            #hurryTimerContainer.timer-danger,
             #campaignTimerContainer.timer-danger {
                 animation: campaignRingPulse 0.6s ease-in-out infinite;
             }
@@ -1132,6 +1158,21 @@ button.danger {
                         <span id="streakTimerText">0</span>
                     </div>
                     <div class="meter-label">STREAK TIMER</div>
+                </div>
+
+                <div class="hurry-wrapper" id="hurryTimerWrapper">
+                    <div id="hurryTimerContainer">
+                        <svg class="meter-svg" viewBox="0 0 80 80" aria-hidden="true">
+                            <circle class="meter-track" cx="40" cy="40" r="30"></circle>
+                            <circle id="hurryTimerFill" class="meter-fill" cx="40" cy="40" r="30"
+                                    transform="rotate(-90 40 40)"></circle>
+                        </svg>
+                        <div class="meter-core"></div>
+                        <span id="hurryTimerDisplay">
+                            <span id="hurryTimerInner">20s</span>
+                        </span>
+                    </div>
+                    <div class="meter-label">HURRY TIMER</div>
                 </div>
 
                 <div class="campaign-wrapper" id="campaignTimerWrapper">
@@ -2696,6 +2737,8 @@ let hurryWarningActive = false;
 let hurryWarningSeconds = null;
 let hurryMode =
     localStorage.getItem("bubbleHurryMode") === "true";
+let showFullHurrySeconds =
+    localStorage.getItem("showFullHurrySeconds") === "true";
 let isFileDialogOpen = false;
 let wasPausedBeforeFileDialog = false;
 let hurryTimer = null;
@@ -3069,6 +3112,14 @@ function toggleHurryMode() {
     localStorage.setItem("bubbleHurryMode", hurryMode);
     updateHurryButton();
     updateFPSWarning();
+
+    if (hurryMode) {
+        resetHurryTimer();
+        startHurryTimer();
+    } else {
+        stopHurryTimer();
+        hideHurryTimerRing();
+    }
 }
 
 function updateHurryButton() {
@@ -4052,6 +4103,18 @@ else if (cmd === '!nofallingbubblesallowed') {
     alert(
         `No falling bubbles allowed ${noFallingBubblesAllowed ? "ENABLED" : "DISABLED"}`
     );
+}
+else if (cmd === '!showfullhurryseconds') {
+    if (arg !== 'true' && arg !== 'false') {
+        alert("Usage: !showfullhurryseconds true/false");
+        return;
+    }
+
+    showFullHurrySeconds = (arg === 'true');
+    localStorage.setItem("showFullHurrySeconds", showFullHurrySeconds);
+    updateHurryTimerRing();
+
+    logInfo(`Full hurry seconds display ${showFullHurrySeconds ? "ENABLED" : "DISABLED"}.`);
 }
 else if (cmd === '!showfps') {
     if (arg !== 'true' && arg !== 'false') {
@@ -5877,21 +5940,31 @@ if (p.y < RADIUS) {
 let hurryAccumulator = 0;
 let hurryAccumulator1 = 0;
 function startHurryTimer() {
-    if (!hurryMode || !gameRunning) return;
-    if (hurryRunning) return;
+    if (!hurryMode || !gameRunning) {
+        hideHurryTimerRing();
+        return;
+    }
+    if (hurryRunning) {
+        updateHurryTimerRing();
+        return;
+    }
     hurryRunning = true;
     hurryPaused = false;
     hurryAccumulator = 0; // reset accumulator
-    hurryTick();
+    updateHurryTimerRing();
 }
 
 function pauseHurryTimer() {
     hurryPaused = true;
     hurryRunning = false;
+    updateHurryTimerRing();
 }
 
 function resumeHurryTimer() {
-    if (!hurryMode || !gameRunning) return;
+    if (!hurryMode || !gameRunning) {
+        hideHurryTimerRing();
+        return;
+    }
     hurryPaused = false;
     startHurryTimer();
 }
@@ -5903,6 +5976,7 @@ function stopHurryTimer() {
     }
     hurryRunning = false;
     hurryPaused = false;
+    hideHurryTimerRing();
 }
 
 function resetHurryTimer() {
@@ -5911,15 +5985,22 @@ function resetHurryTimer() {
     hurryWarningSeconds = null;
 	hurryAccumulator = 0;
 	hurryAccumulator1 = 0;
+    updateHurryTimerRing();
 
     if (hurryMode && gameRunning && !isPaused) {
         resumeHurryTimer();
     }
 }
 
-function hurryTick(dt) {
-    if (!hurryRunning || hurryPaused || isLoading || !hurryMode || !gameRunning || isPaused || projectiles.length === 1 || gameOver || gameWin || winPending || conversionQueue.length > 0) return;
-    hurryAccumulator += dt;
+function hurryTick(dt = 0) {
+    if (!hurryRunning || hurryPaused || isLoading || !hurryMode || !gameRunning || isPaused || projectiles.length === 1 || gameOver || gameWin || winPending || conversionQueue.length > 0) {
+        updateHurryTimerRing();
+        return;
+    }
+
+    const safeDt = Number.isFinite(dt) ? dt : 0;
+
+    hurryAccumulator += safeDt;
     if (hurryAccumulator >= 1000) {
         hurryIdleSeconds++;
         hurryAccumulator = 0;
@@ -5927,7 +6008,7 @@ function hurryTick(dt) {
     
     logInfo(`${hurryIdleSeconds} ${hurryWarningSeconds} ${hurryAccumulator} ${hurryAccumulator1}`)
     // ⚠️ warning phase
-    if (hurryIdleSeconds === 10) {
+    if (hurryIdleSeconds === 10 && !hurryWarningActive) {
         hurryWarningActive = true;
         hurryWarningSeconds = 10;
         sounds.play("tick");
@@ -5936,7 +6017,7 @@ function hurryTick(dt) {
     
     // ⏱️ countdown
     if (hurryWarningActive && hurryWarningSeconds !== null) {
-        hurryAccumulator1 += dt;
+        hurryAccumulator1 += safeDt;
         if (hurryAccumulator1 >= 1000) {
         hurryWarningSeconds--;
         sounds.play("tick");
@@ -5946,6 +6027,8 @@ function hurryTick(dt) {
             hurryWarningSeconds = 0;
         }
     }
+
+    updateHurryTimerRing();
 
     // 💥 auto shoot
     if (hurryIdleSeconds >= 20.9) {
@@ -6874,6 +6957,89 @@ function endDailyPuzzle(completed) {
         suppressAutosaveOnce = true
     }
 }
+function getHurryTimerSecondsLeft() {
+    const idlePart = Number(hurryIdleSeconds) || 0;
+    const accumulatorPart = Math.max(0, Number(hurryAccumulator) || 0) / 1000;
+    return Math.max(0, 20 - idlePart - accumulatorPart);
+}
+
+function updateHurryTimerRing() {
+    const wrapper = document.getElementById('hurryTimerWrapper');
+    const timerContainer = document.getElementById('hurryTimerContainer');
+    const timerText = document.getElementById('hurryTimerDisplay');
+    const inner = document.getElementById('hurryTimerInner');
+
+    if (!hurryMode || !gameRunning || isCustomMode) {
+        hideHurryTimerRing();
+        return;
+    }
+
+    const secondsLeftFloat = getHurryTimerSecondsLeft();
+    const secondsLeft = Math.max(0, Math.ceil(secondsLeftFloat));
+    const percentLeft = Math.max(0, Math.min(100, (secondsLeftFloat / 20) * 100));
+
+    let timerColor = '#66ff00';
+    if (secondsLeft <= 10) {
+        timerColor = '#ff3333';
+    } else if (secondsLeft <= 15) {
+        timerColor = '#ffcc00';
+    }
+
+    document.documentElement.style.setProperty('--hurry-timer-color', timerColor);
+
+    if (wrapper) wrapper.classList.add('is-visible');
+
+    if (timerContainer) {
+        timerContainer.style.display = 'block';
+        timerContainer.classList.toggle(
+            'timer-danger',
+            secondsLeft <= 10 && !isPaused && !gameOver && !gameWin && !winPending
+        );
+    }
+
+    if (timerText) {
+        timerText.style.display = 'flex';
+        timerText.style.color = timerColor;
+        timerText.style.textShadow = `0 0 10px ${timerColor}`;
+        timerText.classList.toggle('full-hurry-seconds', showFullHurrySeconds);
+    }
+
+    if (inner) {
+        if (showFullHurrySeconds) {
+            inner.innerHTML =
+                `IDLE: ${hurryIdleSeconds}s<br>` +
+                `WARNSEC: ${hurryWarningSeconds ?? 'null'}<br>` +
+                `ACC0: ${Math.round(Number(hurryAccumulator) || 0)}<br>` +
+                `ACC1: ${Math.round(Number(hurryAccumulator1) || 0)}`;
+        } else {
+            inner.textContent = `${secondsLeft}s`;
+        }
+    }
+
+    setCircularMeterFill('hurryTimerFill', percentLeft, timerColor);
+}
+
+function hideHurryTimerRing() {
+    const wrapper = document.getElementById('hurryTimerWrapper');
+    const timerContainer = document.getElementById('hurryTimerContainer');
+    const timerText = document.getElementById('hurryTimerDisplay');
+
+    if (wrapper) wrapper.classList.remove('is-visible');
+
+    if (timerContainer) {
+        timerContainer.style.display = 'none';
+        timerContainer.classList.remove('timer-danger');
+    }
+
+    if (timerText) {
+        timerText.style.display = 'none';
+        timerText.classList.remove('full-hurry-seconds');
+    }
+
+    document.documentElement.style.setProperty('--hurry-timer-color', '#66ff00');
+    setCircularMeterFill('hurryTimerFill', 0, '#66ff00');
+}
+
 function updateCampaignTimerRing() {
     const wrapper = document.getElementById('campaignTimerWrapper');
     const timerContainer = document.getElementById('campaignTimerContainer');
@@ -7024,6 +7190,7 @@ mouseY = canvas.height - 200;
     document.getElementById('livesDisplay').style.display = 'flex';
     document.getElementById('percentText').style.display = 'flex';
     document.getElementById('streakTimerText').style.display = 'flex';
+    updateHurryTimerRing();
     canvas.style.display = 'block';
     
     // Generate new level layout
@@ -7082,6 +7249,7 @@ document.getElementById('livesDisplay').style.display = 'none';
     document.getElementById('percentText').style.display = 'none';
 document.getElementById('streakContainer').style.display = 'none';
 document.getElementById('streakTimerText').style.display = 'none';
+hideHurryTimerRing();
     canvas.style.display = 'block';
     updatePaletteUI();
     if (animationId) cancelAnimationFrame(animationId);
@@ -7170,6 +7338,7 @@ setBrowserTitle("▶️ SK's Bubble Shooter — Playtesting");
     document.getElementById('livesDisplay').style.display = 'flex';
     document.getElementById('percentText').style.display = 'flex';
     document.getElementById('streakTimerText').style.display = 'flex';
+    updateHurryTimerRing();
 
     initializeAmmo("customPlaytest");
 
