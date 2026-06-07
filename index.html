@@ -7959,7 +7959,7 @@ async function openSaveSlotPopup(action = "load", saveData = null) {
 
     title.textContent = action === "save" ? "💾 Save Files" : "📂 Load Save File";
     note.textContent = action === "save"
-        ? "Press ADD on save slots 1-10 to save inside the game. The autosave slot is only used by autosave."
+        ? "Press SAVE on save slots 1-10 to save inside the game. The autosave slot is only used by autosave."
         : "Press LOAD to load a saved file, IMPORT to add a .bubblesav from your device, EXPORT to download a backup, or DELETE to remove it.";
 
     popup.style.display = "flex";
@@ -8018,7 +8018,7 @@ async function renderSaveSlotPopup() {
                 ${details}
             </div>
             <div class="save-slot-buttons">
-                <button data-action="add" ${(savePopupMode !== "save" || slotId === "autosave") ? "disabled" : ""}>ADD</button>
+                <button data-action="add" ${(savePopupMode !== "save" || slotId === "autosave") ? "disabled" : ""}>SAVE</button>
                 <button data-action="load" ${!hasSave ? "disabled" : ""}>LOAD</button>
                 <button data-action="import" ${slotId === "autosave" ? "disabled" : ""}>IMPORT</button>
                 <button data-action="export" ${!hasSave ? "disabled" : ""}>EXPORT</button>
