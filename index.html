@@ -965,7 +965,108 @@ button.danger {
     margin-top:10px;
     text-shadow:0 0 20px red;
 }
-    </style>
+    
+
+/* ⚠️ Full-screen game error message */
+#gameErrorScreen {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+    background:
+        radial-gradient(circle at center, rgba(120, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.98) 62%),
+        #000;
+    color: #ffdddd;
+    z-index: 2147483647;
+    font-family: 'Storopia', sans-serif;
+    text-align: center;
+}
+
+#gameErrorScreen.show {
+    display: flex;
+}
+
+.game-error-box {
+    width: min(820px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+    padding: 24px;
+    border: 3px solid #ff3333;
+    border-radius: 18px;
+    background: rgba(12, 0, 0, 0.96);
+    box-shadow:
+        0 0 18px rgba(255, 0, 0, 0.95),
+        0 0 45px rgba(255, 0, 0, 0.65),
+        inset 0 0 28px rgba(255, 0, 0, 0.25);
+    animation: gameErrorGlow 1.1s ease-in-out infinite alternate;
+}
+
+.game-error-icon {
+    font-size: 72px;
+    line-height: 1;
+    margin-bottom: 10px;
+    filter: drop-shadow(0 0 16px #ff0000);
+}
+
+.game-error-title {
+    margin: 0 0 18px;
+    color: #ff4444;
+    font-size: clamp(24px, 5vw, 44px);
+    text-shadow:
+        0 0 10px #ff0000,
+        0 0 24px #ff0000;
+}
+
+.game-error-section-title {
+    margin-top: 18px;
+    color: #ff7777;
+    font-size: 16px;
+    letter-spacing: 0.12em;
+    text-shadow: 0 0 10px #ff0000;
+}
+
+.game-error-text,
+.game-error-stack {
+    margin: 8px auto 0;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.72);
+    border: 1px solid rgba(255, 70, 70, 0.8);
+    border-radius: 10px;
+    color: #ffecec;
+    text-align: left;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: Consolas, Monaco, monospace;
+    font-size: 13px;
+    line-height: 1.45;
+    box-shadow: inset 0 0 12px rgba(255, 0, 0, 0.18);
+}
+
+.game-error-restart {
+    margin-top: 20px;
+    color: #ffffff;
+    font-size: 17px;
+    text-shadow: 0 0 12px #ff0000;
+}
+
+@keyframes gameErrorGlow {
+    from {
+        box-shadow:
+            0 0 14px rgba(255, 0, 0, 0.75),
+            0 0 34px rgba(255, 0, 0, 0.45),
+            inset 0 0 22px rgba(255, 0, 0, 0.18);
+    }
+    to {
+        box-shadow:
+            0 0 24px rgba(255, 0, 0, 1),
+            0 0 70px rgba(255, 0, 0, 0.8),
+            inset 0 0 34px rgba(255, 0, 0, 0.32);
+    }
+}
+</style>
 </head>
 <div id="unsupportedBrowserMessage">
     <h1>SK's Bubble Shooter</h1>
@@ -977,6 +1078,25 @@ button.danger {
     <hint>(If this text fades away then your browser supports JavaScript / HTML5 and you can play the game.)</hint>
 </div>
 <body oncontextmenu="return false;">
+
+<div id="gameErrorScreen" role="alert" aria-live="assertive">
+    <div class="game-error-box">
+        <div class="game-error-icon">⚠️</div>
+        <h1 class="game-error-title">Oh no! An error has occurred! :(</h1>
+
+        <div class="game-error-section-title">---ERROR TYPE---</div>
+        <div id="errorTypeText" class="game-error-text">UnknownError</div>
+
+        <div class="game-error-section-title">---CAUSE OF THE ERROR---</div>
+        <div id="errorMessage" class="game-error-text">No error message was provided.</div>
+
+        <div class="game-error-section-title">---STACK TRACE---</div>
+        <pre id="stackTraceText" class="game-error-stack">No stack trace was provided.</pre>
+
+        <div class="game-error-restart">Press the refresh button on your browser to restart the game.</div>
+    </div>
+</div>
+
 <div id="achievementPopup" class="achievement-popup hidden">
     <div class="achievement-popup-icon">🏆</div>
     <div class="achievement-title">ACHIEVEMENT UNLOCKED!</div>
@@ -1265,6 +1385,75 @@ button.danger {
     </div>
 
     <input type="file" id="fileInput" accept=".bubblesav" onchange="loadGame(event)">
+
+
+<script>
+// ======================
+// FULL GAME ERROR SCREEN
+// ======================
+(function () {
+    let errorScreenVisible = false;
+
+    function asText(value, fallback) {
+        if (value === undefined || value === null || value === "") return fallback;
+        try {
+            if (typeof value === "string") return value;
+            if (value instanceof Error) return value.message || fallback;
+            return JSON.stringify(value, null, 2) || String(value);
+        } catch (e) {
+            return String(value);
+        }
+    }
+
+    function showGameError(error, forcedType) {
+        if (errorScreenVisible) return;
+        errorScreenVisible = true;
+
+        const screen = document.getElementById("gameErrorScreen");
+        const errorTypeText = document.getElementById("errorTypeText");
+        const errorMessage = document.getElementById("errorMessage");
+        const stackTraceText = document.getElementById("stackTraceText");
+
+        if (!screen || !errorTypeText || !errorMessage || !stackTraceText) {
+            alert("Oh no! An error has occurred! :(\n\n" + asText(error, "Unknown error"));
+            return;
+        }
+
+        const type = forcedType || error?.name || typeof error || "UnknownError";
+        const message = error?.message || asText(error, "No error message was provided.");
+        const stack = error?.stack || "No stack trace was provided.";
+
+        errorTypeText.textContent = type;
+        errorMessage.textContent = message;
+        stackTraceText.textContent = stack;
+
+        screen.classList.add("show");
+
+        // Stop the game from continuing underneath the crash screen as much as possible.
+        try { if (typeof isPaused !== "undefined") isPaused = true; } catch (e) {}
+        try { if (typeof isGameRunning !== "undefined") isGameRunning = false; } catch (e) {}
+        try { if (typeof isPlaying !== "undefined") isPlaying = false; } catch (e) {}
+        try { if (typeof stopMusic === "function") stopMusic(); } catch (e) {}
+    }
+
+    window.showGameError = showGameError;
+
+    window.addEventListener("error", function (event) {
+        showGameError(event.error || event.message, event.error?.name || "JavaScriptError");
+    });
+
+    window.addEventListener("unhandledrejection", function (event) {
+        showGameError(event.reason, event.reason?.name || "UnhandledPromiseRejection");
+    });
+
+    document.addEventListener("keydown", function (event) {
+        if (event.ctrlKey && event.altKey && event.key.toLowerCase() === "e") {
+            event.preventDefault();
+            throw new Error("Forced test error triggered with Ctrl + Alt + E.");
+        }
+    });
+})();
+</script>
 
 <script type="module">
 import { SoundTouch, SimpleFilter } from "./soundtouch.js";
