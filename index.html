@@ -980,7 +980,7 @@ button.danger {
         radial-gradient(circle at center, rgba(120, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.98) 62%),
         #000;
     color: #ffdddd;
-    z-index: 2147483647;
+    z-index: 99997;
     font-family: 'Storopia', sans-serif;
     text-align: center;
 }
@@ -1426,8 +1426,11 @@ button.danger {
         errorTypeText.textContent = type;
         errorMessage.textContent = message;
         stackTraceText.textContent = stack;
+        showSecretText("Loading: Error Message", 2500);
+        fadeTransition(() => {
+    screen.classList.add("show");
+}, 2500, true);
 
-        screen.classList.add("show");
 
         // Stop the game from continuing underneath the crash screen as much as possible.
         try { if (typeof isPaused !== "undefined") isPaused = true; } catch (e) {}
@@ -2155,7 +2158,7 @@ fadeTransition(() => {
     unlockedAchievements = {};
     saveAchievements();
     renderAchievements();
-});
+}, 2500, false);
 }
 	const toggleMusicPlayerBtn = document.getElementById("toggleMusicPlayerBtn");
 let musicPlayerVisible =
@@ -2840,7 +2843,7 @@ fadeTransition(() => {
         stopHurryTimer();
         refreshFavicon();
        
-    });
+    }, 2500, false);
 
     });
 
@@ -2858,7 +2861,7 @@ function resetStats() {
     updateStatsBoard();
 
     logInfo("Player stats reset.");
-});
+}, 2500, false);
 }
     document.fonts.load("20px Storopia");
     // --- SETTINGS & AUDIO ---
@@ -3022,7 +3025,7 @@ async function startSecretLevelFromHTMLButton()
     showSecretText("Loading: Secret Level...", 2500)
     fadeTransition(() => {
     startSecretLevel();
-    });
+    }, 2500, false);
     
 }
 else
@@ -3030,7 +3033,7 @@ else
     showSecretText("Loading: Secret Level...", 2500)
     fadeTransition(() => {
     startSecretLevel();
-    });
+    }, 2500, false);
      
 }
 }
@@ -3098,7 +3101,7 @@ document.getElementById("authorName").onclick = async () => {
     showSecretText("Loading: Secret Level...", 2500)
     fadeTransition(() => {
     startSecretLevel();
-    });
+    }, 2500, false);
     
 }
 else
@@ -3106,7 +3109,7 @@ else
     showSecretText("Loading: Secret Level...", 2500)
     fadeTransition(() => {
     startSecretLevel();
-    });
+    }, 2500, false);
      
 }
     
@@ -3124,22 +3127,33 @@ function fadeOverlayOut() {
     o.style.pointerEvents = "none";
 	isLoading = false;
 }
-function fadeTransition(callback, duration = 2500) {
+function fadeTransition(callback, duration = 2500, isError = false) {
     const overlay = document.getElementById("secretOverlay");
 
     // Fade IN
     overlay.style.pointerEvents = "auto";
     overlay.style.opacity = "1";
-    sounds.play("whoosh_in");
+
+    if (isError) {
+        sounds.play("error_buzz");
+    } else {
+        sounds.play("whoosh_in");
+    }
 
     isLoading = true;
+
     setTimeout(() => {
-        // Run your action (start mode / next level)
+        // Run your action
         if (callback) callback();
 
         // Fade OUT
         overlay.style.opacity = "0";
-        sounds.play("whoosh_out");
+
+        // Don't play normal whoosh_out for error screens
+        if (!isError) {
+            sounds.play("whoosh_out");
+        }
+
         overlay.style.pointerEvents = "none";
         isLoading = false;
 
@@ -3727,6 +3741,52 @@ else if (type === 'poof') {
     osc.start();
     osc.stop(now + 0.4);
 }
+else if (type === "error_buzz") {
+    // ⚠️ Harsh buzzing error sound
+    osc.type = "sawtooth";
+
+    osc.frequency.setValueAtTime(95, now);
+    osc.frequency.setValueAtTime(140, now + 0.08);
+    osc.frequency.setValueAtTime(80, now + 0.16);
+    osc.frequency.setValueAtTime(155, now + 0.24);
+    osc.frequency.setValueAtTime(70, now + 0.32);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.18, now + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+
+    osc.start();
+    osc.stop(now + 0.45);
+
+    // Static/noise layer
+    const bufferSize = audioCtx.sampleRate * 0.45;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = audioCtx.createBufferSource();
+    const noiseGain = audioCtx.createGain();
+    const filter = audioCtx.createBiquadFilter();
+
+    noise.buffer = buffer;
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(650, now);
+    filter.Q.setValueAtTime(8, now);
+
+    noiseGain.gain.setValueAtTime(0.0001, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.12, now + 0.03);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+
+    noise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(audioCtx.destination);
+
+    noise.start();
+    noise.stop(now + 0.45);
+}
 }}
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -3822,7 +3882,7 @@ function startCampaign() {
         lastTimeMs = performance.now(); // ✅ reset timer baseline
         startMode('puzzle');
         startHurryTimer();
-    });
+    }, 2500, false);
     }
 
 function refreshFavicon() {
@@ -4161,7 +4221,7 @@ document.getElementById('debugInput').addEventListener('keydown', async (e) => {
     fadeTransition(() => {
     randomiseBubbleLayout();
     lastRandomiseLayoutTime = Date.now();
-    });
+    }, 2500, false);
 }
 else if (cmd === '!setperfectstreak' && !isNaN(val)) {
     perfectStreak = Math.max(0, val);
@@ -4748,7 +4808,7 @@ if (idx !== -1) {
             level++;
             startMode('puzzle', false, true);
             return;
-        });
+        }, 2500, false);
         }
 
         if (gameOver) {
@@ -4776,7 +4836,7 @@ if (idx !== -1) {
     startMode('puzzle', false, true);
     initializeAmmo("puzzleNew");
     return;
-});
+}, 2500, false);
         }
     }
 
@@ -7104,7 +7164,7 @@ function startPuzzleMode() {
         hideCampaignTimer();
         startMode('puzzle');
         startHurryTimer();
-    });
+    }, 2500, false);
     }
     function startDailyPuzzleMode() {
     const data = loadDailyData();
@@ -7441,7 +7501,7 @@ hideHurryTimerRing();
     drawDeadlineGridRow();
     requestAnimationFrame(gameLoop);
     stopHurryTimer();
-});
+}, 2500, false);
 }
 
 function getConnectedToTop() {
@@ -7530,7 +7590,7 @@ setBrowserTitle("▶️ SK's Bubble Shooter — Playtesting");
     updateProgressBar();
     updateAmmo();
     startHurryTimer();
-});
+}, 2500, false);
 }
     
 function hasParentAbove(r, c) {
@@ -8584,7 +8644,7 @@ function loadSaveData(s, fileName = "save file") {
         hurryWarningSeconds = null;
         startHurryTimer();
         logSuccess(`Save file loaded. ("${fileName}")`);
-    });
+    }, 2500, false);
 }
 
 function loadGame(e) {
@@ -8642,7 +8702,8 @@ function closeCustomSavePopup() {
     'poof',
     "achievement_complete",
     "whoosh_in",
-    "whoosh_out"
+    "whoosh_out",
+    "error_buzz"
 ];
 
 function openSfxMenu() {
@@ -8753,7 +8814,7 @@ if (!autosaveEnabled && gameRunning && !gameOver && !gameWin && !isCustomMode &&
 
 }
 secretSequenceActive = false;
-});
+}, 2500, false);
 addSecretLevelButton();
 }
 function addSecretLevelButton()
