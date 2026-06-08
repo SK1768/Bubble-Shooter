@@ -1132,6 +1132,12 @@ button.danger {
         <br>
         <button id="autosaveToggle" onclick="toggleAutosave()" onmouseenter="setMenuDesc('Autosave: Creates a save file every time you complete a level in Puzzle Mode.')" onmouseleave="clearMenuDesc()">💾 Autosave: OFF</button>
         <button id="soundToggle" onclick="toggleSound()" onmouseenter="setMenuDesc('Sound: Toggles the in game\'s sound. Note: SFX Tester will not play any sound effects when the sound is off.')" onmouseleave="clearMenuDesc()">🔊 Sound: ON</button>
+        <button id="consoleErrorsToggle"
+        onclick="toggleConsoleErrorsInGame()"
+        onmouseenter="setMenuDesc('Console Error Screen: Allows or blocks console.error() from opening the in-game error screen.')"
+        onmouseleave="clearMenuDesc()">
+    ⚠️ Console Errors In Game: ON
+</button>
         <button id="hurryModeBtn"
         onclick="toggleHurryMode()"
         onmouseenter="setMenuDesc('Hurry Mode: Automatically shoots if you wait too long.')"
@@ -1479,13 +1485,57 @@ button.danger {
     // Make direct console.error(...) calls open the red game error screen too.
     // Styled logError("...") calls use console.error("%c...", "css"), so those are ignored
     // to stop normal debug logging from crashing the game.
+    let consoleErrorsInGameEnabled =
+        localStorage.getItem("consoleErrorsInGameEnabled") !== "false";
+
+    function updateConsoleErrorsInGameToggle() {
+        const btn = document.getElementById("consoleErrorsToggle");
+        if (!btn) return;
+
+        if (consoleErrorsInGameEnabled) {
+            btn.textContent = "⚠️ Console Errors In Game: ON";
+            btn.style.background = "#ff4444";
+            btn.style.color = "#000";
+        } else {
+            btn.textContent = "⚠️ Console Errors In Game: OFF";
+            btn.style.background = "#444";
+            btn.style.color = "#fff";
+        }
+    }
+
+    window.toggleConsoleErrorsInGame = function () {
+        consoleErrorsInGameEnabled = !consoleErrorsInGameEnabled;
+        localStorage.setItem("consoleErrorsInGameEnabled", consoleErrorsInGameEnabled ? "true" : "false");
+        updateConsoleErrorsInGameToggle();
+
+        if (typeof showSecretText === "function") {
+            showSecretText(
+                consoleErrorsInGameEnabled
+                    ? "Console errors will now appear in game."
+                    : "Console errors will no longer appear in game.",
+                1800
+            );
+        }
+    };
+
+    window.areConsoleErrorsInGameEnabled = function () {
+        return consoleErrorsInGameEnabled;
+    };
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", updateConsoleErrorsInGameToggle);
+    } else {
+        updateConsoleErrorsInGameToggle();
+    }
+
     const originalConsoleError = console.error.bind(console);
 
     console.error = function (...args) {
         originalConsoleError(...args);
 
         if (errorScreenVisible) return;
-
+        if (!consoleErrorsInGameEnabled) return;
+        
         const realError = args.find(arg =>
             arg instanceof Error ||
             (typeof DOMException !== "undefined" && arg instanceof DOMException)
