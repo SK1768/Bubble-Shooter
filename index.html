@@ -1066,6 +1066,67 @@ button.danger {
             inset 0 0 34px rgba(255, 0, 0, 0.32);
     }
 }
+
+/* ⚠️ Yellow warning mode for console.warn() messages */
+#gameErrorScreen.warning-mode {
+    background:
+        radial-gradient(circle at center, rgba(160, 130, 0, 0.38) 0%, rgba(0, 0, 0, 0.98) 62%),
+        #000;
+    color: #fff8cc;
+}
+
+#gameErrorScreen.warning-mode .game-error-box {
+    border-color: #ffdd33;
+    background: rgba(18, 14, 0, 0.96);
+    box-shadow:
+        0 0 18px rgba(255, 221, 51, 0.95),
+        0 0 45px rgba(255, 221, 51, 0.65),
+        inset 0 0 28px rgba(255, 221, 51, 0.25);
+    animation: gameWarningGlow 1.1s ease-in-out infinite alternate;
+}
+
+#gameErrorScreen.warning-mode .game-error-icon {
+    filter: drop-shadow(0 0 16px #ffdd33);
+}
+
+#gameErrorScreen.warning-mode .game-error-title {
+    color: #ffdd33;
+    text-shadow:
+        0 0 10px #ffdd33,
+        0 0 24px #ffdd33;
+}
+
+#gameErrorScreen.warning-mode .game-error-section-title {
+    color: #fff066;
+    text-shadow: 0 0 10px #ffdd33;
+}
+
+#gameErrorScreen.warning-mode .game-error-text,
+#gameErrorScreen.warning-mode .game-error-stack {
+    border-color: rgba(255, 221, 51, 0.9);
+    color: #fff8cc;
+    box-shadow: inset 0 0 12px rgba(255, 221, 51, 0.18);
+}
+
+#gameErrorScreen.warning-mode .game-error-restart {
+    color: #fff8cc;
+    text-shadow: 0 0 12px #ffdd33;
+}
+
+@keyframes gameWarningGlow {
+    from {
+        box-shadow:
+            0 0 14px rgba(255, 221, 51, 0.75),
+            0 0 34px rgba(255, 221, 51, 0.45),
+            inset 0 0 22px rgba(255, 221, 51, 0.18);
+    }
+    to {
+        box-shadow:
+            0 0 24px rgba(255, 221, 51, 1),
+            0 0 70px rgba(255, 221, 51, 0.8),
+            inset 0 0 34px rgba(255, 221, 51, 0.32);
+    }
+}
 </style>
 </head>
 <div id="unsupportedBrowserMessage">
@@ -1081,19 +1142,19 @@ button.danger {
 
 <div id="gameErrorScreen" role="alert" aria-live="assertive">
     <div class="game-error-box">
-        <div class="game-error-icon">⚠️</div>
-        <h1 class="game-error-title">Oh no! An error has occurred! :(</h1>
+        <div class="game-error-icon" id="gameMessageIcon">⚠️</div>
+        <h1 class="game-error-title" id="gameMessageTitle">Oh no! An error has occurred! :(</h1>
 
-        <div class="game-error-section-title">---ERROR TYPE---</div>
+        <div class="game-error-section-title" id="gameMessageTypeLabel">---ERROR TYPE---</div>
         <div id="errorTypeText" class="game-error-text">UnknownError</div>
 
-        <div class="game-error-section-title">---CAUSE OF THE ERROR---</div>
+        <div class="game-error-section-title" id="gameMessageCauseLabel">---CAUSE OF THE ERROR---</div>
         <div id="errorMessage" class="game-error-text">No error message was provided.</div>
 
         <div class="game-error-section-title">---STACK TRACE---</div>
         <pre id="stackTraceText" class="game-error-stack">No stack trace was provided.</pre>
 
-        <div class="game-error-restart">Press the refresh button on your browser to restart the game.</div>
+        <div class="game-error-restart" id="gameMessageRestartText">Press the refresh button on your browser to restart the game.</div>
     </div>
 </div>
 
@@ -1134,9 +1195,9 @@ button.danger {
         <button id="soundToggle" onclick="toggleSound()" onmouseenter="setMenuDesc('Sound: Toggles the in game\'s sound. Note: SFX Tester will not play any sound effects when the sound is off.')" onmouseleave="clearMenuDesc()">🔊 Sound: ON</button>
         <button id="consoleErrorsToggle"
         onclick="toggleConsoleErrorsInGame()"
-        onmouseenter="setMenuDesc('Console Error Screen: Allows or blocks console.error() from opening the in-game error screen.')"
+        onmouseenter="setMenuDesc('Console Message Screen: Allows or blocks console.error() and console.warn() from opening the in-game message screen.')"
         onmouseleave="clearMenuDesc()">
-    ⚠️ Console Errors In Game: ON
+    ⚠️ Console Errors/Warnings In Game: ON
 </button>
         <button id="hurryModeBtn"
         onclick="toggleHurryMode()"
@@ -1395,10 +1456,11 @@ button.danger {
 
 <script>
 // ======================
-// FULL GAME ERROR SCREEN
+// FULL GAME ERROR / WARNING SCREEN
 // ======================
 (function () {
-    let errorScreenVisible = false;
+    let gameMessageVisible = false;
+    let activeGameMessageMode = "error";
 
     function asText(value, fallback) {
         if (value === undefined || value === null || value === "") return fallback;
@@ -1416,7 +1478,7 @@ button.danger {
         }
     }
 
-    function getErrorType(error, forcedType) {
+    function getMessageType(error, forcedType, fallbackType) {
         if (forcedType && forcedType !== "JavaScriptError" && forcedType !== "UnhandledPromiseRejection") {
             return forcedType;
         }
@@ -1424,65 +1486,133 @@ button.danger {
         if (error instanceof ErrorEvent && error.error?.name) return error.error.name;
         if (error?.name) return error.name;
         if (error?.constructor?.name && error.constructor.name !== "Object") return error.constructor.name;
-        if (typeof error === "string") return "StringException";
+        if (typeof error === "string") return fallbackType || "StringMessage";
         if (forcedType) return forcedType;
-        return "UnknownError";
+        return fallbackType || "UnknownMessage";
     }
 
-    function getErrorMessage(error) {
-        if (error instanceof ErrorEvent) return error.message || error.error?.message || "No error message was provided.";
+    function getMessageText(error, fallback) {
+        if (error instanceof ErrorEvent) return error.message || error.error?.message || fallback;
         if (error?.message) return error.message;
-        return asText(error, "No error message was provided.");
+        return asText(error, fallback);
     }
 
-    function getErrorStack(error) {
+    function getMessageStack(error) {
         if (error instanceof ErrorEvent && error.error?.stack) return error.error.stack;
         if (error?.stack) return error.stack;
         return "No stack trace was provided.";
     }
 
-    function showGameError(error, forcedType) {
-        if (errorScreenVisible) return;
-        errorScreenVisible = true;
+    function showGameMessage(message, forcedType, mode) {
+        if (gameMessageVisible) return;
+        gameMessageVisible = true;
+        activeGameMessageMode = mode || "error";
 
         const screen = document.getElementById("gameErrorScreen");
-        const errorTypeText = document.getElementById("errorTypeText");
-        const errorMessage = document.getElementById("errorMessage");
+        const icon = document.getElementById("gameMessageIcon");
+        const title = document.getElementById("gameMessageTitle");
+        const typeLabel = document.getElementById("gameMessageTypeLabel");
+        const causeLabel = document.getElementById("gameMessageCauseLabel");
+        const restartText = document.getElementById("gameMessageRestartText");
+        const typeText = document.getElementById("errorTypeText");
+        const messageText = document.getElementById("errorMessage");
         const stackTraceText = document.getElementById("stackTraceText");
 
-        if (!screen || !errorTypeText || !errorMessage || !stackTraceText) {
-            alert("Oh no! An error has occurred! :(\n\n" + asText(error, "Unknown error"));
+        if (!screen || !typeText || !messageText || !stackTraceText) {
+            alert("Oh no! An error has occurred! :(\n\n" + asText(message, "Unknown message"));
             return;
         }
 
-        const type = getErrorType(error, forcedType);
-        const message = getErrorMessage(error);
-        const stack = getErrorStack(error);
+        const isWarning = activeGameMessageMode === "warning";
+        const fallbackType = isWarning ? "ConsoleWarning" : "UnknownError";
+        const fallbackMessage = isWarning
+            ? "No warning message was provided."
+            : "No error message was provided.";
 
-        errorTypeText.textContent = type;
-        errorMessage.textContent = message;
-        stackTraceText.textContent = stack;
+        typeText.textContent = getMessageType(message, forcedType, fallbackType);
+        messageText.textContent = getMessageText(message, fallbackMessage);
+        stackTraceText.textContent = getMessageStack(message);
+
+        screen.classList.toggle("warning-mode", isWarning);
+
+        if (icon) icon.textContent = "⚠️";
+
+        if (isWarning) {
+            if (title) title.textContent = "Oops! A warning has occurred! 0_0";
+            if (typeLabel) typeLabel.textContent = "---WARNING TYPE---";
+            if (causeLabel) causeLabel.textContent = "---CAUSE OF THE WARNING---";
+            if (restartText) restartText.textContent = 'Press "P" to close this message and return to the main menu.';
+        } else {
+            if (title) title.textContent = "Oh no! An error has occurred! :(";
+            if (typeLabel) typeLabel.textContent = "---ERROR TYPE---";
+            if (causeLabel) causeLabel.textContent = "---CAUSE OF THE ERROR---";
+            if (restartText) restartText.textContent = "Press the refresh button on your browser to restart the game.";
+        }
 
         try {
-            showSecretText("Loading: Error Message", 2500);
+            showSecretText(isWarning ? "Loading: Warning Message" : "Loading: Error Message", 2500);
             fadeTransition(() => {
                 screen.classList.add("show");
-            }, 2500, true);
+            }, 2500, !isWarning);
         } catch (transitionError) {
             screen.classList.add("show");
         }
 
+        if (!isWarning) {
+            // Stop the game from continuing underneath the crash screen as much as possible.
+            try { if (typeof isPaused !== "undefined") isPaused = true; } catch (e) {}
+            try { if (typeof isGameRunning !== "undefined") isGameRunning = false; } catch (e) {}
+            try { if (typeof isPlaying !== "undefined") isPlaying = false; } catch (e) {}
+            try { if (typeof stopMusic === "function") stopMusic(); } catch (e) {}
+        }
+    }
 
-        // Stop the game from continuing underneath the crash screen as much as possible.
-        try { if (typeof isPaused !== "undefined") isPaused = true; } catch (e) {}
-        try { if (typeof isGameRunning !== "undefined") isGameRunning = false; } catch (e) {}
-        try { if (typeof isPlaying !== "undefined") isPlaying = false; } catch (e) {}
-        try { if (typeof stopMusic === "function") stopMusic(); } catch (e) {}
+    function showGameError(error, forcedType) {
+        showGameMessage(error, forcedType, "error");
+    }
+
+    function showGameWarning(warning, forcedType) {
+        showGameMessage(warning, forcedType || "ConsoleWarning", "warning");
     }
 
     window.showGameError = showGameError;
+    window.showGameWarning = showGameWarning;
 
-    // Make direct console.error(...) calls open the red game error screen too.
+    window.closeGameWarningToMenu = function () {
+        if (!gameMessageVisible || activeGameMessageMode !== "warning") return;
+
+        const screen = document.getElementById("gameErrorScreen");
+        if (screen) {
+            screen.classList.remove("show", "warning-mode");
+        }
+
+        gameMessageVisible = false;
+        activeGameMessageMode = "error";
+
+        if (typeof exitToMenu === "function") {
+            exitToMenu();
+        } else {
+            const mainMenu = document.getElementById("mainMenu");
+            const gameUI = document.getElementById("gameUI");
+            const customUI = document.getElementById("customUI");
+            const mobileControls = document.getElementById("mobileControls");
+            const canvas = document.getElementById("gameCanvas");
+
+            if (mainMenu) mainMenu.style.display = "block";
+            if (gameUI) gameUI.style.display = "none";
+            if (customUI) customUI.style.display = "none";
+            if (mobileControls) mobileControls.style.display = "none";
+            if (canvas) canvas.style.display = "none";
+        }
+    };
+
+    window.addEventListener("keydown", function (event) {
+        if (event.key && event.key.toLowerCase() === "p") {
+            window.closeGameWarningToMenu();
+        }
+    });
+
+    // Make direct console.error(...) and console.warn(...) calls open the in-game message screen too.
     // Styled logError("...") calls use console.error("%c...", "css"), so those are ignored
     // to stop normal debug logging from crashing the game.
     let consoleErrorsInGameEnabled =
@@ -1493,11 +1623,11 @@ button.danger {
         if (!btn) return;
 
         if (consoleErrorsInGameEnabled) {
-            btn.textContent = "⚠️ Console Errors In Game: ON";
-            btn.style.background = "#ff4444";
+            btn.textContent = "⚠️ Console Errors/Warnings In Game: ON";
+            btn.style.background = "#ffdd33";
             btn.style.color = "#000";
         } else {
-            btn.textContent = "⚠️ Console Errors In Game: OFF";
+            btn.textContent = "⚠️ Console Errors/Warnings In Game: OFF";
             btn.style.background = "#444";
             btn.style.color = "#fff";
         }
@@ -1507,15 +1637,6 @@ button.danger {
         consoleErrorsInGameEnabled = !consoleErrorsInGameEnabled;
         localStorage.setItem("consoleErrorsInGameEnabled", consoleErrorsInGameEnabled ? "true" : "false");
         updateConsoleErrorsInGameToggle();
-
-        if (typeof showSecretText === "function") {
-            showSecretText(
-                consoleErrorsInGameEnabled
-                    ? "Console errors will now appear in game."
-                    : "Console errors will no longer appear in game.",
-                1800
-            );
-        }
     };
 
     window.areConsoleErrorsInGameEnabled = function () {
@@ -1528,28 +1649,40 @@ button.danger {
         updateConsoleErrorsInGameToggle();
     }
 
-    const originalConsoleError = console.error.bind(console);
-
-    console.error = function (...args) {
-        originalConsoleError(...args);
-
-        if (errorScreenVisible) return;
-        if (!consoleErrorsInGameEnabled) return;
-        
-        const realError = args.find(arg =>
+    function buildConsoleMessage(args, fallback, name) {
+        const realMessage = args.find(arg =>
             arg instanceof Error ||
             (typeof DOMException !== "undefined" && arg instanceof DOMException)
         );
 
-        if (realError) {
-            showGameError(realError, realError.name || "ConsoleError");
-            return;
-        }
+        if (realMessage) return realMessage;
 
-        const message = args.map(arg => asText(arg, String(arg))).join(" ");
-        const consoleError = new Error(message || "console.error() was called.");
-        consoleError.name = "ConsoleError";
-        showGameError(consoleError, "ConsoleError");
+        const text = args.map(arg => asText(arg, String(arg))).join(" ");
+        const wrapped = new Error(text || fallback);
+        wrapped.name = name;
+        return wrapped;
+    }
+
+    const originalConsoleError = console.error.bind(console);
+    const originalConsoleWarn = console.warn.bind(console);
+
+    console.error = function (...args) {
+        originalConsoleError(...args);
+
+        if (gameMessageVisible) return;
+        if (!consoleErrorsInGameEnabled) return;
+        const consoleError = buildConsoleMessage(args, "console.error() was called.", "ConsoleError");
+        showGameError(consoleError, consoleError.name || "ConsoleError");
+    };
+
+    console.warn = function (...args) {
+        originalConsoleWarn(...args);
+
+        if (gameMessageVisible) return;
+        if (!consoleErrorsInGameEnabled) return;
+
+        const consoleWarning = buildConsoleMessage(args, "console.warn() was called.", "ConsoleWarning");
+        showGameWarning(consoleWarning, consoleWarning.name || "ConsoleWarning");
     };
 
     window.addEventListener("error", function (event) {
