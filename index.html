@@ -3021,7 +3021,7 @@ function loadStats() {
             ? { ...DEFAULT_STATS, ...JSON.parse(saved) }
             : { ...DEFAULT_STATS };
     } catch (e) {
-        console.warn("Could not load saved stats, using defaults.", e);
+        logWarning(`Could not load saved stats, using defaults. ${e}`);
         return { ...DEFAULT_STATS };
     }
 }
