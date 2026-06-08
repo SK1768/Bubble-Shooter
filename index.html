@@ -1445,13 +1445,6 @@ button.danger {
     window.addEventListener("unhandledrejection", function (event) {
         showGameError(event.reason, event.reason?.name || "UnhandledPromiseRejection");
     });
-
-    document.addEventListener("keydown", function (event) {
-        if (event.ctrlKey && event.altKey && event.key.toLowerCase() === "e") {
-            event.preventDefault();
-            throw new Error("Forced test error triggered with Ctrl + Alt + E.");
-        }
-    });
 })();
 </script>
 
@@ -4079,8 +4072,10 @@ document.getElementById('debugInput').addEventListener('keydown', async (e) => {
             alert("Commands must start with \"!\".")
             return;
         }
-
-        if (cmd === '!completelevel') { 
+        if (cmd === '!forceerror') {
+            throw new Error("You used the \"!forceerror\" debug command to force an error to occur.")
+        }
+        else if (cmd === '!completelevel') { 
             bubbles = []; 
             triggerWin(); 
         } 
