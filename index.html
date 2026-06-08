@@ -1557,14 +1557,12 @@ button.danger {
         } catch (transitionError) {
             screen.classList.add("show");
         }
-
-        if (!isWarning) {
             // Stop the game from continuing underneath the crash screen as much as possible.
             try { if (typeof isPaused !== "undefined") isPaused = true; } catch (e) {}
             try { if (typeof isGameRunning !== "undefined") isGameRunning = false; } catch (e) {}
             try { if (typeof isPlaying !== "undefined") isPlaying = false; } catch (e) {}
             try { if (typeof stopMusic === "function") stopMusic(); } catch (e) {}
-        }
+        
     }
 
     function showGameError(error, forcedType) {
