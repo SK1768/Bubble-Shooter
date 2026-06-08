@@ -1476,6 +1476,32 @@ button.danger {
 
     window.showGameError = showGameError;
 
+    // Make direct console.error(...) calls open the red game error screen too.
+    // Styled logError("...") calls use console.error("%c...", "css"), so those are ignored
+    // to stop normal debug logging from crashing the game.
+    const originalConsoleError = console.error.bind(console);
+
+    console.error = function (...args) {
+        originalConsoleError(...args);
+
+        if (errorScreenVisible) return;
+
+        const realError = args.find(arg =>
+            arg instanceof Error ||
+            (typeof DOMException !== "undefined" && arg instanceof DOMException)
+        );
+
+        if (realError) {
+            showGameError(realError, realError.name || "ConsoleError");
+            return;
+        }
+
+        const message = args.map(arg => asText(arg, String(arg))).join(" ");
+        const consoleError = new Error(message || "console.error() was called.");
+        consoleError.name = "ConsoleError";
+        showGameError(consoleError, "ConsoleError");
+    };
+
     window.addEventListener("error", function (event) {
         showGameError(event.error || event, event.error?.name || event.constructor?.name || "JavaScriptError");
     });
@@ -4170,7 +4196,7 @@ document.getElementById('debugInput').addEventListener('keydown', async (e) => {
         if (cmd === '!forceerror') {
             const forcedError = new Error('You used the "!forceerror" debug command to force an error to occur.');
             forcedError.name = "ForcedDebugException";
-            window.showGameError(forcedError);
+            console.error(forcedError);
             e.target.value = '';
             document.getElementById('debugConsole').style.display = 'none';
             return;
