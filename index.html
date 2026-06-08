@@ -1399,10 +1399,40 @@ button.danger {
         try {
             if (typeof value === "string") return value;
             if (value instanceof Error) return value.message || fallback;
-            return JSON.stringify(value, null, 2) || String(value);
+            if (value instanceof ErrorEvent) return value.message || fallback;
+            if (typeof DOMException !== "undefined" && value instanceof DOMException) {
+                return value.message || fallback;
+            }
+            const json = JSON.stringify(value, null, 2);
+            return json === undefined ? String(value) : json;
         } catch (e) {
             return String(value);
         }
+    }
+
+    function getErrorType(error, forcedType) {
+        if (forcedType && forcedType !== "JavaScriptError" && forcedType !== "UnhandledPromiseRejection") {
+            return forcedType;
+        }
+
+        if (error instanceof ErrorEvent && error.error?.name) return error.error.name;
+        if (error?.name) return error.name;
+        if (error?.constructor?.name && error.constructor.name !== "Object") return error.constructor.name;
+        if (typeof error === "string") return "StringException";
+        if (forcedType) return forcedType;
+        return "UnknownError";
+    }
+
+    function getErrorMessage(error) {
+        if (error instanceof ErrorEvent) return error.message || error.error?.message || "No error message was provided.";
+        if (error?.message) return error.message;
+        return asText(error, "No error message was provided.");
+    }
+
+    function getErrorStack(error) {
+        if (error instanceof ErrorEvent && error.error?.stack) return error.error.stack;
+        if (error?.stack) return error.stack;
+        return "No stack trace was provided.";
     }
 
     function showGameError(error, forcedType) {
@@ -1419,17 +1449,22 @@ button.danger {
             return;
         }
 
-        const type = forcedType || error?.name || typeof error || "UnknownError";
-        const message = error?.message || asText(error, "No error message was provided.");
-        const stack = error?.stack || "No stack trace was provided.";
+        const type = getErrorType(error, forcedType);
+        const message = getErrorMessage(error);
+        const stack = getErrorStack(error);
 
         errorTypeText.textContent = type;
         errorMessage.textContent = message;
         stackTraceText.textContent = stack;
-        showSecretText("Loading: Error Message", 2500);
-        fadeTransition(() => {
-    screen.classList.add("show");
-}, 2500, true);
+
+        try {
+            showSecretText("Loading: Error Message", 2500);
+            fadeTransition(() => {
+                screen.classList.add("show");
+            }, 2500, true);
+        } catch (transitionError) {
+            screen.classList.add("show");
+        }
 
 
         // Stop the game from continuing underneath the crash screen as much as possible.
@@ -1442,11 +1477,11 @@ button.danger {
     window.showGameError = showGameError;
 
     window.addEventListener("error", function (event) {
-        showGameError(event.error || event.message, event.error?.name || "JavaScriptError");
+        showGameError(event.error || event, event.error?.name || event.constructor?.name || "JavaScriptError");
     });
 
     window.addEventListener("unhandledrejection", function (event) {
-        showGameError(event.reason, event.reason?.name || "UnhandledPromiseRejection");
+        showGameError(event.reason, event.reason?.name || event.reason?.constructor?.name || "UnhandledPromiseRejection");
     });
 })();
 </script>
@@ -4133,7 +4168,12 @@ document.getElementById('debugInput').addEventListener('keydown', async (e) => {
             return;
         }
         if (cmd === '!forceerror') {
-            throw new Error("You used the \"!forceerror\" debug command to force an error to occur.")
+            const forcedError = new Error('You used the "!forceerror" debug command to force an error to occur.');
+            forcedError.name = "ForcedDebugException";
+            window.showGameError(forcedError);
+            e.target.value = '';
+            document.getElementById('debugConsole').style.display = 'none';
+            return;
         }
         else if (cmd === '!completelevel') { 
             bubbles = []; 
