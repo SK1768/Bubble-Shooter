@@ -4078,6 +4078,17 @@ const COLOR_EMOJIS = {
 
 let mode = 'puzzle', score = 0, level = 1, angle = 0, mouseInside = false;
 let bubbles = [], fallingBubbles = [], projectiles = [], particles = [], floatingScores = [], confetti = [];
+let chainPopActive = false;
+let chainPopTotal = 0;
+let chainPopIndex = 0;
+let chainPopOrigin = null;
+let chainPopScorePerPop = 0;
+let chainPopProgressPerPop = 0;
+let chainPopTotalScore = 0;
+let chainPopTotalProgress = 0;
+let chainPopPopupX = 0;
+let chainPopPopupY = 0;
+let chainPopPendingFallKeys = new Set();
 let currentBall = '', nextBall = '', ammo = 0, initialBubbleCount = 0;
 let streakCount = 1, streakTimer = 0, streakFrozen = false;
 const STREAK_DURATION = 6;
@@ -4940,7 +4951,7 @@ canvas.addEventListener('mousedown', e => {
     const my = e.clientY - rect.top;
 
     // ✅ DRAG MODE PICKUP
-    if (dragBubblesEnabled && !isPaused && !gameOver && !gameWin) {
+    if (dragBubblesEnabled && !isPaused && !gameOver && !gameWin && conversionQueue.length === 0 && !chainPopActive) {
         // pick grid bubble
         const gridBubble = bubbles.find(b => Math.hypot(mx - b.x, my - b.y) <= RADIUS);
         if (gridBubble) {
@@ -5011,6 +5022,7 @@ if (idx !== -1) {
     // NORMAL GAME CLICK BEHAVIOR
     // -----------------------------
     if (!gameRunning) return;
+    if (conversionQueue.length > 0 || chainPopActive) return;
 
     if (isPaused) {
         setPause(false);
@@ -5136,7 +5148,7 @@ canvas.addEventListener('mouseup', e => {
             if (idx !== -1) bubbles.splice(idx, 1);
         }
 
-        popBubbles(matches);
+        popBubbles(matches, placed);
     }
 }
             } else {
@@ -5240,7 +5252,7 @@ function setPause(state) {
 function togglePause() { if(!gameRunning || gameOver || gameWin || winPending) return; setPause(!isPaused);}
 
 function shoot() {
-if (winPending || conversionQueue.length > 0) return;
+if (winPending || conversionQueue.length > 0 || chainPopActive) return;
 
     hurryIdleSeconds = 0;
     hurryWarningActive = false;
@@ -5397,7 +5409,7 @@ if (nb.color != COLORLESS && colorlessNeighbors.length >= 2) {
 
     if (m.length >= 3) {
         lastShotWasMatch = true;
-        popBubbles(m);
+        popBubbles(m, nb);
     } else {
         lastShotWasMatch = false;
         spawnDudHitParticles(nb.x, nb.y, nb.color);
@@ -5433,7 +5445,7 @@ function calcProgressPercent(currentCount, initialCount) {
     return +pct.toFixed(1);
 }
 function spawnPopParticles(x, y, color) {
-    const COUNT = 5; // 🔽 fewer particles (try 4–6)
+    const COUNT = 50; // 🔽 fewer particles (try 4–6)
 
     for (let i = 0; i < COUNT; i++) {
         const angle = Math.random() * Math.PI * 2; // 0–360°
@@ -5508,82 +5520,282 @@ function spawnProjectileTrail(x, y, color, vx, vy, t = 0) {
         size: Math.random() * 2 + 6
     });
 }
-function popBubbles(m) {
-    const beforePct = calcProgressPercent(bubbles.length, initialBubbleCount);
-    startHurryTimer();
-    streakCount++;
-    streakTimer = STREAK_DURATION;
-    sounds.play('pop');
-	stats.bubblesPopped += m.length;
-    checkProgressAchievements();
-    if (stats.bubblesPopped >= 1000) unlockAchievement("POP_1K");
-if (stats.bubblesPopped >= 10000) unlockAchievement("POP_10K");
-    saveStats();
-    let pts = m.length * 10 * streakCount;
-    score += pts;
+function updateChainPendingFallPreview(chain, nextPopIndex) {
+    chainPopPendingFallKeys.clear();
 
-    m.forEach(b => {
-        let idx = bubbles.indexOf(b);
-        if (idx > -1) bubbles.splice(idx, 1);
+    if (!chainPopActive || !Array.isArray(chain)) return;
 
-        for (let i = 0; i < 6; i++) {
-            particles.push({
-                x: b.x, y: b.y,
-                vx: (Math.random()-0.5)*8,
-                vy: (Math.random()-0.5)*8,
-                life: 5,
-                color: b.color,
-                size: Math.random()*3+1
-            });
-            spawnPopParticles(b.x, b.y, b.color);
+    // 🔮 Predict which bubbles will fall AFTER the whole remaining chain finishes.
+    // This means we simulate the board with every not-yet-popped chain bubble removed,
+    // then preview any non-chain bubble that would become disconnected in that final state.
+    const remainingChainKeys = new Set(
+        chain
+            .slice(nextPopIndex)
+            .filter(Boolean)
+            .map(b => `${b.row},${b.col}`)
+    );
+
+    // Simulated final board state after the rest of the chain pops.
+    const simulatedBoard = bubbles.filter(b => !remainingChainKeys.has(`${b.row},${b.col}`));
+    const simulatedLookup = new Map(simulatedBoard.map(b => [`${b.row},${b.col}`, b]));
+
+    const connected = new Set();
+    const queue = simulatedBoard.filter(b => b.row === 0);
+
+    queue.forEach(b => connected.add(`${b.row},${b.col}`));
+
+    let qi = 0;
+    while (qi < queue.length) {
+        const curr = queue[qi++];
+        const dirs = (curr.row % 2 === 0)
+            ? [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]]
+            : [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
+
+        dirs.forEach(([dr, dc]) => {
+            const key = `${curr.row + dr},${curr.col + dc}`;
+            const nb = simulatedLookup.get(key);
+            if (!nb) return;
+            if (connected.has(key)) return;
+
+            connected.add(key);
+            queue.push(nb);
+        });
+    }
+
+    // Mark bubbles on the LIVE board that still exist now, are not part of the remaining chain,
+    // and are predicted to be disconnected once the chain fully ends.
+    bubbles.forEach(b => {
+        const key = `${b.row},${b.col}`;
+        if (!remainingChainKeys.has(key) && !connected.has(key)) {
+            chainPopPendingFallKeys.add(key);
         }
     });
-
-    dropFloatingBubbles();
-    updateProgressBar();
-
-    const afterPct = calcProgressPercent(bubbles.length, initialBubbleCount);
-    const diff = +(afterPct - beforePct).toFixed(1);
-
-    floatingScores.push({
-        x: m[0]?.x || 220,
-        y: m[0]?.y || 320,
-        text: `+${fmt(pts)} x${fmt(streakCount)}  (${diff > 0 ? '+' : ''}${diff.toFixed(1)}%)`,
-        life: 1.0
-		
-    });
-
-if (bubbles.length === 0) {
-    ctx.save();
-
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = "bold 64px Storopia";
-
-    // glow
-    ctx.fillStyle = "#ffcc00";
-    ctx.shadowColor = "#ff9900";
-    ctx.shadowBlur = 25;
-
-    // slight pulse
-    const pulse = 1 + Math.sin(performance.now() / 120) * 0.05;
-    ctx.translate(canvas.width / 2, canvas.height / 2);
-    ctx.scale(pulse, pulse);
-
-    ctx.fillText("WAIT...", canvas.width / 2, 280);
-
-    ctx.restore();
-    logInfo("WAIT")
-    winPending = true;
-    campaignTimerAcc = 0;
 }
 
-
- else if (ammo <= 0) triggerFail("You ran out of bubbles!");
- updateAmmo();
- lastShotWasMatch = false;
+function isChainPendingFallBubble(b) {
+    return !!(b && chainPopActive && chainPopPendingFallKeys.has(`${b.row},${b.col}`));
 }
+function popBubbles(m, startBubble = null) {
+    if (!m || m.length === 0) return;
 
+    // Stop another shot/drag-pop from starting while the chain reaction is still popping.
+    if (chainPopActive) return;
+    chainPopActive = true;
+
+    const beforePct = calcProgressPercent(bubbles.length, initialBubbleCount);
+    pauseHurryTimer();
+
+    streakCount++;
+    streakTimer = STREAK_DURATION;
+
+    // Remove duplicates, then make the pop spread from the shot/snapped bubble outward.
+    const uniqueMatches = Array.from(new Map(
+        m.filter(Boolean).map(b => [`${b.row},${b.col}`, b])
+    ).values());
+
+    const origin = uniqueMatches.find(b =>
+        startBubble && b.row === startBubble.row && b.col === startBubble.col
+    ) || uniqueMatches[0];
+
+    const matchedKeys = new Set(uniqueMatches.map(b => `${b.row},${b.col}`));
+    const chain = [];
+    const seenChain = new Set();
+    const queue = origin ? [origin] : [];
+
+    while (queue.length > 0) {
+        const cur = queue.shift();
+        const key = `${cur.row},${cur.col}`;
+        if (seenChain.has(key)) continue;
+        seenChain.add(key);
+        chain.push(cur);
+
+        for (const nb of getNeighbors(cur)) {
+            const nbKey = `${nb.row},${nb.col}`;
+            if (matchedKeys.has(nbKey) && !seenChain.has(nbKey)) {
+                queue.push(nb);
+            }
+        }
+    }
+
+    // Fallback: include any matched bubble that was not reached for some reason.
+    for (const b of uniqueMatches) {
+        const key = `${b.row},${b.col}`;
+        if (!seenChain.has(key)) chain.push(b);
+    }
+
+    chainPopTotal = chain.length;
+    chainPopIndex = 0;
+    chainPopOrigin = origin ? `${origin.row},${origin.col}` : null;
+
+    const pts = chain.length * 10 * streakCount;
+    const scorePerPop = chain.length > 0 ? pts / chain.length : 0;
+    const matchedOnlyAfterPct = calcProgressPercent(
+        Math.max(0, bubbles.length - chain.length),
+        initialBubbleCount
+    );
+    const popProgressTotal = +(matchedOnlyAfterPct - beforePct).toFixed(1);
+    const progressPerPop = chain.length > 0 ? popProgressTotal / chain.length : 0;
+
+    chainPopScorePerPop = scorePerPop;
+    chainPopProgressPerPop = progressPerPop;
+    chainPopTotalScore = pts;
+    chainPopTotalProgress = popProgressTotal;
+    chainPopPopupX = origin ? origin.x : (startBubble ? startBubble.x : canvas.width / 2);
+    chainPopPopupY = origin ? origin.y : (startBubble ? startBubble.y : canvas.height / 2);
+
+    stats.bubblesPopped += chain.length;
+    checkProgressAchievements();
+    if (stats.bubblesPopped >= 1000) unlockAchievement("POP_1K");
+    if (stats.bubblesPopped >= 10000) unlockAchievement("POP_10K");
+    saveStats();
+
+    let popped = 0;
+    updateChainPendingFallPreview(chain, popped);
+
+    function burstBubble(b) {
+        const idx = bubbles.indexOf(b);
+        if (idx > -1) {
+            bubbles.splice(idx, 1);
+        } else {
+            // Dragged bubbles can be represented by a temporary object, so fall back to row/col.
+            const byCell = bubbles.findIndex(o => o.row === b.row && o.col === b.col);
+            if (byCell > -1) bubbles.splice(byCell, 1);
+        }
+
+        // ✅ Use the original old pop particle burst from the non-chain pop code.
+        // This is the older chunky burst effect that existed before the chain reaction patch.
+        for (let i = 0; i < 6; i++) {
+            particles.push({
+                x: b.x,
+                y: b.y,
+                vx: (Math.random() - 0.5) * 8,
+                vy: (Math.random() - 0.5) * 8,
+                life: 5,
+                color: b.color,
+                size: Math.random() * 3 + 1
+            });
+        }
+
+        // Keep the original small pop sparkle too, because the old pop used both effects together.
+        spawnPopParticles(b.x, b.y, b.color);
+
+        // ✅ Award the chain total in small slices, one slice per popped bubble.
+        // The streak counter/multiplier still only increments once for the whole chain.
+        score += scorePerPop;
+
+        const popProgressText = progressPerPop === 0
+            ? "+0.0%"
+            : `${progressPerPop > 0 ? '+' : ''}${progressPerPop.toFixed(1)}%`;
+
+        // ✅ Keep the separated score popup for each bubble in the chain.
+        floatingScores.push({
+            x: b.x,
+            y: b.y,
+            text: `+${fmt(scorePerPop)} (${popProgressText})`,
+            life: 1.0
+        });
+
+        sounds.play('pop');
+        popped++;
+        chainPopIndex = popped;
+        updateChainPendingFallPreview(chain, popped);
+        updateProgressBar();
+    }
+
+    function finishChainReaction() {
+        // ✅ Only after the full chain reaction is done, check which bubbles are floating.
+        dropFloatingBubbles();
+        updateProgressBar();
+
+        const chainProgressText = chainPopTotalProgress === 0
+            ? "+0.0%"
+            : `${chainPopTotalProgress > 0 ? '+' : ''}${chainPopTotalProgress.toFixed(1)}%`;
+
+        // ✅ Keep the separated per-pop score popups, then show a final
+        // chain summary popup in the CENTER of the canvas when the chain ends.
+        floatingScores.push({
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            text: `+${fmt(chainPopTotalScore)} x${streakCount} (${chainProgressText})`,
+            life: 1.35
+        });
+
+        // Floating bubbles are still checked only after the chain finishes.
+        chainPopPendingFallKeys.clear();
+
+        chainPopActive = false;
+        chainPopIndex = 0;
+        chainPopTotal = 0;
+        chainPopOrigin = null;
+        chainPopScorePerPop = 0;
+        chainPopProgressPerPop = 0;
+        chainPopTotalScore = 0;
+        chainPopTotalProgress = 0;
+        chainPopPopupX = 0;
+        chainPopPopupY = 0;
+
+        if (bubbles.length === 0) {
+            ctx.save();
+
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.font = "bold 64px Storopia";
+
+            ctx.fillStyle = "#ffcc00";
+            ctx.shadowColor = "#ff9900";
+            ctx.shadowBlur = 25;
+
+            const pulse = 1 + Math.sin(performance.now() / 120) * 0.05;
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.scale(pulse, pulse);
+
+            ctx.fillText("WAIT...", canvas.width / 2, 280);
+
+            ctx.restore();
+            logInfo("WAIT");
+            winPending = true;
+            campaignTimerAcc = 0;
+        } else if (ammo <= 0) {
+            triggerFail("You ran out of bubbles!");
+        } else {
+            startHurryTimer();
+        }
+
+        updateAmmo();
+        lastShotWasMatch = false;
+    }
+
+    function isChainReactionPaused() {
+        return !!(
+            isPaused ||
+            isLoading ||
+            gameOver ||
+            gameWin ||
+            winPending ||
+            !gameRunning
+        );
+    }
+
+    function popNextInChain() {
+        // ⏸️ Do NOT let the chain reaction continue underneath pause menus,
+        // fade/loading transitions, win pending screens, game over, etc.
+        // It waits here and resumes from the same bubble once gameplay resumes.
+        if (isChainReactionPaused()) {
+            setTimeout(popNextInChain, 55);
+            return;
+        }
+
+        if (popped >= chain.length) {
+            finishChainReaction();
+            return;
+        }
+
+        burstBubble(chain[popped]);
+        setTimeout(popNextInChain, 55);
+    }
+
+    popNextInChain();
+}
 function fmt(n) {
     return Number(n).toLocaleString();
 }
@@ -6327,7 +6539,7 @@ if (inner) {
     if (isPaused && !isCustomMode) return;
     updatePanicState();
     if (!gameOver && !gameWin && !winPending) {
-        if (streakTimer > 0 && !streakFrozen) { 
+        if (streakTimer > 0 && !streakFrozen && conversionQueue.length === 0 && !chainPopActive) { 
             streakTimer -= 0.01; 
             if (streakTimer <= 0) streakCount = 1; 
         }
@@ -6484,7 +6696,7 @@ function resetHurryTimer() {
 }
 
 function hurryTick(dt = 0) {
-    if (!hurryRunning || hurryPaused || isLoading || !hurryMode || !gameRunning || isPaused || projectiles.length === 1 || gameOver || gameWin || winPending || conversionQueue.length > 0) {
+    if (!hurryRunning || hurryPaused || isLoading || !hurryMode || !gameRunning || isPaused || projectiles.length === 1 || gameOver || gameWin || winPending || conversionQueue.length > 0 || chainPopActive) {
         updateHurryTimerRing();
         return;
     }
@@ -6591,6 +6803,7 @@ canvas.addEventListener("pointerdown", (e) => {
 
   // Don't start aiming if game isn't in a state to aim
   if (!gameRunning) return;
+  if (conversionQueue.length > 0 || chainPopActive) return;
   if (isPaused) { setPause(false); return; }
   if (gameOver || gameWin) return;
   if (isCustomMode) return;
@@ -6633,6 +6846,8 @@ function endPointerAim(e) {
     !isPaused &&
     !gameOver &&
     !gameWin &&
+    conversionQueue.length === 0 &&
+    !chainPopActive &&
     ammo > 0 &&
     mouseX >= 0 &&
     mouseX <= canvas.width &&
@@ -6701,14 +6916,20 @@ ctx.globalAlpha = 1;
     ctx.strokeStyle = '#ff3333'; ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(0, DEADLINE); ctx.lineTo(canvas.width, DEADLINE); ctx.stroke(); ctx.setLineDash([]);
     bubbles.forEach(b => {
+        const chainPendingFallPreview = isChainPendingFallBubble(b);
+        if (chainPendingFallPreview) {
+            ctx.save();
+            // 🔮 predicted-fall preview: still faded, but easier to see
+            ctx.globalAlpha = 0.58;
+        }
         
     // COLORLESS bubble = outline only
     if (!b.color) {
         
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = chainPendingFallPreview ? "#ff9500" : "#ffffff";
+        ctx.lineWidth = chainPendingFallPreview ? 4 : 2;
         ctx.beginPath();
-        ctx.arc(b.x, b.y, RADIUS - 2, 0, Math.PI * 2);
+        ctx.arc(b.x, b.y, chainPendingFallPreview ? RADIUS : RADIUS - 2, 0, Math.PI * 2);
         ctx.stroke();
                if (colorblindMode) {
         const emoji =
@@ -6728,6 +6949,7 @@ ctx.globalAlpha = 1;
 
         ctx.restore();
 }
+        if (chainPendingFallPreview) ctx.restore();
         return;
     }
     ctx.strokeStyle = '#ff3333';
@@ -6795,6 +7017,15 @@ if (panicMode) {
     ctx.arc(b.x, b.y, RADIUS - 2, 0, Math.PI * 2);
     ctx.fill();
 
+    // 🟠 predicted-fall hitbox outline
+    if (chainPendingFallPreview && showBubbleHitBox) {
+        ctx.strokeStyle = "#ff9500";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, RADIUS, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
     // Colorblind emoji overlay (only for colored bubbles)
        // 👁️ colorblind overlay
     if (colorblindMode) {
@@ -6814,7 +7045,9 @@ if (panicMode) {
         ctx.fillText(emoji, b.x, b.y);
 
         ctx.restore();
-}});
+}
+    if (chainPendingFallPreview) ctx.restore();
+});
 
 
     if (!isCustomMode) {
@@ -7260,6 +7493,16 @@ const randomiseLayoutCooldownText = formatCooldownMS(timeLeft);
         `gameMode: ${mode}`,
         `bubblesRemaining: ${bubbles.length}`,
         `conversionQueue: ${conversionQueue.length}`,
+        `popChainActive: ${chainPopActive}`,
+        `popChainPaused: ${chainPopActive && (isPaused || isLoading || gameOver || gameWin || winPending || !gameRunning)}`,
+        `popChainProgress: ${chainPopActive ? chainPopIndex + "/" + chainPopTotal : "0/0"}`,
+        `popChainOrigin: ${chainPopOrigin}`,
+        `popChainScorePerPop: ${chainPopActive ? fmt(chainPopScorePerPop) : "0"}`,
+        `popChainProgressPerPop: ${chainPopActive ? chainPopProgressPerPop.toFixed(1) + "%" : "0.0%"}`,
+        `popChainTotalScore: ${chainPopActive ? fmt(chainPopTotalScore) : "0"}`,
+        `popChainTotalProgress: ${chainPopActive ? chainPopTotalProgress.toFixed(1) + "%" : "0.0%"}`,
+        `popChainOriginPopupPos: ${chainPopActive ? Math.round(chainPopPopupX) + "," + Math.round(chainPopPopupY) : "null"}`,
+        `popChainSummaryPopupPos: ${canvas ? Math.round(canvas.width / 2) + "," + Math.round(canvas.height / 2) : "null"}`,
         `bubblesFalling: ${fallingBubbles.length}`,
         `projectiles: ${projectiles.length}`,
         `currentBubble: ${ammo <= 0 ? null : debugBubbleName(currentBall)}`,
@@ -7280,6 +7523,7 @@ const randomiseLayoutCooldownText = formatCooldownMS(timeLeft);
         `lastClearWasPerfect: ${lastClearWasPerfect}`,
         `trueGameOver: ${trueGameOver}`,
         `isAiming: ${isAiming}`,
+        `aimFrozen: ${conversionQueue.length > 0 || chainPopActive}`,
         `panicMode: ${panicMode}`,
         `panicTriggered: ${panicTriggered}`,
         `gameRunning: ${gameRunning}`,
@@ -7854,7 +8098,7 @@ function hasParentAbove(r, c) {
 }
 function drawAimVisualizer() {
 
-        if (!aimEnabled || isPaused || gameOver || gameWin || isCustomMode || projectiles.length > 0 || winPending || conversionQueue.length > 0) return;
+        if (!aimEnabled || isPaused || gameOver || gameWin || isCustomMode || projectiles.length > 0 || winPending || conversionQueue.length > 0 || chainPopActive) return;
 
         if (
             mouseX < 0 ||
