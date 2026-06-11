@@ -1152,6 +1152,16 @@ body.rainbow-mode {
     animation: rainbowTextCycle 2.5s linear infinite;
 }
 
+@keyframes rainbowTextCycle {
+    0% { color: hsl(0, 100%, 65%); }
+    16% { color: hsl(60, 100%, 65%); }
+    33% { color: hsl(120, 100%, 65%); }
+    50% { color: hsl(180, 100%, 65%); }
+    66% { color: hsl(240, 100%, 70%); }
+    83% { color: hsl(300, 100%, 70%); }
+    100% { color: hsl(360, 100%, 65%); }
+}
+
 body.rainbow-mode canvas {
     border-color: hsl(var(--rainbow-hue, 0), 100%, 55%) !important;
     box-shadow:
@@ -3894,8 +3904,8 @@ function resetDebugConflictFlagsFromMainMenu() {
     localStorage.setItem("isBannedFromDebugCommands", "false");
     localStorage.setItem("debugLocked", "false");
     updateDebugButton();
-    logInfo("isBannedFromDebugCommands and debugLocked have both been reset to false.");
-    alert("isBannedFromDebugCommands and debugLocked have both been reset to false.");
+    logInfo("Debug command ban and debug lock have both been reset to false.");
+    alert("Debug command ban and debug lock have both been reset to false.");
     return true;
 }
 
@@ -3909,14 +3919,34 @@ function boolArg(arg, commandName) {
 }
 
 function applyRainbowMode() {
+    if (!document.body) return;
+
     document.body.classList.toggle('rainbow-mode', rainbowMode);
+
+    if (rainbowMode) {
+        // Apply a colour immediately after refresh/load instead of waiting for the game loop.
+        document.documentElement.style.setProperty('--rainbow-hue', rainbowHue);
+    } else {
+        document.documentElement.style.removeProperty('--rainbow-hue');
+    }
 }
 
 function updateRainbowMode() {
     if (!rainbowMode) return;
+
     rainbowHue = (rainbowHue + 3) % 360;
     document.documentElement.style.setProperty('--rainbow-hue', rainbowHue);
+
+    // Keeps the rainbow class restored after refresh, menu load, or returning from another screen.
+    if (document.body && !document.body.classList.contains('rainbow-mode')) {
+        document.body.classList.add('rainbow-mode');
+    }
 }
+
+// Keep rainbow mode alive on the main menu too.
+// The normal gameLoop only runs while the game is running, so a refresh on the menu
+// could leave the saved rainbowMode flag enabled without animating the colours.
+setInterval(updateRainbowMode, 33);
 
 function updateBubblesRemainingRing() {
     const container = document.getElementById('bubblesContainer');
@@ -4402,6 +4432,11 @@ function updatePanicState() {
 
 
 function openDebug() {
+    if (isBannedFromDebugCommands) {
+        updateDebugButton();
+        alert("You have been banned from using debug commands.");
+        return;
+    }
 
     if (debugLocked && !tryUnlockDebugWithCode()) {
         return;
@@ -4606,13 +4641,10 @@ document.getElementById('debugInput').addEventListener('keydown', async (e) => {
             return;
         }
         if (cmd === '!lockdebug') {
-            const enabled = boolArg(arg, '!lockdebug');
-            if (enabled === null) return;
-
-            debugLocked = enabled;
-            localStorage.setItem('debugLocked', debugLocked ? 'true' : 'false');
+            debugLocked = true;
+            localStorage.setItem('debugLocked', 'true');
             updateDebugButton();
-            logInfo(`Debug lock ${debugLocked ? 'ENABLED' : 'DISABLED'}.`);
+            logInfo('Debug button has been locked. Click the debug button and enter the unlock code to unlock it.');
         }
         else if (cmd === '!rainbowmode') {
             const enabled = boolArg(arg, '!rainbowmode');
@@ -7835,7 +7867,7 @@ function formatCooldownMS(ms) {
 }
 function gameLoop(now) {
     requestAnimationFrame(gameLoop);
-    updateRainbowMode();
+
     if (!gameRunning) return;
 
     const delta = now - lastFrameTime;
@@ -7845,6 +7877,7 @@ function gameLoop(now) {
     lastFrameTime = now - (delta % frameInterval);
 
     update();
+    updateRainbowMode();
     hurryTick(delta);
     draw();
 }
