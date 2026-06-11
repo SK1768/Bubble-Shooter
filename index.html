@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1070,6 +1070,27 @@ button.danger {
     text-shadow: 0 0 12px #ff0000;
 }
 
+.game-error-actions {
+    margin-top: 14px;
+    display: flex;
+    justify-content: center;
+}
+
+.game-error-action-btn {
+    min-width: 150px;
+    border: 2px solid #ff3333;
+    background: #260000;
+    color: #ffffff;
+    box-shadow:
+        0 0 12px rgba(255, 0, 0, 0.65),
+        inset 0 0 10px rgba(255, 0, 0, 0.22);
+}
+
+.game-error-action-btn:hover {
+    background: #ff3333;
+    color: #000000;
+}
+
 @keyframes gameErrorGlow {
     from {
         box-shadow:
@@ -1129,6 +1150,20 @@ button.danger {
 #gameErrorScreen.warning-mode .game-error-restart {
     color: #fff8cc;
     text-shadow: 0 0 12px #ffdd33;
+}
+
+#gameErrorScreen.warning-mode .game-error-action-btn {
+    border-color: #ffdd33;
+    background: #221c00;
+    color: #fff8cc;
+    box-shadow:
+        0 0 12px rgba(255, 221, 51, 0.65),
+        inset 0 0 10px rgba(255, 221, 51, 0.22);
+}
+
+#gameErrorScreen.warning-mode .game-error-action-btn:hover {
+    background: #ffdd33;
+    color: #000000;
 }
 
 @keyframes gameWarningGlow {
@@ -1200,7 +1235,8 @@ body.rainbow-mode #trackTime,
 body.rainbow-mode #mainMenu h1,
 body.rainbow-mode #authorName,
 body.rainbow-mode #statsContent,
-body.rainbow-mode #menuDescription {
+body.rainbow-mode #menuDescription,
+body.rainbow-mode #secretOverlay {
     color: hsl(var(--rainbow-hue, 0), 100%, 65%) !important;
     text-shadow:
         0 0 8px hsl(var(--rainbow-hue, 0), 100%, 65%),
@@ -1229,7 +1265,7 @@ body.rainbow-mode #debugBtn.debug-locked {
     <small>Try Chrome, Firefox, Edge or Safari.</small>
     <hint>(If this text fades away then your browser supports JavaScript / HTML5 and you can play the game.)</hint>
 </div>
-<body oncontextmenu="return false;">
+<body oncontextmenu="return false">
 
 <div id="gameErrorScreen" role="alert" aria-live="assertive">
     <div class="game-error-box">
@@ -1245,7 +1281,10 @@ body.rainbow-mode #debugBtn.debug-locked {
         <div class="game-error-section-title">---STACK TRACE---</div>
         <pre id="stackTraceText" class="game-error-stack">No stack trace was provided.</pre>
 
-        <div class="game-error-restart" id="gameMessageRestartText">Press the refresh button on your browser to restart the game.</div>
+        <div class="game-error-restart" id="gameMessageRestartText">Press "Refresh" to restart the game.</div>
+        <div class="game-error-actions">
+            <button id="gameMessageActionBtn" class="game-error-action-btn" type="button">Refresh</button>
+        </div>
     </div>
 </div>
 
@@ -1618,6 +1657,7 @@ body.rainbow-mode #debugBtn.debug-locked {
         const typeLabel = document.getElementById("gameMessageTypeLabel");
         const causeLabel = document.getElementById("gameMessageCauseLabel");
         const restartText = document.getElementById("gameMessageRestartText");
+        const actionBtn = document.getElementById("gameMessageActionBtn");
         const typeText = document.getElementById("errorTypeText");
         const messageText = document.getElementById("errorMessage");
         const stackTraceText = document.getElementById("stackTraceText");
@@ -1645,12 +1685,20 @@ body.rainbow-mode #debugBtn.debug-locked {
             if (title) title.textContent = "Oops! A warning has occurred! 0_0";
             if (typeLabel) typeLabel.textContent = "---WARNING TYPE---";
             if (causeLabel) causeLabel.textContent = "---CAUSE OF THE WARNING---";
-            if (restartText) restartText.textContent = 'Press "P" to close this message and return to the main menu.';
+            if (restartText) restartText.textContent = 'Press "Close" to close this message.';
+            if (actionBtn) {
+                actionBtn.textContent = "Close";
+                actionBtn.onclick = window.closeGameWarning;
+            }
         } else {
             if (title) title.textContent = "Oh no! An error has occurred! :(";
             if (typeLabel) typeLabel.textContent = "---ERROR TYPE---";
             if (causeLabel) causeLabel.textContent = "---CAUSE OF THE ERROR---";
-            if (restartText) restartText.textContent = "Press the refresh button on your browser to restart the game.";
+            if (restartText) restartText.textContent = 'Press "Refresh" to restart the game.';
+            if (actionBtn) {
+                actionBtn.textContent = "Refresh";
+                actionBtn.onclick = function () { location.reload(); };
+            }
         }
 
         try {
@@ -1662,10 +1710,13 @@ body.rainbow-mode #debugBtn.debug-locked {
             screen.classList.add("show");
         }
             // Stop the game from continuing underneath the crash screen as much as possible.
-            try { if (typeof isPaused !== "undefined") isPaused = true; } catch (e) {}
-            try { if (typeof isGameRunning !== "undefined") isGameRunning = false; } catch (e) {}
-            try { if (typeof isPlaying !== "undefined") isPlaying = false; } catch (e) {}
-            try { if (typeof stopMusic === "function") stopMusic(); } catch (e) {}
+            // Warnings are dismissible, so they should not force the player back to the menu or stop the game.
+            if (!isWarning) {
+                try { if (typeof isPaused !== "undefined") isPaused = true; } catch (e) {}
+                try { if (typeof isGameRunning !== "undefined") isGameRunning = false; } catch (e) {}
+                try { if (typeof isPlaying !== "undefined") isPlaying = false; } catch (e) {}
+                try { if (typeof stopMusic === "function") stopMusic(); } catch (e) {}
+            }
         
     }
 
@@ -1680,7 +1731,7 @@ body.rainbow-mode #debugBtn.debug-locked {
     window.showGameError = showGameError;
     window.showGameWarning = showGameWarning;
 
-    window.closeGameWarningToMenu = function () {
+    window.closeGameWarning = function () {
         if (!gameMessageVisible || activeGameMessageMode !== "warning") return;
 
         const screen = document.getElementById("gameErrorScreen");
@@ -1690,27 +1741,14 @@ body.rainbow-mode #debugBtn.debug-locked {
 
         gameMessageVisible = false;
         activeGameMessageMode = "error";
-
-        if (typeof exitToMenu === "function") {
-            exitToMenu();
-        } else {
-            const mainMenu = document.getElementById("mainMenu");
-            const gameUI = document.getElementById("gameUI");
-            const customUI = document.getElementById("customUI");
-            const mobileControls = document.getElementById("mobileControls");
-            const canvas = document.getElementById("gameCanvas");
-
-            if (mainMenu) mainMenu.style.display = "block";
-            if (gameUI) gameUI.style.display = "none";
-            if (customUI) customUI.style.display = "none";
-            if (mobileControls) mobileControls.style.display = "none";
-            if (canvas) canvas.style.display = "none";
-        }
     };
+
+    // Old name kept as an alias in case any older code still calls it.
+    window.closeGameWarningToMenu = window.closeGameWarning;
 
     window.addEventListener("keydown", function (event) {
         if (event.key && event.key.toLowerCase() === "p") {
-            window.closeGameWarningToMenu();
+            window.closeGameWarning();
         }
     });
 
