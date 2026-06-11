@@ -393,6 +393,7 @@ body {
             }
 
             .lives-wrapper,
+            .bubbles-wrapper,
             .progress-wrapper,
             .streak-wrapper,
             .hurry-wrapper,
@@ -423,6 +424,10 @@ body {
                 color: var(--lives-label-color, #00ff00);
             }
 
+            .bubbles-wrapper .meter-label {
+                color: var(--bubbles-label-color, #ffffff);
+            }
+
             .progress-wrapper .meter-label {
                 color: var(--progress-label-color, #8b0000);
             }
@@ -450,6 +455,7 @@ body {
             }
 
             #livesContainer,
+            #bubblesContainer,
             #progressContainer,
             #streakContainer,
             #hurryTimerContainer,
@@ -500,6 +506,11 @@ body {
                 filter: drop-shadow(0 0 7px #00ff00);
             }
 
+            #bubblesFill {
+                stroke: #ffffff;
+                filter: drop-shadow(0 0 7px #ffffff);
+            }
+
             #progressFill {
                 stroke: #8b0000;
                 filter: drop-shadow(0 0 7px #8b0000);
@@ -533,6 +544,7 @@ body {
             }
 
             #livesDisplay,
+            #bubblesRemainingText,
             #percentText,
             #streakTimerText,
             #hurryTimerDisplay,
@@ -559,6 +571,12 @@ body {
                 color: #00ff00;
                 text-shadow: 0 0 8px #00ff00;
                 font-size: 18px;
+            }
+
+            #bubblesRemainingText {
+                color: var(--bubbles-label-color, #ffffff);
+                text-shadow: 0 0 8px var(--bubbles-label-color, #ffffff);
+                font-size: 11px;
             }
 
             #percentText {
@@ -1127,6 +1145,69 @@ button.danger {
             inset 0 0 34px rgba(255, 221, 51, 0.32);
     }
 }
+
+
+/* 🌈 Rainbow debug mode */
+body.rainbow-mode {
+    animation: rainbowTextCycle 2.5s linear infinite;
+}
+
+body.rainbow-mode canvas {
+    border-color: hsl(var(--rainbow-hue, 0), 100%, 55%) !important;
+    box-shadow:
+        0 0 18px hsl(var(--rainbow-hue, 0), 100%, 55%),
+        0 0 38px hsl(calc(var(--rainbow-hue, 0) + 90), 100%, 55%) !important;
+}
+
+body.rainbow-mode button,
+body.rainbow-mode .mobile-btn,
+body.rainbow-mode .panel,
+body.rainbow-mode #statsBoard,
+body.rainbow-mode #debugConsole,
+body.rainbow-mode #debugOverlayPanel,
+body.rainbow-mode #musicPanel,
+body.rainbow-mode #chooseMusicBtn {
+    border: 2px solid hsl(var(--rainbow-hue, 0), 100%, 55%) !important;
+    color: hsl(calc(var(--rainbow-hue, 0) + 180), 100%, 70%) !important;
+    text-shadow: 0 0 8px currentColor !important;
+    box-shadow:
+        0 0 12px hsl(var(--rainbow-hue, 0), 100%, 55%),
+        inset 0 0 10px hsla(calc(var(--rainbow-hue, 0) + 120), 100%, 55%, 0.25) !important;
+}
+
+body.rainbow-mode .meter-label,
+body.rainbow-mode #livesDisplay,
+body.rainbow-mode #bubblesRemainingText,
+body.rainbow-mode #percentText,
+body.rainbow-mode #streakTimerText,
+body.rainbow-mode #hurryTimerDisplay,
+body.rainbow-mode #campaignTimerDisplay,
+body.rainbow-mode #levelDisplay,
+body.rainbow-mode #scoreDisplay,
+body.rainbow-mode #streakDisplay,
+body.rainbow-mode #trackState,
+body.rainbow-mode #trackTime,
+body.rainbow-mode #mainMenu h1,
+body.rainbow-mode #authorName,
+body.rainbow-mode #statsContent,
+body.rainbow-mode #menuDescription {
+    color: hsl(var(--rainbow-hue, 0), 100%, 65%) !important;
+    text-shadow:
+        0 0 8px hsl(var(--rainbow-hue, 0), 100%, 65%),
+        0 0 18px hsl(calc(var(--rainbow-hue, 0) + 90), 100%, 55%) !important;
+}
+
+body.rainbow-mode .meter-fill {
+    stroke: hsl(var(--rainbow-hue, 0), 100%, 58%) !important;
+    filter: drop-shadow(0 0 8px hsl(var(--rainbow-hue, 0), 100%, 58%)) !important;
+}
+
+body.rainbow-mode #debugBtn.debug-locked {
+    border-color: #ff0000 !important;
+    color: #ff4444 !important;
+    box-shadow: 0 0 14px #ff0000 !important;
+}
+
 </style>
 </head>
 <div id="unsupportedBrowserMessage">
@@ -1319,6 +1400,19 @@ button.danger {
                         </span>
                     </div>
                     <div class="meter-label">LIVES</div>
+                </div>
+
+                <div class="bubbles-wrapper">
+                    <div id="bubblesContainer">
+                        <svg class="meter-svg" viewBox="0 0 80 80" aria-hidden="true">
+                            <circle class="meter-track" cx="40" cy="40" r="30"></circle>
+                            <circle id="bubblesFill" class="meter-fill" cx="40" cy="40" r="30"
+                                    transform="rotate(-90 40 40)"></circle>
+                        </svg>
+                        <div class="meter-core"></div>
+                        <span id="bubblesRemainingText">0/0</span>
+                    </div>
+                    <div class="meter-label">BUBBLES LEFT</div>
                 </div>
 
                 <div class="progress-wrapper">
@@ -3075,6 +3169,7 @@ fadeTransition(() => {
         logInfo(
             "Welcome to SK's Bubble Shooter HTML game!"
         );
+        checkDebugFlagConflictOnLoad();
         if (musicPlayerVisible) {
             document.getElementById("musicPanel").style.display = "block"
         }
@@ -3194,6 +3289,9 @@ let isLoading = false;
 let playerName = localStorage.getItem("playerName") || "Player";
 let cheatCount = Number(localStorage.getItem("cheatCount")) || 0;
 let isBannedFromDebugCommands = localStorage.getItem("isBannedFromDebugCommands") === "true";
+let debugLocked = localStorage.getItem("debugLocked") === "true";
+let rainbowMode = localStorage.getItem("rainbowMode") === "true";
+let rainbowHue = 0;
 let hurryRunning = false;
 const RANDOMISE_LAYOUT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 let lastRandomiseLayoutTime = 0;
@@ -3735,12 +3833,110 @@ function toggleAutosave() {
 updateSoundButton();
 updateAutosaveButton();
 updateAimButton();
+applyRainbowMode();
+updateDebugButton();
 
 function updateDebugButton()
 {
-    const debugBtn =  document.getElementById("debugBtn")
-    debugBtn.style.borderColor = isBannedFromDebugCommands ? "#ff0000" : "#555"
+    const debugBtn =  document.getElementById("debugBtn");
+    if (!debugBtn) return;
 
+    const blocked = isBannedFromDebugCommands || debugLocked;
+    debugBtn.style.borderColor = blocked ? "#ff0000" : "#555";
+    debugBtn.style.borderWidth = blocked ? "3px" : "2px";
+    debugBtn.classList.toggle("debug-locked", blocked);
+
+    if (isBannedFromDebugCommands) {
+        debugBtn.title = "You have been banned from using debug commands.";
+        debugBtn.innerText = "🚫 DEBUG";
+    } else if (debugLocked) {
+        debugBtn.title = "Debug is locked. Click and enter the unlock code.";
+        debugBtn.innerText = "🔒 DEBUG";
+    } else {
+        debugBtn.title = "Open debug console";
+        debugBtn.innerText = "DEBUG";
+    }
+
+}
+
+function tryUnlockDebugWithCode() {
+    const code = prompt("Enter the code to unlock the debug button:");
+
+    if (code === null) return false;
+
+    if (code.trim() === "1768") {
+        debugLocked = false;
+        localStorage.setItem("debugLocked", "false");
+        updateDebugButton();
+        alert("Debug button unlocked.");
+        return true;
+    }
+
+    alert("Incorrect code.");
+    updateDebugButton();
+    return false;
+}
+
+function checkDebugFlagConflictOnLoad() {
+    if (isBannedFromDebugCommands && debugLocked) {
+        logWarning('isBannedFromDebugCommands and debugLocked are set to true which will cause problems to the debug commands system. Press "R" in the main menu to set both of them back to false.');
+    }
+}
+
+function resetDebugConflictFlagsFromMainMenu() {
+    if (!(isBannedFromDebugCommands && debugLocked)) return false;
+
+    const mainMenu = document.getElementById("mainMenu");
+    if (!mainMenu || mainMenu.style.display === "none") return false;
+
+    isBannedFromDebugCommands = false;
+    debugLocked = false;
+    localStorage.setItem("isBannedFromDebugCommands", "false");
+    localStorage.setItem("debugLocked", "false");
+    updateDebugButton();
+    logInfo("isBannedFromDebugCommands and debugLocked have both been reset to false.");
+    alert("isBannedFromDebugCommands and debugLocked have both been reset to false.");
+    return true;
+}
+
+
+function boolArg(arg, commandName) {
+    if (arg !== 'true' && arg !== 'false') {
+        alert(`Usage: ${commandName} true/false`);
+        return null;
+    }
+    return arg === 'true';
+}
+
+function applyRainbowMode() {
+    document.body.classList.toggle('rainbow-mode', rainbowMode);
+}
+
+function updateRainbowMode() {
+    if (!rainbowMode) return;
+    rainbowHue = (rainbowHue + 3) % 360;
+    document.documentElement.style.setProperty('--rainbow-hue', rainbowHue);
+}
+
+function updateBubblesRemainingRing() {
+    const container = document.getElementById('bubblesContainer');
+    const text = document.getElementById('bubblesRemainingText');
+    if (!container || !text) return;
+
+    const total = Math.max(0, Number(initialBubbleCount) || 0);
+    const remaining = Math.max(0, bubbles ? bubbles.length : 0);
+    const remainingPercent = total > 0 ? (remaining / total) * 100 : 0;
+    const bubbleColor = (currentBall && ammo > 0) ? currentBall : '#888888';
+
+    container.style.display = 'block';
+    text.style.display = 'flex';
+    text.textContent = total > 0 ? `${remaining}/${total}` : `${remaining}`;
+    text.style.color = bubbleColor;
+    text.style.textShadow = `0 0 10px ${bubbleColor}`;
+    document.documentElement.style.setProperty('--bubbles-label-color', bubbleColor);
+
+    // Opposite of progress: progress fills up as bubbles disappear, this drains down.
+    setCircularMeterFill('bubblesFill', remainingPercent, bubbleColor);
 }
 
 function toggleAim() {
@@ -4205,11 +4401,35 @@ function updatePanicState() {
 }
 
 
-function openDebug() { document.getElementById('debugConsole').style.display = 'block'; document.getElementById('debugInput').value = ''; document.getElementById('debugInput').focus(); setPause(true); }
+function openDebug() {
+
+    if (debugLocked && !tryUnlockDebugWithCode()) {
+        return;
+    }
+
+    document.getElementById('debugConsole').style.display = 'block';
+    document.getElementById('debugInput').value = '';
+    document.getElementById('debugInput').focus();
+    setPause(true);
+}
 
 window.addEventListener('keydown', e => {
     if (e.key === 'Escape') togglePause();
-    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'c') { e.preventDefault(); openDebug(); }
+
+    const activeTag = (document.activeElement && document.activeElement.tagName || '').toLowerCase();
+    const typingInInput = activeTag === 'input' || activeTag === 'textarea';
+
+    if (!typingInInput && e.key && e.key.toLowerCase() === 'r') {
+        if (resetDebugConflictFlagsFromMainMenu()) {
+            e.preventDefault();
+            return;
+        }
+    }
+
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        openDebug();
+    }
 });
 
 document.getElementById('debugInput').addEventListener('keydown', async (e) => {
@@ -4385,7 +4605,29 @@ document.getElementById('debugInput').addEventListener('keydown', async (e) => {
             alert("Commands must start with \"!\".")
             return;
         }
-        if (cmd === '!forceerror') {
+        if (cmd === '!lockdebug') {
+            const enabled = boolArg(arg, '!lockdebug');
+            if (enabled === null) return;
+
+            debugLocked = enabled;
+            localStorage.setItem('debugLocked', debugLocked ? 'true' : 'false');
+            updateDebugButton();
+            logInfo(`Debug lock ${debugLocked ? 'ENABLED' : 'DISABLED'}.`);
+        }
+        else if (cmd === '!rainbowmode') {
+            const enabled = boolArg(arg, '!rainbowmode');
+            if (enabled === null) return;
+
+            rainbowMode = enabled;
+            localStorage.setItem('rainbowMode', rainbowMode ? 'true' : 'false');
+            applyRainbowMode();
+            updateBubblesRemainingRing();
+            updateProgressBar();
+            updateLivesUI();
+            updateDebugButton();
+            logInfo(`Rainbow mode ${rainbowMode ? 'ENABLED' : 'DISABLED'}.`);
+        }
+        else if (cmd === '!forceerror') {
             const forcedError = new Error('You used the "!forceerror" debug command to force an error to occur.');
             forcedError.name = "ForcedDebugException";
             console.error(forcedError);
@@ -4516,6 +4758,7 @@ else if (cmd === '!setcurrentbubble') {
 
     currentBall = arg.toUpperCase();
     refreshFavicon();
+    updateBubblesRemainingRing();
 }
 
 else if (cmd === '!setnextbubble') {
@@ -6069,6 +6312,7 @@ function updateProgressBar() {
     percentText.style.textShadow = `0 0 10px ${ringColor}`;
 
     setCircularMeterFill("progressFill", progressValue, ringColor);
+    updateBubblesRemainingRing();
     animateProgressText(progressValue);
 }
 function animateProgressText(targetPercent) {
@@ -7591,7 +7835,7 @@ function formatCooldownMS(ms) {
 }
 function gameLoop(now) {
     requestAnimationFrame(gameLoop);
-
+    updateRainbowMode();
     if (!gameRunning) return;
 
     const delta = now - lastFrameTime;
@@ -7920,9 +8164,11 @@ mouseY = canvas.height - 200;
     document.getElementById('mobileControls').style.display = 'flex';
     setSideRingsVisible(true);
     document.getElementById('livesContainer').style.display = 'block';
+    document.getElementById('bubblesContainer').style.display = 'block';
     document.getElementById('progressContainer').style.display = 'block';
     document.getElementById('streakContainer').style.display = 'block';
     document.getElementById('livesDisplay').style.display = 'flex';
+    document.getElementById('bubblesRemainingText').style.display = 'flex';
     document.getElementById('percentText').style.display = 'flex';
     document.getElementById('streakTimerText').style.display = 'flex';
     updateHurryTimerRing();
@@ -7980,7 +8226,9 @@ mouseY = canvas.height - 200;
     document.getElementById('mobileControls').style.display = 'none';
     document.getElementById('livesContainer').style.display = 'none';
     document.getElementById('progressContainer').style.display = 'none';
+    document.getElementById('bubblesContainer').style.display = 'none';
 document.getElementById('livesDisplay').style.display = 'none';
+    document.getElementById('bubblesRemainingText').style.display = 'none';
     document.getElementById('percentText').style.display = 'none';
 document.getElementById('streakContainer').style.display = 'none';
 document.getElementById('streakTimerText').style.display = 'none';
@@ -8436,9 +8684,10 @@ if (isLoadingSave) {
     }
 
     refreshFavicon();
+    updateBubblesRemainingRing();
 }
 
-function swapBubbles() { if (ammo <= 1) return; [currentBall, nextBall] = [nextBall, currentBall]; sounds.play('swap'); refreshFavicon(); stats.bubblesSwapped++; saveStats();}
+function swapBubbles() { if (ammo <= 1) return; [currentBall, nextBall] = [nextBall, currentBall]; sounds.play('swap'); refreshFavicon(); updateBubblesRemainingRing(); stats.bubblesSwapped++; saveStats();}
 function triggerConfetti() { for(let i=0; i<50; i++) confetti.push({ x: 220, y: 300, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, color: ALL_COLORS[Math.floor(Math.random()*6)], life: 1.0 }); }
 function updatePaletteUI() {
     const p = document.getElementById('colorPalette');
@@ -9238,18 +9487,22 @@ function closeSfxMenu() {
     initialBubbleCount = 0;
 
     setCircularMeterFill("livesFill", 0, "#00ff00");
+    setCircularMeterFill("bubblesFill", 0, "#ffffff");
     setCircularMeterFill("progressFill", 0, "#8b0000");
     setCircularMeterFill("streakFill", 0, "#00e5ff");
     displayedProgressPercent = 0;
 document.getElementById('livesInner').innerText = "❤️0";
+document.getElementById('bubblesRemainingText').innerText = "0/0";
 document.getElementById('percentText').innerText = "0.0%";
 document.getElementById('streakTimerText').innerText = "0s";
 
     document.getElementById('livesContainer').classList.remove('low-lives');
     document.getElementById('livesContainer').style.display = "none";
+    document.getElementById('bubblesContainer').style.display = "none";
     document.getElementById('progressContainer').style.display = "none";
     document.getElementById('streakContainer').style.display = "none";
     document.getElementById('livesDisplay').style.display = "none";
+    document.getElementById('bubblesRemainingText').style.display = "none";
     document.getElementById('percentText').style.display = "none";
     document.getElementById('streakTimerText').style.display = "none";
     setSideRingsVisible(false);
