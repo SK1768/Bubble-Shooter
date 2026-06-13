@@ -1,4 +1,4 @@
-
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -8820,10 +8820,6 @@ function updatePaletteUI() {
         ammo: (mode === 'custom' || isPlaytesting)
             ? parseInt(document.getElementById('customAmmoInput')?.value) || ammo
             : ammo,
-        progress: (mode === 'custom' && !isPlaytesting)
-            ? "0.0%"
-            : getProgress(),
-
         bubbles: bubbles.map(b => ({
             row: b.row,
             col: b.col,
@@ -9415,8 +9411,7 @@ function loadSaveData(s, fileName = "save file") {
         perfectStreak = s.perfect_streak ?? 0;
         updateLivesUI();
 
-        loadedProgressOverride =
-            typeof s.progress === "string" ? s.progress : null;
+        loadedProgressOverride = null;
 
         startMode("puzzle", true);
 
