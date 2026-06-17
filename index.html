@@ -4354,7 +4354,7 @@ let chainPopPopupX = 0;
 let chainPopPopupY = 0;
 let chainPopPendingFallKeys = new Set();
 let currentBall = '', nextBall = '', ammo = 0, initialBubbleCount = 0;
-let streakCount = 1, streakTimer = 0, streakFrozen = false;
+let streakCount = 0, streakTimer = 0, streakFrozen = false;
 const STREAK_DURATION = 6;
 let gameOver = false, gameWin = false, gameRunning = false, isPaused = false;
 let gameOverReason = ""; 
@@ -4942,13 +4942,15 @@ else if (cmd === '!showfps') {
 else if (cmd === '!resetgame')
 {
    if (confirm("Are you sure you want to reset the game?\nOK = Yes\nCancel = No"))
+   showSecretText("Restting the game...", 2500)
+   fadeTransition(() => {
    startMode("puzzle")
    perfectStreak = 0;
    score = 0;
-   streakCount = 1;
+   streakCount = 0;
    streakTimer = 0;
    ammo = 50;
-
+}, 2500, false)
 }
 else if (cmd === "!showdebug") {
 
@@ -8899,7 +8901,6 @@ async function putSaveSlot(slotId, saveData, forcedFileName = null) {
         timestamp: meta.timestamp || new Date().toLocaleString(),
         gameType: meta.gameType || (saveData.level === "CUSTOM LEVEL" ? "CUSTOM" : "PUZZLE")
     };
-
     return new Promise((resolve, reject) => {
         const tx = db.transaction(BUBBLE_SAVE_STORE, "readwrite");
         tx.objectStore(BUBBLE_SAVE_STORE).put(row);
@@ -8911,7 +8912,8 @@ async function putSaveSlot(slotId, saveData, forcedFileName = null) {
             db.close();
             reject(tx.error);
         };
-    });
+    })
+   
 }
 
 async function deleteSaveSlot(slotId) {
@@ -8932,19 +8934,22 @@ async function deleteSaveSlot(slotId) {
 }
 
 function saveDataToDownload(saveData, fileName) {
+    showSecretText(`Exporting: ${fileName}...`, 2500)
+    fadeTransition(() => {
     const blob = new Blob([JSON.stringify(saveData, null, 2)], { type: "text/plain" });
     const a = document.createElement("a");
     a.download = fileName || getSaveFileName(saveData);
     a.href = URL.createObjectURL(blob);
     a.click();
     URL.revokeObjectURL(a.href);
+}, 2500, false)
 }
 
 function pickSaveFileFromDevice() {
     return new Promise((resolve) => {
         const input = document.createElement("input");
         input.type = "file";
-        input.accept = ".bubblesav,application/json,text/plain";
+        input.accept = ".bubblesav";
         input.style.display = "none";
         document.body.appendChild(input);
 
@@ -8983,10 +8988,12 @@ async function importSaveToSlot(slotId, oldRow = null) {
         const okToOverwrite = confirm(
             `${oldRow.fileName} already exist in save slot ${slotNumber}. Do you want overwrite it with ${importedFileName}?`
         );
-
         if (!okToOverwrite) return;
     }
-
+    
+    const slotNumber = slotId.replace("slot", "")
+    showSecretText(`Importing: ${importedFileName} to slot ${slotNumber}...`, 2500)
+    fadeTransition(async () => {
     try {
         await putSaveSlot(slotId, saveData, importedFileName);
         await renderSaveSlotPopup();
@@ -8994,6 +9001,7 @@ async function importSaveToSlot(slotId, oldRow = null) {
         alert("Could not import this save file inside the game.");
         logError(e);
     }
+}, 2500, false)
 }
 
 function getSlotLabel(slotId) {
@@ -9093,8 +9101,11 @@ async function renderSaveSlotPopup() {
                 );
 
                 if (!okToOverwrite) return;
+                
             }
-
+    const slotNumber = slotId.replace("slot", "");
+    showSecretText(`Saving: ${newFileName} to slot ${slotNumber}...`, 2500)
+    fadeTransition(async () => {
             try {
                 const saved = await putSaveSlot(slotId, pendingSaveDataForSlot);
                 logSuccess(`Saved inside IndexedDB. ("${saved.fileName}")`);
@@ -9103,6 +9114,7 @@ async function renderSaveSlotPopup() {
                 alert("Could not save this file inside the game.");
                 logError(e);
             }
+        },2500, false);
         };
 
         div.querySelector('[data-action="load"]').onclick = () => {
@@ -9123,6 +9135,8 @@ async function renderSaveSlotPopup() {
         div.querySelector('[data-action="delete"]').onclick = async () => {
             if (!row) return;
             if (!confirm(`Are you sure you want to delete ${row.fileName}?`)) return;
+            showSecretText(`Deleting: ${row.fileName}`, 2500)
+            fadeTransition(async () =>{
             try {
                 await deleteSaveSlot(slotId);
                 await renderSaveSlotPopup();
@@ -9130,6 +9144,7 @@ async function renderSaveSlotPopup() {
                 alert("Could not delete this save file.");
                 logError(e);
             }
+          }, 2500,)
         };
 
         list.appendChild(div);
