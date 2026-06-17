@@ -6862,10 +6862,10 @@ if (inner) {
         const streakPct = (streakTimer / STREAK_DURATION) * 100;
 const streakContainer = document.getElementById("streakContainer");
 const streakTimerText = document.getElementById("streakTimerText");
-const shownStreakPct = streakCount > 1 ? Math.max(0, streakPct) : 0;
+const shownStreakPct = streakCount > 0 ? Math.max(0, streakPct) : 0;
 
 setCircularMeterFill("streakFill", shownStreakPct, "#00e5ff");
-streakTimerText.innerText = streakCount > 1 ? `${streakTimer.toFixed(1)}s` : "0.0s";
+streakTimerText.innerText = streakCount > 0 ? `${streakTimer.toFixed(1)}s` : "0.0s";
 streakTimerText.style.display = "flex";
 
         projectiles.forEach((p, i) => {
@@ -8379,7 +8379,7 @@ setBrowserTitle("▶️ SK's Bubble Shooter — Playtesting");
     gameWin = false;
 
     score = 0;
-    streakCount = 1;
+    streakCount = 0;
     streakTimer = 0;
 
     document.getElementById('customUI').style.display = 'none';
