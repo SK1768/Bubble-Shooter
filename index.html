@@ -6857,7 +6857,7 @@ if (inner) {
     if (!gameOver && !gameWin && !winPending) {
         if (streakTimer > 0 && !streakFrozen && conversionQueue.length === 0 && !chainPopActive) { 
             streakTimer -= 0.01; 
-            if (streakTimer <= 0) streakCount = 1; 
+            if (streakTimer <= 0) streakCount = 0; 
         }
         const streakPct = (streakTimer / STREAK_DURATION) * 100;
 const streakContainer = document.getElementById("streakContainer");
