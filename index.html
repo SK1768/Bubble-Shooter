@@ -8937,31 +8937,19 @@ function saveDataToDownload(saveData, fileName) {
     showSecretText(`Exporting: ${fileName}.`, 2500);
 
     fadeTransition(() => {
-        const saveText = JSON.stringify(saveData, null, 2);
-        const finalFileName = fileName || getSaveFileName(saveData);
-
-        if (navigator.share) {
-            const file = new File([saveText], finalFileName, {
-                type: "text/plain"
-            });
-
-            navigator.share({
-                files: [file],
-                title: finalFileName,
-                text: "SK's Bubble Shooter save file"
-            }).catch(() => {
-                alert("Export was cancelled.");
-            });
-
-            return;
-        }
-
-        const blob = new Blob([saveText], { type: "text/plain" });
+        const blob = new Blob([JSON.stringify(saveData, null, 2)], { type: "text/plain" });
         const a = document.createElement("a");
-        a.download = finalFileName;
+
+        a.download = fileName || getSaveFileName(saveData);
         a.href = URL.createObjectURL(blob);
+
+        document.body.appendChild(a);
         a.click();
-        URL.revokeObjectURL(a.href);
+        a.remove();
+
+        setTimeout(() => {
+            URL.revokeObjectURL(a.href);
+        }, 1000);
     }, 2500, false);
 }
 
@@ -9039,7 +9027,7 @@ async function openSaveSlotPopup(action = "load", saveData = null) {
     title.textContent = action === "save" ? "💾 Save Files" : "📂 Load Save File";
     note.textContent = action === "save"
         ? "Press SAVE on save slots 1-10 to save inside the game. The autosave slot is only used by autosave."
-        : "Press LOAD to load a saved file, IMPORT to add a .bubblesav from your device, EXPORT to download a backup, or DELETE to remove it.";
+        : "Press LOAD to load a saved file, IMPORT to add a .bubblesav from your device, EXPORT to download a backup or DELETE to remove it.";
 
     popup.style.display = "flex";
     await renderSaveSlotPopup();
@@ -9101,6 +9089,7 @@ async function renderSaveSlotPopup() {
                 <button data-action="load" ${!hasSave ? "disabled" : ""}>LOAD</button>
                 <button data-action="import" ${slotId === "autosave" ? "disabled" : ""}>IMPORT</button>
                 <button data-action="export" ${!hasSave ? "disabled" : ""}>EXPORT</button>
+                <button data-action="copy" ${!hasSave ? "disabled" : ""}>COPY</button>
                 <button data-action="delete" class="danger" ${!hasSave ? "disabled" : ""}>DELETE</button>
             </div>
         `;
@@ -9151,6 +9140,18 @@ async function renderSaveSlotPopup() {
             if (!row) return;
             saveDataToDownload(row.saveData, row.fileName);
         };
+		div.querySelector('[data-action="copy"]').onclick = async () => {
+    if (!row) return;
+
+    const saveText = JSON.stringify(row.saveData, null, 2);
+
+    try {
+        await navigator.clipboard.writeText(saveText);
+        alert("Save text copied! You can paste it into Notes or a text file.");
+    } catch (e) {
+        prompt("Copy this save text:", saveText);
+    }
+};
 
         div.querySelector('[data-action="delete"]').onclick = async () => {
             if (!row) return;
