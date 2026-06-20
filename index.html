@@ -8940,13 +8940,22 @@ function saveDataToDownload(saveData, fileName) {
         const saveText = JSON.stringify(saveData, null, 2);
         const finalFileName = fileName || getSaveFileName(saveData);
 
-        // Android WebView export support
-        if (window.Android && typeof window.Android.exportSaveFile === "function") {
-            window.Android.exportSaveFile(finalFileName, saveText);
+        if (navigator.share) {
+            const file = new File([saveText], finalFileName, {
+                type: "text/plain"
+            });
+
+            navigator.share({
+                files: [file],
+                title: finalFileName,
+                text: "SK's Bubble Shooter save file"
+            }).catch(() => {
+                alert("Export was cancelled.");
+            });
+
             return;
         }
 
-        // Normal browser export
         const blob = new Blob([saveText], { type: "text/plain" });
         const a = document.createElement("a");
         a.download = finalFileName;
