@@ -8934,15 +8934,26 @@ async function deleteSaveSlot(slotId) {
 }
 
 function saveDataToDownload(saveData, fileName) {
-    showSecretText(`Exporting: ${fileName}...`, 2500)
+    showSecretText(`Exporting: ${fileName}.`, 2500);
+
     fadeTransition(() => {
-    const blob = new Blob([JSON.stringify(saveData, null, 2)], { type: "text/plain" });
-    const a = document.createElement("a");
-    a.download = fileName || getSaveFileName(saveData);
-    a.href = URL.createObjectURL(blob);
-    a.click();
-    URL.revokeObjectURL(a.href);
-}, 2500, false)
+        const saveText = JSON.stringify(saveData, null, 2);
+        const finalFileName = fileName || getSaveFileName(saveData);
+
+        // Android WebView export support
+        if (window.Android && typeof window.Android.exportSaveFile === "function") {
+            window.Android.exportSaveFile(finalFileName, saveText);
+            return;
+        }
+
+        // Normal browser export
+        const blob = new Blob([saveText], { type: "text/plain" });
+        const a = document.createElement("a");
+        a.download = finalFileName;
+        a.href = URL.createObjectURL(blob);
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }, 2500, false);
 }
 
 function pickSaveFileFromDevice() {
