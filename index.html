@@ -4470,12 +4470,7 @@ function updatePanicState() {
 
 
 function openDebug() {
-    if (isBannedFromDebugCommands) {
-        updateDebugButton();
-        alert("You have been banned from using debug commands.");
-        return;
-    }
-
+	
     if (debugLocked && !tryUnlockDebugWithCode()) {
         return;
     }
