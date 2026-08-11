@@ -5249,13 +5249,6 @@ canvas.addEventListener('mousedown', e => {
         swapBubbles();
         return false;
     }
-    if (isDailyPuzzle) {
-        exitToMenu();
-        isDailyPuzzle = false;
-        suppressAutosaveOnce = false;
-        return;
-    }
-
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
@@ -5341,6 +5334,16 @@ if (idx !== -1) {
 
     // If level ended, click advances (your existing logic)
     if (gameOver || gameWin) {
+
+        // Daily Puzzle should only return to the menu AFTER its result screen.
+        // Previously this check lived at the top of mousedown, so every normal
+        // Daily Puzzle shot could immediately kick the player back to the menu.
+        if (isDailyPuzzle) {
+            exitToMenu();
+            isDailyPuzzle = false;
+            suppressAutosaveOnce = false;
+            return;
+        }
 
         if (isPlaytesting) {
             bubbles = JSON.parse(JSON.stringify(customLevelSnapshot));
@@ -6086,12 +6089,19 @@ function popBubbles(m, startBubble = null) {
         );
     }
 
+    function getChainPopDelay() {
+        // Keep the chain reaction tied to the same timing used by the FPS cap.
+        // Read frameInterval each time so changing the slider during a chain
+        // takes effect on the very next pop.
+        return Math.max(1, frameInterval);
+    }
+
     function popNextInChain() {
         // ⏸️ Do NOT let the chain reaction continue underneath pause menus,
         // fade/loading transitions, win pending screens, game over, etc.
         // It waits here and resumes from the same bubble once gameplay resumes.
         if (isChainReactionPaused()) {
-            setTimeout(popNextInChain, 55);
+            setTimeout(popNextInChain, getChainPopDelay());
             return;
         }
 
@@ -6101,7 +6111,7 @@ function popBubbles(m, startBubble = null) {
         }
 
         burstBubble(chain[popped]);
-        setTimeout(popNextInChain, 55);
+        setTimeout(popNextInChain, getChainPopDelay());
     }
 
     popNextInChain();
