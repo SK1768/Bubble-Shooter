@@ -1312,6 +1312,7 @@ body.rainbow-mode #debugBtn.debug-locked {
 <br>
         <button onclick="enterCustomEditor()" style="background: #a155ff;"onmouseenter="setMenuDesc('Custom Mode: Create and test your own bubble layouts.')" onmouseleave="clearMenuDesc()">🛠️ CUSTOM MODE</button>
         <br>
+        <button onclick="startContainerMode()" style="background:#9b59b6;" onmouseenter="setMenuDesc('Container Mode: Catch falling bubbles in a separate container, combine matching colours into bigger bubbles and earn bonus points when you complete the level. Keep the bubbles below the red line or the container will overflow!')" onmouseleave="clearMenuDesc()">🪣 CONTAINER MODE</button><br>
         <button onclick="startCampaign()" style="background:#ff9500; font-weight:bold;"onmouseenter="setMenuDesc('Campaign Mode: Beat 20 levels with only 5 lives before the timer runs out.')" onmouseleave="clearMenuDesc()">
             🏆 CAMPAIGN MODE
         </button>
@@ -1411,6 +1412,7 @@ body.rainbow-mode #debugBtn.debug-locked {
         <div style="background: #333; padding: 10px; border-radius: 5px; display: inline-block;">
             <label>Set Ammo: </label>
             <input type="number" id="customAmmoInput" class="ammo-input" value="40" min="1">
+            <label style="display:inline-block;margin:8px"><input type="checkbox" id="customContainerMode"> 🫧 Container Mode</label>
             <button onclick="startFromCustom()" style="background:#00ffcc; color:#000;">PLAY TEST</button>
         </div>
         <div id="colorPalette" style="margin-top: 10px;"></div>
@@ -1523,6 +1525,7 @@ body.rainbow-mode #debugBtn.debug-locked {
         </div>
     <canvas id="gameCanvas" width="440" height="640"></canvas>
 		<div id="bubbleHexOverlay"></div>
+        <div id="containerPanel" style="display:none;position:absolute;top:0;left:calc(100% + 115px);width:440px;height:640px;"><div id="containerTitle" style="display:none"></div><canvas id="containerCanvas" width="440" height="640" style="display:block;width:440px;height:640px;border:0;background:transparent;box-shadow:none;"></canvas></div>
         <div id="mobileControls">
             <div id="debugOverlayPanel"></div>
     <button class="mobile-btn" onclick="swapBubbles()">SWAP</button>
@@ -2214,6 +2217,25 @@ DAILY_100: {
     stat: "dailyPuzzleCompleted",
     goal: 100
 },
+// Additional container challenges (progress persists in localStorage).
+CONTAINER_POP_1: {title:"First Splash",description:"Pop your first container bubble.",stat:"containerBubblesPopped",goal:1},
+CONTAINER_POP_500: {title:"Bucket Buster",description:"Pop 500 container bubbles.",stat:"containerBubblesPopped",goal:500},
+CONTAINER_POP_1000: {title:"Container Demolition",description:"Pop 1,000 container bubbles.",stat:"containerBubblesPopped",goal:1000},
+CONTAINER_MERGE_1: {title:"Bubble Buddies",description:"Merge two bubbles in the container.",stat:"containerBubblesMerged",goal:1},
+CONTAINER_MERGE_25: {title:"Mixing Bowl",description:"Merge 25 pairs of container bubbles.",stat:"containerBubblesMerged",goal:25},
+CONTAINER_MERGE_100: {title:"Master Mixer",description:"Merge 100 pairs of container bubbles.",stat:"containerBubblesMerged",goal:100},
+CONTAINER_CATCH_50: {title:"Bubble Catcher",description:"Catch 50 bubbles in the container.",stat:"containerBubblesCaught",goal:50},
+CONTAINER_CATCH_250: {title:"Bucket Brigade",description:"Catch 250 bubbles in the container.",stat:"containerBubblesCaught",goal:250},
+CONTAINER_BONUS_100K: {title:"Bonus Jackpot",description:"Earn 100,000 container bonus points.",stat:"containerBonusPoints",goal:100000},
+CONTAINER_CONVERT_1: {title:"Colour Magic",description:"Convert your first colourless container bubble.",stat:"containerColourlessConverted",goal:1},
+CONTAINER_BIG_POP: {title:"Big Bang",description:"Pop a merged container bubble containing at least 5 original bubbles."},
+CONTAINER_CHAIN_5: {title:"Popcorn Party",description:"Pop at least 5 container bubbles with one click."},
+CONTAINER_BONUS_1K: {title:"Bonus Collector",description:"Earn 1,000 container bonus points.",stat:"containerBonusPoints",goal:1000},
+CONTAINER_BONUS_10K: {title:"Bonus Banker",description:"Earn 10,000 container bonus points.",stat:"containerBonusPoints",goal:10000},
+CONTAINER_POP_10: {title:"Container Cleaner",description:"Pop 10 bubbles inside the container.",stat:"containerBubblesPopped",goal:10},
+CONTAINER_POP_100: {title:"Container Crusher",description:"Pop 100 bubbles inside the container.",stat:"containerBubblesPopped",goal:100},
+CONTAINER_CONVERT_10: {title:"Container Alchemist",description:"Convert 10 colourless bubbles inside the container.",stat:"containerColourlessConverted",goal:10},
+CONTAINER_CONVERT_100: {title:"Colour Transformer",description:"Convert 100 colourless bubbles inside the container.",stat:"containerColourlessConverted",goal:100},
 SECRET_FINDER: {
     title: "Secret Finder",
     description: "Find the secret level and beat it."
@@ -2229,6 +2251,10 @@ FORGIVEN: {
 };
 
 const ACHIEVEMENT_ICONS = {
+    CONTAINER_BIG_POP: "💥",
+    CONTAINER_CHAIN_5: "🍿",
+    CONTAINER_MERGE_1: "🫧",
+    CONTAINER_POP_1: "🪣",
     FIRST_WIN: "🎉",
     MAX_LIVES: "❤️",
     PERFECT_CLEAR: "✨",
@@ -2246,6 +2272,7 @@ const ACHIEVEMENT_ICONS = {
 
 function getAchievementIcon(id, achievement) {
     if (ACHIEVEMENT_ICONS[id]) return ACHIEVEMENT_ICONS[id];
+    if (id.startsWith("CONTAINER_")) return "🫙";
     if (id.startsWith("LEVEL_")) return "⭐";
     if (id.startsWith("SCORE_")) return "💰";
     if (id.startsWith("STREAK_")) return "🔥";
@@ -2575,6 +2602,12 @@ const DEFAULT_STATS = {
     campaignWins: 0,
     dailyPuzzleCompleted: 0,
 
+    containerPlays: 0,
+    containerBubblesPopped: 0,
+    containerBubblesMerged: 0,
+    containerBubblesCaught: 0,
+    containerBonusPoints: 0,
+    containerColourlessConverted: 0,
     bubblesShot: 0,
     bubblesSwapped: 0,
 	bubblesPopped: 0,
@@ -3750,6 +3783,14 @@ function clearMenuDesc() {
 	Bubbles Dropped: <b>${fmt(stats.bubblesDropped)}</b><br>
     Colourless Bubbles Converted: <b>${fmt(stats.colourlessBubblesConverted || 0)}</b><br><br>
 
+    🫙 Container Mode Stats:<br>
+    Container Mode Played: <b>${fmt(stats.containerPlays || 0)}</b><br>
+    Container Bubbles Caught: <b>${fmt(stats.containerBubblesCaught || 0)}</b><br>
+    Container Bubbles Popped: <b>${fmt(stats.containerBubblesPopped || 0)}</b><br>
+    Container Bubbles Merged: <b>${fmt(stats.containerBubblesMerged || 0)}</b><br>
+    Container Colourless Bubbles Converted: <b>${fmt(stats.containerColourlessConverted || 0)}</b><br>
+    Container Bonus Points Earned: <b>${fmt(stats.containerBonusPoints || 0)}</b><br><br>
+
     Max Streak: <b>${fmt(stats.totalStreak)}</b><br>
     Max Perfect Streak: <b>${fmt(stats.perfectStreak)}</b><br><br>
 
@@ -4032,7 +4073,18 @@ const sounds = { // Webkit SFX
 
         const now = audioCtx.currentTime;
 
-        if (type === 'shoot') {
+        if (type === 'container_combine') {
+            osc.type='triangle'; osc.frequency.setValueAtTime(420,now); osc.frequency.exponentialRampToValueAtTime(760,now+0.13);
+            gain.gain.setValueAtTime(0.11,now);gain.gain.exponentialRampToValueAtTime(0.001,now+0.14);
+            osc.start();osc.stop(now+0.14);
+        } else if (type === 'container_drop') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(330, now);
+            osc.frequency.exponentialRampToValueAtTime(110, now + 0.16);
+            gain.gain.setValueAtTime(0.12, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+            osc.start(); osc.stop(now + 0.16);
+        } else if (type === 'shoot') {
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(150, now);
             osc.frequency.exponentialRampToValueAtTime(40, now + 0.1);
@@ -4342,6 +4394,337 @@ const COLOR_EMOJIS = {
 
 let mode = 'puzzle', score = 0, level = 1, angle = 0, mouseInside = false;
 let bubbles = [], fallingBubbles = [], projectiles = [], particles = [], floatingScores = [], confetti = [];
+let containerAbsorbParticles = [];
+let normalParticleFrameScale = 1; // Normal particle motion is calibrated to 60 FPS.
+let containerMode = false;
+let container_mode = false;
+let container_bubbles = [];
+let containerParticles = [];
+let containerEndQueue = [];
+let containerEndTimer = 0;
+let containerFinishing = false;
+let containerBonusPending = false;
+let containerRetryPending = false;
+let containerBonusTotal = 0;
+const CONTAINER_CAPACITY = 35;
+const CONTAINER_RED_LINE_Y = 45;
+const CONTAINER_PANIC_DISTANCE = 85;
+const CONTAINER_R = RADIUS;
+function containerRadius(b){return Math.max(4,Number(b?.radius)||CONTAINER_R);}
+function containerBubbleUnits(b){return Math.max(1,Number(b?.units)||Math.round((containerRadius(b)/CONTAINER_R)**2));}
+function containerBonusValue(){return container_bubbles.reduce((sum,b)=>sum+100*containerBubbleUnits(b),0);}
+function combineContainerBubbles(a,b){
+    if(a.color==null || a.color!==b.color)return false;
+    const ar=containerRadius(a),br=containerRadius(b);
+    const au=containerBubbleUnits(a),bu=containerBubbleUnits(b);
+    const massA=ar*ar,massB=br*br;
+    a.x=(a.x*massA+b.x*massB)/(massA+massB);
+    a.y=(a.y*massA+b.y*massB)/(massA+massB);
+    a.radius=Math.sqrt(ar*ar+br*br);
+    a.units=au+bu;
+    a.vx=((a.vx||0)*massA+(b.vx||0)*massB)/(massA+massB);
+    a.vy=((a.vy||0)*massA+(b.vy||0)*massB)/(massA+massB);
+    a.hasLanded=!!(a.hasLanded||b.hasLanded);
+    a.isFalling=!a.hasLanded;
+    stats.containerBubblesMerged=(Number(stats.containerBubblesMerged)||0)+1;
+    checkProgressAchievements(); saveStats();
+    spawnContainerEffect(a.x,a.y,a.color,'poof');sounds.play('container_combine');
+    return true;
+}
+function spawnContainerAbsorb(x,y,color){
+    // Dedicated particle pool: never changes the normal pop, poof or trail effects.
+    const tint = color || '#ffffff';
+    for(let i=0;i<30;i++){
+        const angle=Math.random()*Math.PI*2;
+        const distance=14+Math.random()*36;
+        const px=x+Math.cos(angle)*distance;
+        const py=y+Math.sin(angle)*distance;
+        containerAbsorbParticles.push({
+            x:px,y:py,vx:(x-px)*0.10,vy:(y-py)*0.10,
+            life:1,color:i%5===0?'#ffffff':tint,size:2+Math.random()*2.5
+        });
+    }
+}
+
+function startContainerMode() {
+    showSecretText("Loading: Container Mode...", 2500)
+    fadeTransition(() => {
+    containerMode = true;
+    container_mode = true;
+    stats.containerPlays = (Number(stats.containerPlays) || 0) + 1;
+    saveStats();
+    updateStatsBoard();
+    isDailyPuzzle = false;
+    isSecretLevel = false;
+    isCampaignMode = false;
+    startMode('puzzle');
+    }, 2500, false);
+}
+function addContainerBubble(b) {
+    if (!containerMode || gameOver || gameWin || containerFinishing) return;
+    const c = document.getElementById('containerCanvas');
+    const x = Math.max(CONTAINER_R,Math.min(c.width-CONTAINER_R, b.x / canvas.width * c.width));
+    container_bubbles.push({x,y:-CONTAINER_R,color:b.color,radius:CONTAINER_R,units:1,vy:0,vx:0,isFalling:true,hasLanded:false});
+    stats.containerBubblesCaught=(Number(stats.containerBubblesCaught)||0)+1;
+    checkProgressAchievements(); saveStats();
+    spawnContainerAbsorb(b.x,DEADLINE,b.color);
+    spawnContainerEffect(x,0,b.color,'pop',containerRadius(b));
+    sounds.play('container_drop');
+    // Failure is based on a LANDED bubble reaching the red line, not bubble count.
+}
+document.addEventListener('DOMContentLoaded',()=>{
+    const c=document.getElementById('containerCanvas');
+    c.addEventListener('pointerdown',e=>{
+        if(!containerMode||isPaused||gameOver||gameWin||containerFinishing||containerBonusPending)return;
+        const rect=c.getBoundingClientRect();
+        const x=(e.clientX-rect.left)*c.width/rect.width,y=(e.clientY-rect.top)*c.height/rect.height;
+        const i=container_bubbles.findIndex(b=>Math.hypot(b.x-x,b.y-y)<containerRadius(b)*1.2);
+        if(i>=0)popContainerCluster(i);
+    });
+});
+function popContainerCluster(index) {
+    const source = container_bubbles[index];
+    if (!source) return;
+    const visited = new Set([index]), queue = [index];
+    while(queue.length) {
+        const a = container_bubbles[queue.shift()];
+        container_bubbles.forEach((b,i)=>{
+            if (!visited.has(i) && b.color===source.color && Math.hypot(b.x-a.x,b.y-a.y)<(containerRadius(a)+containerRadius(b))*1.3) {
+                visited.add(i);queue.push(i);
+            }
+        });
+    }
+    // Same-colour bubbles merge on contact, so a minimum cluster of two
+    // made the container-pop achievements practically impossible.
+    // Allow clicking a single bubble, including a large merged bubble.
+    if (visited.size >= 5) unlockAchievement("CONTAINER_CHAIN_5");
+    if ([...visited].some(i=>containerBubbleUnits(container_bubbles[i])>=5)) unlockAchievement("CONTAINER_BIG_POP");
+    [...visited].sort((a,b)=>b-a).forEach(i=>{
+        const b=container_bubbles.splice(i,1)[0];
+        spawnContainerEffect(b.x,b.y,b.color,"pop",containerRadius(b));
+        score+=10*containerBubbleUnits(b);
+    });
+    stats.containerBubblesPopped = (Number(stats.containerBubblesPopped)||0) + visited.size;
+    checkProgressAchievements(); saveStats();
+    sounds.play('pop');
+}
+function spawnContainerEffect(x,y,color,type='pop',radius=CONTAINER_R) {
+    if(type==='pop') {
+        // Use the game's original pop-particle generator, scaled to the
+        // actual container bubble radius and rendered on the container canvas.
+        spawnPopParticles(x,y,color,radius,containerParticles);
+        return;
+    }
+    const count=20;
+    for(let i=0;i<count;i++) {
+        const a=Math.random()*Math.PI*2;
+        const speed=1.2;
+        containerParticles.push({x,y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,
+            gravity:0,life:1,color:color??'#222222',size:5});
+    }
+}
+function updateContainer(dt) {
+    if (!containerMode) return;
+    const c = document.getElementById('containerCanvas');
+    const w=c.width,h=c.height,r=CONTAINER_R;
+    const step=Math.min(2,Math.max(0.35,(Number(dt)||0.016)*60));
+    // Two-axis physics: gravity, sideways rolling, wall bounces and bubble collisions.
+    for (const b of container_bubbles) {
+        b.vx=Number(b.vx)||0;
+        b.vy=Number(b.vy)||0;
+        if(typeof b.hasLanded!=="boolean") b.hasLanded=false;
+        if(typeof b.isFalling!=="boolean") b.isFalling=!b.hasLanded;
+        b.vy=Math.min(9,b.vy+0.24*step);
+        b.x+=b.vx*step;
+        b.y+=b.vy*step;
+        const br=containerRadius(b);
+        if(b.x<br){b.x=br;b.vx=Math.abs(b.vx)*0.3;}
+        if(b.x>w-br){b.x=w-br;b.vx=-Math.abs(b.vx)*0.3;}
+        if(b.y>=h-br){b.y=h-br;b.vy=0;b.vx*=0.8;b.hasLanded=true;b.isFalling=false;}
+        b.vx*=0.985;
+    }
+    // Recover bubbles that escape the container due to unstable collision physics.
+    // Respawn above the play area so the usual gravity and landing rules apply.
+    for (const b of container_bubbles) {
+        const br=containerRadius(b);
+        if (!Number.isFinite(b.x) || !Number.isFinite(b.y) ||
+            b.x < -br || b.x > w+br || b.y > h+br || b.y < -h*2) {
+            b.x=Math.max(br,Math.min(w-br,Number.isFinite(b.x)?b.x:w/2));
+            b.y=-br;
+            b.vx=0;b.vy=0;b.isFalling=true;b.hasLanded=false;
+            spawnContainerEffect(b.x,0,b.color,'pop',containerRadius(b));
+        }
+    }
+    const conversions = new Set();
+    // Spatial hashing: only check nearby bubbles, instead of every possible pair.
+    // Rebuild each pass because collisions and merges move the bubbles.
+    const cellSize = Math.max(32, CONTAINER_R * 4);
+    // Adaptive solver: dense containers do not need four complete collision passes per frame.
+    const physicsPasses = container_bubbles.length > 180 ? 1 : container_bubbles.length > 65 ? 2 : 4;
+    for(let pass=0;pass<physicsPasses;pass++) {
+        const grid = new Map();
+        const key = (x,y) => `${x},${y}`;
+        for (let i=0;i<container_bubbles.length;i++) {
+            const b=container_bubbles[i];
+            const br=containerRadius(b);
+            const minX=Math.floor((b.x-br)/cellSize), maxX=Math.floor((b.x+br)/cellSize);
+            const minY=Math.floor((b.y-br)/cellSize), maxY=Math.floor((b.y+br)/cellSize);
+            for(let gx=minX;gx<=maxX;gx++) for(let gy=minY;gy<=maxY;gy++) {
+                const k=key(gx,gy);
+                if(!grid.has(k))grid.set(k,[]);
+                grid.get(k).push(i);
+            }
+        }
+        // Numeric pair IDs avoid thousands of temporary strings and split/map allocations.
+        const count = container_bubbles.length;
+        const pairs = new Set();
+        for(const indices of grid.values()) {
+            for(let n=0;n<indices.length;n++) for(let m=n+1;m<indices.length;m++) {
+                const i=Math.min(indices[n],indices[m]),j=Math.max(indices[n],indices[m]);
+                pairs.add(i*count+j);
+            }
+        }
+        const removed = new Set();
+        for(const pair of pairs) {
+            const i=Math.floor(pair/count),j=pair%count;
+            if(removed.has(i)||removed.has(j))continue;
+            const a=container_bubbles[i],b=container_bubbles[j];
+            if(!a||!b)continue;
+            let dx=b.x-a.x,dy=b.y-a.y;
+            const ar=containerRadius(a),br=containerRadius(b),minimum=ar+br;
+            if(Math.abs(dx)>=minimum||Math.abs(dy)>=minimum)continue;
+            let dist=Math.hypot(dx,dy);
+            if(dist>=minimum)continue;
+            if(a.color!=null && a.color===b.color && !containerFinishing){
+                if(combineContainerBubbles(a,b)){
+                    removed.add(j);
+                    continue;
+                }
+            }
+            if(a.isFalling && b.hasLanded && a.y<=b.y){a.hasLanded=true;a.isFalling=false;}
+            if(b.isFalling && a.hasLanded && b.y<=a.y){b.hasLanded=true;b.isFalling=false;}
+            if(a.color==null && b.color!=null) conversions.add([a,b.color]);
+            if(b.color==null && a.color!=null) conversions.add([b,a.color]);
+            if(dist<0.001){dx=(i%2?1:-1)*0.01;dy=0.01;dist=Math.hypot(dx,dy);}
+            const nx=dx/dist,ny=dy/dist,overlap=(minimum-dist)/2;
+            a.x-=nx*overlap;a.y-=ny*overlap;
+            b.x+=nx*overlap;b.y+=ny*overlap;
+            const relative=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny;
+            if(relative<0){
+                const impulse=-relative*0.32;
+                a.vx-=impulse*nx;a.vy-=impulse*ny;
+                b.vx+=impulse*nx;b.vy+=impulse*ny;
+            }
+        }
+        if(removed.size) container_bubbles=container_bubbles.filter((_,i)=>!removed.has(i));
+        for(const b of container_bubbles){
+            const br=containerRadius(b);
+            b.x=Math.max(br,Math.min(w-br,b.x));
+            b.y=Math.min(h-br,b.y);
+            if(b.y>=h-br){b.vy=0;b.vx*=0.82;b.hasLanded=true;b.isFalling=false;}
+        }
+    }
+    for(const [bubble,newColor] of conversions) {
+        if(bubble.color!=null)continue;
+        bubble.color=newColor;
+        spawnContainerEffect(bubble.x,bubble.y,newColor,'poof');
+        sounds.play('poof');
+        score++;
+        stats.colourlessBubblesConverted=(Number(stats.colourlessBubblesConverted)||0)+1;
+        stats.containerColourlessConverted=(Number(stats.containerColourlessConverted)||0)+1;
+        checkProgressAchievements(); saveStats();
+    }
+    for(const p of containerParticles) {
+        p.x+=p.vx*step;p.y+=p.vy*step;
+        p.vy+=p.gravity*step;
+        p.life-=0.035*step;
+    }
+    containerParticles=containerParticles.filter(p=>p.life>0);
+    if(containerEndQueue.length) {
+        containerEndTimer-=Number(dt) || (frameInterval / 1000);
+        if(containerEndTimer<=0) {
+            const b=containerEndQueue.shift();
+            const i=container_bubbles.indexOf(b);
+            if(i>=0)container_bubbles.splice(i,1);
+            spawnContainerEffect(b.x,b.y,b.color,'pop',containerRadius(b));
+            sounds.play('pop');
+            containerEndTimer=frameInterval / 1000;
+            if(!containerEndQueue.length) {
+                containerFinishing=false;
+                if(containerBonusPending) {
+                    containerBonusPending=false;
+                    containerBonusTotal=0;
+                    triggerWin();
+                }
+                if(containerRetryPending) {
+                    containerRetryPending=false;
+                    beginContainerRetry();
+                }
+            }
+        }
+    }
+    const landedNearLine=container_bubbles.some(b=>b.hasLanded && b.y-containerRadius(b)<=CONTAINER_RED_LINE_Y+CONTAINER_PANIC_DISTANCE);
+    const landedAtLine=container_bubbles.some(b=>b.hasLanded && b.y-containerRadius(b)<=CONTAINER_RED_LINE_Y);
+    const panel=document.getElementById('containerPanel');
+    panel.classList.toggle('danger',landedNearLine);
+    if(landedAtLine && !gameOver && !gameWin && !containerFinishing) triggerFail('The container is full.');
+    
+}
+let containerDrawFrame = 0;
+function drawContainer() {
+    if(!containerMode) return;
+    const c=document.getElementById('containerCanvas'),g=c.getContext('2d');
+    g.clearRect(0,0,c.width,c.height);
+    g.fillStyle='rgba(15,25,35,.8)';g.fillRect(2,2,c.width-4,c.height-4);
+    g.strokeStyle=container_bubbles.some(b=>b.hasLanded && b.y-containerRadius(b)<=CONTAINER_RED_LINE_Y+CONTAINER_PANIC_DISTANCE)?'#ff3333':'#00ffcc';g.lineWidth=4;
+    g.strokeRect(2,2,c.width-4,c.height-4);
+    // Overflow threshold: only landed bubbles count toward panic/failure.
+    g.save();g.beginPath();g.moveTo(3,CONTAINER_RED_LINE_Y);g.lineTo(c.width-3,CONTAINER_RED_LINE_Y);
+    g.strokeStyle='#ff3030';g.lineWidth=4;g.shadowColor='#ff3030';g.shadowBlur=9;g.stroke();g.restore();
+    // The live fill counter uses exactly the same colour as the container border.
+    g.save();
+    g.fillStyle=g.strokeStyle;
+    g.shadowColor=g.strokeStyle;g.shadowBlur=7;
+    g.font='bold 12px Storopia, sans-serif';g.textAlign='center';g.textBaseline='top';
+    g.fillText(`Bonus points after completing the level: ${(containerBonusValue()).toLocaleString()}`,c.width/2,9);
+    g.restore();
+    const landedNearLine=container_bubbles.some(b=>b.hasLanded && b.y-containerRadius(b)<=CONTAINER_RED_LINE_Y+CONTAINER_PANIC_DISTANCE);
+    const landedAtLine=container_bubbles.some(b=>b.hasLanded && b.y-containerRadius(b)<=CONTAINER_RED_LINE_Y);
+    if(landedNearLine || landedAtLine){
+        g.save();g.textAlign='center';g.textBaseline='top';
+        g.font='bold 15px Storopia, sans-serif';g.fillStyle='#ff4444';
+        g.shadowColor='#ff0000';g.shadowBlur=9;
+        g.fillText(landedAtLine?'Container is full. :(':'⚠️ WARNING! CONTAINER IS NEARLY FULL!',c.width/2,29);
+        g.restore();
+    }
+    for(const b of container_bubbles) {
+        g.globalAlpha=b.life===undefined?1:b.life;
+        g.beginPath();g.arc(b.x,b.y,Math.max(2,containerRadius(b)-1),0,Math.PI*2);
+        g.fillStyle=b.color??'#171717';g.fill();g.strokeStyle='#ffffff66';g.lineWidth=1;g.stroke();
+        if(colorblindMode){
+            const emoji=b.color==null?'❔':(COLOR_EMOJIS[b.color]||'❔');
+            g.font=`${Math.max(12,Math.round(22*containerRadius(b)/CONTAINER_R))}px Storopia, sans-serif`;
+            g.textAlign='center';g.textBaseline='middle';
+            g.lineWidth=2.5;g.strokeStyle='rgba(0,0,0,0.8)';
+            if(container_bubbles.length<100)g.strokeText(emoji,b.x,b.y);
+            g.fillText(emoji,b.x,b.y);
+        }
+    }
+    for(const p of containerParticles) {
+        g.globalAlpha=Math.max(0,p.life);
+        g.fillStyle=p.color;
+        g.beginPath();g.arc(p.x,p.y,p.size*Math.max(.2,p.life),0,Math.PI*2);g.fill();
+
+    }
+    g.globalAlpha=1;
+}
+function finishContainerBubbles() {
+    if(!containerMode) return;
+    if(containerFinishing)return;
+    containerEndQueue=container_bubbles.slice().sort((a,b)=>a.y-b.y);
+    containerFinishing=containerEndQueue.length>0;
+    containerEndTimer=frameInterval / 1000;
+}
 let chainPopActive = false;
 let chainPopTotal = 0;
 let chainPopIndex = 0;
@@ -4439,6 +4822,7 @@ function updatePanicState() {
         return;
     }
 
+    const containerPanic = containerMode && container_bubbles.some(b=>b.hasLanded && b.y-containerRadius(b)<=CONTAINER_RED_LINE_Y+CONTAINER_PANIC_DISTANCE);
     const nearRedLine = bubbles.some(b => b.y > DEADLINE - 60);
     const lowAmmo = ammo < 10;
     const lowLives = lives > 0 && lives <= 3;
@@ -4447,7 +4831,7 @@ function updatePanicState() {
         isCampaignMode && Math.ceil(campaignTimer) <= 20;
 
     const shouldPanic =
-        nearRedLine || lowAmmo || timerPanic || lowLives;
+        nearRedLine || lowAmmo || timerPanic || lowLives || containerPanic;
 
     if (shouldPanic && !panicMode) {
         panicMode = true;
@@ -4678,6 +5062,27 @@ document.getElementById('debugInput').addEventListener('keydown', async (e) => {
             localStorage.setItem('debugLocked', 'true');
             updateDebugButton();
             logInfo('Debug button has been locked. Click the debug button and enter the unlock code to unlock it.');
+        }
+        else if (cmd === '!addbubblestocontainer') {
+            const amount = Number(arg);
+            if (!Number.isSafeInteger(amount) || amount < 1 || amount > 1000) {
+                alert('Usage: !addbubblestocontainer (AmountNumber)\nEnter a whole number from 1 to 1000.');
+            } else if (!containerMode || !gameRunning || gameOver || gameWin || containerFinishing) {
+                alert('This command can only be used during an active Container Mode level.');
+            } else {
+                const containerCanvas = document.getElementById('containerCanvas');
+                for (let i = 0; i < amount; i++) {
+                    const color = ALL_COLORS[Math.floor(Math.random() * ALL_COLORS.length)];
+                    const x = CONTAINER_R + Math.random() * (containerCanvas.width - CONTAINER_R * 2);
+                    // Spawn above the container so normal gravity and collisions apply.
+                    container_bubbles.push({
+                        x, y: -CONTAINER_R - i * (CONTAINER_R * 2),
+                        color, radius: CONTAINER_R, units: 1,
+                        vy: 0, vx: 0, isFalling: true, hasLanded: false
+                    });
+                }
+                logInfo(`Added ${amount} bubble(s) to the container. Total: ${container_bubbles.length}.`);
+            }
         }
         else if (cmd === '!rainbowmode') {
             const enabled = boolArg(arg, '!rainbowmode');
@@ -5384,31 +5789,14 @@ if (idx !== -1) {
         }
 
         if (gameOver) {
-
-            if (isCampaignMode)
-        {
-            campaignTimer = CAMPAIGN_TIME_LIMIT;
-        }
-     
-   
-     // 💀 True game over or daily puzzle → back to menu
-    if (lives <= 0) {
-        exitToMenu();
-        return;
-    }
-    
-
-    showSecretText('Please wait...', 2500)
-    fadeTransition(() => {
-
-    // 🔁 Retry same level
-    gameOver = false;
-    gameWin = false;
-    suppressAutosaveOnce = true;
-    startMode('puzzle', false, true);
-    initializeAmmo("puzzleNew");
-    return;
-}, 2500, false);
+            if(containerMode && container_bubbles.length) {
+                if(!containerRetryPending) {
+                    containerRetryPending=true;
+                    finishContainerBubbles();
+                }
+                return;
+            }
+            beginContainerRetry();
         }
     }
 
@@ -5565,7 +5953,7 @@ function setPause(state) {
 function togglePause() { if(!gameRunning || gameOver || gameWin || winPending) return; setPause(!isPaused);}
 
 function shoot() {
-if (winPending || conversionQueue.length > 0 || chainPopActive) return;
+if (winPending || containerBonusPending || containerFinishing || gameOver || gameWin || conversionQueue.length > 0 || chainPopActive) return;
 
     hurryIdleSeconds = 0;
     hurryWarningActive = false;
@@ -5757,22 +6145,21 @@ function calcProgressPercent(currentCount, initialCount) {
     const pct = (Math.max(0, initialCount - currentCount) / initialCount) * 100;
     return +pct.toFixed(1);
 }
-function spawnPopParticles(x, y, color) {
-    const COUNT = 50; // 🔽 fewer particles (try 4–6)
-
-    for (let i = 0; i < COUNT; i++) {
-        const angle = Math.random() * Math.PI * 2; // 0–360°
-        const speed = Math.random() * 2 + 1;       // strength
-
-        particles.push({
-            x,
-            y,
+function spawnPopParticles(x, y, color, bubbleRadius = RADIUS, targetParticles = particles) {
+    // Same original 50-particle pop effect for both canvases.
+    // Container particles keep their own canvas/array and scale with bubble size.
+    const scale = Math.max(0.2, Number(bubbleRadius) / RADIUS || 1);
+    for (let i = 0; i < 50; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 2 + 1;
+        targetParticles.push({
+            x, y,
             vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed - 1.2, // slight upward bias
+            vy: Math.sin(angle) * speed - 1.2,
             gravity: 0.18,
             life: 1,
             color,
-            size: Math.random() * 2.5 + 2
+            size: (Math.random() * 2.5 + 2) * scale
         });
     }
 }
@@ -5974,24 +6361,7 @@ function popBubbles(m, startBubble = null) {
             const byCell = bubbles.findIndex(o => o.row === b.row && o.col === b.col);
             if (byCell > -1) bubbles.splice(byCell, 1);
         }
-
-        // ✅ Use the original old pop particle burst from the non-chain pop code.
-        // This is the older chunky burst effect that existed before the chain reaction patch.
-        for (let i = 0; i < 6; i++) {
-            particles.push({
-                x: b.x,
-                y: b.y,
-                vx: (Math.random() - 0.5) * 8,
-                vy: (Math.random() - 0.5) * 8,
-                life: 5,
-                color: b.color,
-                size: Math.random() * 3 + 1
-            });
-        }
-
-        // Keep the original small pop sparkle too, because the old pop used both effects together.
         spawnPopParticles(b.x, b.y, b.color);
-
         // ✅ Award the chain total in small slices, one slice per popped bubble.
         // The streak counter/multiplier still only increments once for the whole chain.
         score += scorePerPop;
@@ -6093,7 +6463,7 @@ function popBubbles(m, startBubble = null) {
         // Keep the chain reaction tied to the same timing used by the FPS cap.
         // Read frameInterval each time so changing the slider during a chain
         // takes effect on the very next pop.
-        return Math.max(1, frameInterval);
+        return Math.max(1, 1000 / fpsCap);
     }
 
     function popNextInChain() {
@@ -6166,7 +6536,47 @@ async function handleSecretLevelWin() {
     exitToMenu();
     updateStatsBoard();
 }
+
+function beginContainerRetry() {
+
+
+            if (isCampaignMode)
+        {
+            campaignTimer = CAMPAIGN_TIME_LIMIT;
+        }
+     
+   
+     // 💀 True game over or daily puzzle → back to menu
+    if (lives <= 0) {
+        exitToMenu();
+        return;
+    }
+    
+
+    showSecretText('Please wait...', 2500)
+    fadeTransition(() => {
+
+    // 🔁 Retry same level
+    gameOver = false;
+    gameWin = false;
+    suppressAutosaveOnce = true;
+    startMode('puzzle', false, true);
+    initializeAmmo("puzzleNew");
+    return;
+}, 2500, false);
+        
+}
 function triggerWin() {
+    if(containerMode && container_bubbles.length && !containerBonusPending) {
+        containerBonusPending=true;
+        containerBonusTotal=containerBonusValue();
+        score+=containerBonusTotal;
+        stats.containerBonusPoints=(Number(stats.containerBonusPoints)||0)+containerBonusTotal;
+        checkProgressAchievements(); saveStats();
+        finishContainerBubbles();
+        return;
+    }
+    if(containerBonusPending)return;
 
     if (isSecretLevel) {
     handleSecretLevelWin();
@@ -6593,6 +7003,7 @@ function drawBubbleHitboxes() {
 }
 function update() {
 if (isPaused || isLoading) return;
+updateContainer(Math.min(0.05, Math.max(0.001, (performance.now() - lastTimeMs) / 1000)));
 if (isDailyPuzzle)
 {
     ammo = Infinity
@@ -6608,11 +7019,13 @@ if (
     winPending &&
     fallingBubbles.length === 0 &&
     projectiles.length === 0 &&
+    // Container Mode: wait until every collected bubble has landed.
+    (!containerMode || !container_bubbles.some(b => b.isFalling === true)) &&
     !gameWin &&
     !gameOver
 ) {
     winPending = false;
-    triggerWin();
+    if(!containerBonusPending) triggerWin();
 	unlockAchievement("WIN_SCREEN_DELAY");
 }
 const CONVERSIONS_PER_FRAME = 1;
@@ -6679,6 +7092,12 @@ for (let i = fallingBubbles.length - 1; i >= 0; i--) {
     const DEADLINE_SCORE = 10;
 
 if (b.y >= DEADLINE) {
+    // Capture the falling bubble before the red-line pop removes it.
+    if (containerMode && !gameOver && !gameWin) {
+        addContainerBubble(b);
+        fallingBubbles.splice(i, 1);
+        continue;
+    }
     
     if (!gameOver)
 {
@@ -6720,6 +7139,7 @@ else if (!gameOver)
     // 🧲 absorb logic
     if (absorbFallingBubbles && !isPlaytesting) {
         ammo++;
+        spawnContainerAbsorb(b.x, DEADLINE, b.color);
         updateAmmo();
     }
 
@@ -6935,16 +7355,26 @@ if (p.y < RADIUS) {
     for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
 
-    p.vy += p.gravity; // gravity
-    p.x += p.vx;
-    p.y += p.vy;
-
-    p.life -= 0.02;
+    // Preserve the original 60-FPS particle appearance regardless of the FPS slider.
+    // Some original effects (e.g. projectile sparks) omit gravity entirely.
+    const step = normalParticleFrameScale;
+    const gravity = Number.isFinite(p.gravity) ? p.gravity : 0;
+    p.x += p.vx * step;
+    p.y += p.vy * step + 0.5 * gravity * step * step;
+    p.vy += gravity * step;
+    p.life -= 0.02 * step;
 
     if (p.life <= 0) {
         particles.splice(i, 1);
     }
 }
+    for (let i=containerAbsorbParticles.length-1;i>=0;i--){
+        const p=containerAbsorbParticles[i];
+        p.x+=p.vx; p.y+=p.vy;
+        p.vx*=0.91; p.vy*=0.91;
+        p.life-=0.045;
+        if(p.life<=0)containerAbsorbParticles.splice(i,1);
+    }
     fallingBubbles.forEach((fb, i) => {
     fb.vx *= 0.98;          // damping (keeps it subtle)
     fb.x += fb.vx;
@@ -7193,6 +7623,8 @@ canvas.addEventListener("pointerleave", () => {
   if (activeAimPointerId === null) isAiming = false;
 });
  function draw() {
+    containerDrawFrame++;
+    if(container_bubbles.length < 120 || containerDrawFrame % 2 === 0) drawContainer();
     drawDebugOverlay();
     // ---- FPS Counter ----
 fpsFrameCount++;
@@ -7392,6 +7824,7 @@ if (panicMode) {
     }});
 }
         particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); });
+        containerAbsorbParticles.forEach(p => { ctx.globalAlpha = Math.max(0,p.life); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill(); });
         
         // ---- Floating score text ----
         ctx.save();
@@ -7523,6 +7956,15 @@ if (isAiming) {
 
             ctx.font = "16px Storopia";
             ctx.fillText("Click \"RESUME\" to unpause the game", canvas.width / 2, 370);
+        }
+        if(containerBonusPending) {
+            ctx.save();ctx.fillStyle='rgba(0,0,0,0.78)';ctx.fillRect(0,0,canvas.width,canvas.height);
+            ctx.textAlign='center';ctx.fillStyle='#ffcc00';ctx.shadowColor='#ff9900';ctx.shadowBlur=16;
+            ctx.font='bold 31px Storopia, sans-serif';ctx.fillText('ADDING BONUS...',canvas.width/2,canvas.height/2-18);
+            ctx.font='bold 19px Storopia, sans-serif';
+            ctx.fillText(`+100 POINTS PER BUBBLE`,canvas.width/2,canvas.height/2+22);
+            ctx.fillText(`BONUS: +${containerBonusTotal.toLocaleString()}`,canvas.width/2,canvas.height/2+55);
+            ctx.restore();
         }
         if (gameOver || gameWin || winPending) {
     ctx.fillStyle = winPending ? "rgba(0,0,0,0.0)" :"rgba(0,0,0,0.85)";
@@ -7811,8 +8253,10 @@ const randomiseLayoutCooldownText = formatCooldownMS(timeLeft);
     const lines = [
         `--- SK's Bubble Shooter\'s DEBUG OVERLAY ---`,
         ``,
-        `gameMode: ${mode}`,
+        `gameMode: ${containerMode ? "CONTAINER MODE" : mode}`,
         `bubblesRemaining: ${bubbles.length}`,
+        `containerBubbles: ${container_bubbles.length}`,
+        `containerBubblesFalling: ${container_bubbles.filter(b => b.isFalling === true).length}`,
         `conversionQueue: ${conversionQueue.length}`,
         `popChainActive: ${chainPopActive}`,
         `popChainPaused: ${chainPopActive && (isPaused || isLoading || gameOver || gameWin || winPending || !gameRunning)}`,
@@ -7910,16 +8354,21 @@ function formatCooldownMS(ms) {
 
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
+let activeGameLoopRequest = 0;
 function gameLoop(now) {
-    requestAnimationFrame(gameLoop);
+    if (activeGameLoopRequest) cancelAnimationFrame(activeGameLoopRequest);
+    activeGameLoopRequest = requestAnimationFrame(gameLoop);
 
     if (!gameRunning) return;
 
     const delta = now - lastFrameTime;
 
-    if (delta < frameInterval) return;
+    // A monitor/browser cannot display more frames than its refresh rate.
+    // Avoid accumulating an artificial 30 FPS throttle at higher caps.
+    if (delta + 0.25 < frameInterval) return;
 
-    lastFrameTime = now - (delta % frameInterval);
+    lastFrameTime = now;
+    normalParticleFrameScale = Math.max(0.05, Math.min(3, delta / (1000 / 60)));
 
     update();
     updateRainbowMode();
@@ -7965,6 +8414,10 @@ function startPuzzleMode() {
         if (isDailyPuzzle)
         {
             setBrowserTitle("🧩 SK's Bubble Shooter — Daily Puzzle Mode");
+        }
+        else if (containerMode)
+        {
+            setBrowserTitle("🫙 SK's Bubble Shooter — Container Mode");
         }
         else
         {
@@ -8178,6 +8631,7 @@ function randomiseBubbleLayout() {
     projectiles = [];
     fallingBubbles = [];
     particles = [];
+    containerAbsorbParticles = [];
 
     // Keep roughly the same amount of rows as the current layout
     const maxRow = Math.max(...bubbles.map(b => b.row));
@@ -8202,6 +8656,9 @@ function randomiseBubbleLayout() {
 }
 function startMode(m, isLoad = false, isNextLevel = false) {
     updateDebugButton();
+    if (!containerMode || isNextLevel) container_bubbles=[];
+    containerEndQueue=[];containerFinishing=false;containerParticles=[];containerBonusPending=false;containerRetryPending=false;containerBonusTotal=0;
+    document.getElementById('containerPanel').style.display=containerMode?'block':'none';
     mode = m;
     deathSfxPlayed = false; 
     // If manually starting puzzle mode from menu,
@@ -8227,11 +8684,15 @@ function startMode(m, isLoad = false, isNextLevel = false) {
     }
 
     if (!isNextLevel) {
-    initializeAmmo("puzzleNew");
-}}
+    initializeAmmo("puzzleNew"); 
+}
+    if (containerMode) {
+        setBrowserTitle("🫙 SK's Bubble Shooter — Container Mode")
+    }
+}
 
 
-    if (!isLoad) {bubbles = [];} fallingBubbles = []; projectiles = []; particles = []; confetti = [];
+    if (!isLoad) {bubbles = [];} fallingBubbles = []; projectiles = []; particles = []; containerAbsorbParticles = []; confetti = [];
     document.getElementById('mainMenu').style.display = 'none';
     document.getElementById('customUI').style.display = 'none';
     document.getElementById('gameUI').style.display = 'block';
@@ -8279,7 +8740,8 @@ suppressAutosaveOnce = false; // always clear after startMode
 
 
     if (animationId) cancelAnimationFrame(animationId);
-    requestAnimationFrame(gameLoop);
+    if (activeGameLoopRequest) cancelAnimationFrame(activeGameLoopRequest);
+    activeGameLoopRequest = requestAnimationFrame(gameLoop);
     }
     refreshFavicon();
 
@@ -8291,6 +8753,9 @@ function enterCustomEditor() {
     stats.customPlays++;
     saveStats();
     setBrowserTitle("🛠️ SK's Bubble Shooter — Level Editor");
+    containerMode = false;
+    container_mode = false;
+    document.getElementById("containerPanel").style.display = "none";
     mode = 'custom'; isCustomMode = true; gameRunning = true; gameOver = false; gameWin = false; isPlaytesting = false; isCampaignMode = false; 
     hideCampaignTimer();
     document.getElementById('mainMenu').style.display = 'none';
@@ -8379,6 +8844,10 @@ setBrowserTitle("▶️ SK's Bubble Shooter — Playtesting");
     customLevelSnapshot = JSON.parse(JSON.stringify(bubbles));
     isCustomMode = false;
     isPlaytesting = true;
+    containerMode = document.getElementById("customContainerMode").checked;
+    container_mode = containerMode;
+    container_bubbles = [];
+    document.getElementById("containerPanel").style.display = containerMode ? "block" : "none";
     updateLivesUI();
     gameOver = false;
     gameWin = false;
@@ -8765,7 +9234,17 @@ if (isLoadingSave) {
     updateBubblesRemainingRing();
 }
 
-function swapBubbles() { if (ammo <= 1) return; [currentBall, nextBall] = [nextBall, currentBall]; sounds.play('swap'); refreshFavicon(); updateBubblesRemainingRing(); stats.bubblesSwapped++; saveStats();}
+function swapBubbles() { 
+
+    if (ammo <= 1 || gameOver || gameWin) return; 
+    
+    [currentBall, nextBall] = [nextBall, currentBall]; 
+    sounds.play('swap'); 
+    refreshFavicon(); 
+    updateBubblesRemainingRing(); 
+    stats.bubblesSwapped++; 
+    saveStats();
+}
 function triggerConfetti() { for(let i=0; i<50; i++) confetti.push({ x: 220, y: 300, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, color: ALL_COLORS[Math.floor(Math.random()*6)], life: 1.0 }); }
 function updatePaletteUI() {
     const p = document.getElementById('colorPalette');
@@ -8809,6 +9288,7 @@ function updatePaletteUI() {
             timestamp: ts.readable,
             epoch: ts.epoch,
             gameType:
+                containerMode ? "CONTAINER MODE" :
                 (mode === 'custom' || isPlaytesting) ? "CUSTOM" :
                 isCampaignMode ? "CAMPAIGN" :
                 "PUZZLE",
@@ -8816,7 +9296,7 @@ function updatePaletteUI() {
             isSaveFileProtected: false
         },
 
-        mode,
+        mode: containerMode ? 'CONTAINER MODE' : mode,
         level: (mode === 'custom' || isPlaytesting) ? "CUSTOM LEVEL" : level,
         levelName: (mode === 'custom' || isPlaytesting) ? customLevelName : null,
         authorName: (mode === 'custom' || isPlaytesting) ? customAuthorName : null,
@@ -8827,6 +9307,9 @@ function updatePaletteUI() {
         ammo: (mode === 'custom' || isPlaytesting)
             ? parseInt(document.getElementById('customAmmoInput')?.value) || ammo
             : ammo,
+        containerMode,
+        container_mode: containerMode,
+        container_bubbles: container_bubbles.map(b=>({color:b.color,radius:`${containerRadius(b)}px`,units:containerBubbleUnits(b)})),
         bubbles: bubbles.map(b => ({
             row: b.row,
             col: b.col,
@@ -8840,6 +9323,10 @@ function updatePaletteUI() {
 
 function getSaveFileName(saveData, slotId = null) {
     const meta = saveData?._metadata || {};
+    if(saveData?.container_mode || saveData?.containerMode) {
+        const prefix = meta.saveMethod === "AUTO" || slotId === "container_autosave" ? "(AUTOSAVE) " : "";
+        return `${prefix}containerLevel_${saveData.level}.bubblesav`;
+    }
 
     if (saveData?.level === "CUSTOM LEVEL") {
         const safeLevel = (saveData.levelName || customLevelName || "Untitled").replace(/[\\\/:*?"<>|]/g, "_");
@@ -8847,13 +9334,13 @@ function getSaveFileName(saveData, slotId = null) {
         return `customModeLevel_${safeLevel}_${safeAuthor}.bubblesav`;
     }
 
-    const prefix = meta.saveMethod === "AUTO" || slotId === "autosave" ? "(AUTOSAVE) " : "";
+    const prefix = meta.saveMethod === "AUTO" || (slotId === "autosave" || slotId === "container_autosave") ? "(AUTOSAVE) " : "";
     return `${prefix}puzzleModeLevel_${fmt(saveData?.level ?? level)}.bubblesav`;
 }
 
 const BUBBLE_SAVE_DB_NAME = "SKBubbleShooterSaveFiles";
 const BUBBLE_SAVE_STORE = "saveSlots";
-const SAVE_SLOT_IDS = ["autosave", "slot1", "slot2", "slot3", "slot4", "slot5", "slot6", "slot7", "slot8", "slot9", "slot10"];
+const SAVE_SLOT_IDS = ["autosave", "container_autosave", "slot1", "slot2", "slot3", "slot4", "slot5", "slot6", "slot7", "slot8", "slot9", "slot10"];
 let pendingSaveDataForSlot = null;
 let savePopupMode = "load";
 
@@ -8938,6 +9425,65 @@ async function deleteSaveSlot(slotId) {
     });
 }
 
+// Move a manual save to another slot in a single IndexedDB transaction.
+// The source is only removed when the destination write succeeds.
+async function moveSaveSlot(sourceId, destinationId) {
+    const db = await openSaveDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(BUBBLE_SAVE_STORE, "readwrite");
+        const store = tx.objectStore(BUBBLE_SAVE_STORE);
+        const read = store.get(sourceId);
+        read.onsuccess = () => {
+            const source = read.result;
+            if (!source) {
+                tx.abort();
+                return;
+            }
+            store.put({ ...source, slotId: destinationId });
+            store.delete(sourceId);
+        };
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onabort = () => { db.close(); reject(tx.error || new Error("Move cancelled: source slot missing.")); };
+        tx.onerror = () => { /* onabort reports the transaction failure */ };
+    });
+}
+
+async function promptMoveSaveSlot(sourceId) {
+    if (!/^slot(?:10|[1-9])$/.test(sourceId)) return;
+    try {
+        const slots = await getAllSaveSlots();
+        const source = slots[sourceId];
+        if (!source) return;
+        const manualIds = SAVE_SLOT_IDS.filter(id => /^slot(?:10|[1-9])$/.test(id));
+        const available = manualIds.filter(id => !slots[id]);
+        if (available.length === 0) {
+            alert("The save slots are full.");
+            return;
+        }
+        const entered = prompt(
+            `Which save slot number do you want to move ${source.fileName} to?\n\nAvailable slots: ${available.map(id => id.replace("slot", "")).join(", ")}`
+        );
+        if (entered === null) return;
+        const number = entered.trim();
+        if (!/^(10|[1-9])$/.test(number)) {
+            alert("Please enter a save slot number from 1 to 10.");
+            return;
+        }
+        const destinationId = `slot${number}`;
+        if (destinationId === sourceId) {
+            alert(`${source.fileName} is already in save slot ${number}.`);
+            return;
+        }
+        const occupant = slots[destinationId];
+        if (occupant && !confirm(`Save slot ${number} is occupied by ${occupant.fileName}. Do you want to delete ${occupant.fileName} and replace it with ${source.fileName}?`)) return;
+        await moveSaveSlot(sourceId, destinationId);
+        await renderSaveSlotPopup();
+    } catch (e) {
+        alert("Could not move this save file.");
+        logError(e);
+    }
+}
+
 function saveDataToDownload(saveData, fileName) {
     showSecretText(`Exporting: ${fileName}.`, 2500);
 
@@ -8977,7 +9523,7 @@ function pickSaveFileFromDevice() {
 }
 
 async function importSaveToSlot(slotId, oldRow = null) {
-    if (slotId === "autosave") {
+    if ((slotId === "autosave" || slotId === "container_autosave")) {
         alert("Manual imports cannot be saved in the autosave slot.");
         return;
     }
@@ -9018,7 +9564,7 @@ async function importSaveToSlot(slotId, oldRow = null) {
 }
 
 function getSlotLabel(slotId) {
-    return slotId === "autosave" ? "AUTOSAVE SLOT" : `SAVE SLOT ${slotId.replace("slot", "")}`;
+    return slotId === "container_autosave" ? "AUTOSAVE SLOT (CONTAINER MODE)" : slotId === "autosave" ? "AUTOSAVE SLOT (PUZZLE MODE)" : `SAVE SLOT ${slotId.replace("slot", "")}`;
 }
 
 async function openSaveSlotPopup(action = "load", saveData = null) {
@@ -9032,7 +9578,7 @@ async function openSaveSlotPopup(action = "load", saveData = null) {
     title.textContent = action === "save" ? "💾 Save Files" : "📂 Load Save File";
     note.textContent = action === "save"
         ? "Press SAVE on save slots 1-10 to save inside the game. The autosave slot is only used by autosave."
-        : "Press LOAD to load a saved file, IMPORT to add a .bubblesav from your device, EXPORT to download a backup or DELETE to remove it.";
+        : "Press LOAD to load a saved file, IMPORT to add a .bubblesav, EXPORT to download, MOVE to change slots or DELETE to remove it.";
 
     popup.style.display = "flex";
     await renderSaveSlotPopup();
@@ -9090,17 +9636,18 @@ async function renderSaveSlotPopup() {
                 ${details}
             </div>
             <div class="save-slot-buttons">
-                <button data-action="add" ${(savePopupMode !== "save" || slotId === "autosave") ? "disabled" : ""}>SAVE</button>
+                <button data-action="add" ${(savePopupMode !== "save" || (slotId === "autosave" || slotId === "container_autosave")) ? "disabled" : ""}>SAVE</button>
                 <button data-action="load" ${!hasSave ? "disabled" : ""}>LOAD</button>
-                <button data-action="import" ${slotId === "autosave" ? "disabled" : ""}>IMPORT</button>
+                <button data-action="import" ${(slotId === "autosave" || slotId === "container_autosave") ? "disabled" : ""}>IMPORT</button>
                 <button data-action="export" ${!hasSave ? "disabled" : ""}>EXPORT</button>
                 <button data-action="copy" ${!hasSave ? "disabled" : ""}>COPY</button>
+                <button data-action="move" ${(!hasSave || slotId === "autosave" || slotId === "container_autosave") ? "disabled" : ""}>MOVE</button>
                 <button data-action="delete" class="danger" ${!hasSave ? "disabled" : ""}>DELETE</button>
             </div>
         `;
 
         div.querySelector('[data-action="add"]').onclick = async () => {
-            if (slotId === "autosave") {
+            if ((slotId === "autosave" || slotId === "container_autosave")) {
                 alert("Manual saves cannot be saved in the autosave slot.");
                 return;
             }
@@ -9158,6 +9705,10 @@ async function renderSaveSlotPopup() {
     }
 };
 
+        div.querySelector('[data-action="move"]').onclick = async () => {
+            await promptMoveSaveSlot(slotId);
+        };
+
         div.querySelector('[data-action="delete"]').onclick = async () => {
             if (!row) return;
             if (!confirm(`Are you sure you want to delete ${row.fileName}?`)) return;
@@ -9206,7 +9757,7 @@ async function saveGame(isAuto = false, forceSave = false) {
 
     if (isAuto) {
         try {
-            const saved = await putSaveSlot("autosave", saveData);
+            const saved = await putSaveSlot(containerMode ? "container_autosave" : "autosave", saveData);
             logSuccess(`Autosaved inside IndexedDB. ("${saved.fileName}")`);
         } catch (e) {
             logError(e);
@@ -9454,7 +10005,23 @@ function loadSaveData(s, fileName = "save file") {
 
         loadedProgressOverride = null;
 
+        containerMode=!!(s.container_mode ?? s.containerMode);
+        container_mode=containerMode;
         startMode("puzzle", true);
+        container_bubbles=[];
+        if (containerMode && Array.isArray(s.container_bubbles)) {
+            // Reintroduce saved colours through the same top entry as red-line falling bubbles.
+            // Stagger entry positions so gravity and collisions arrange them naturally.
+            const entryCanvas=document.getElementById('containerCanvas');
+            s.container_bubbles.forEach((saved,i)=>{
+                const color=typeof saved==='string'?saved:saved?.color;
+                if(color===undefined)return;
+                const radius=Math.max(4,parseFloat(saved?.radius)||CONTAINER_R);
+                const units=Math.max(1,Number(saved?.units)||Math.round((radius/CONTAINER_R)**2));
+                const x=radius+Math.random()*Math.max(0,entryCanvas.width-2*radius);
+                container_bubbles.push({x,y:-radius-i*radius*2.2,color,radius,units,vy:0,vx:0,isFalling:true,hasLanded:false});
+            });
+        }
 
         bubbles = [];
         (s.bubbles || []).forEach(b => {
@@ -9550,7 +10117,9 @@ function closeCustomSavePopup() {
     "achievement_complete",
     "whoosh_in",
     "whoosh_out",
-    "error_buzz"
+    "error_buzz",
+    "container_drop",
+    "container_combine"
 ];
 
 function openSfxMenu() {
@@ -9632,7 +10201,13 @@ if (!autosaveEnabled && gameRunning && !gameOver && !gameWin && !isCustomMode &&
 }
  showSecretText('Loading: Main Menu...', 2500)   
     fadeTransition(() => {
-
+    containerMode=false;
+    container_mode=false;
+    container_bubbles=[];
+    containerEndQueue=[];
+    containerFinishing=false;
+    containerParticles=[];
+    document.getElementById("containerPanel").style.display="none";
     console.clear();
     setBrowserTitle("⭐ SK's Bubble Shooter");
     gameRunning = false;
