@@ -1869,22 +1869,9 @@ function updateFPSWarning() {
         fpsWarning.innerHTML = `
         ⚠️ Your FPS cap is set to ${fpsCap} FPS.
         This will make the game become very slow and unplayable.<br>
-        Recommended FPS: 20 and above.
+        Recommended FPS: More than 20.
         `;
-    }
-
-    // ⚡ HIGH FPS + HURRY MODE WARNING
-    else if (fpsCap > 30 && hurryMode) {
-        fpsWarning.style.display = "block";
-        fpsWarnValue.textContent = `${fpsCap} FPS`;
-
-        fpsWarning.innerHTML = `
-        ⚠️ Your FPS cap is set to ${fpsCap} FPS.
-        This will make the hurry timer go faster and you won't have time to react.<br>
-        Recommended FPS: Between 20 and 30.
-        `;
-    }
-
+	}
     // ✅ NO WARNING
     else {
         fpsWarning.style.display = "none";
