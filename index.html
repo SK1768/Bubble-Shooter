@@ -9476,8 +9476,11 @@ async function promptMoveSaveSlot(sourceId) {
         }
         const occupant = slots[destinationId];
         if (occupant && !confirm(`Save slot ${number} is occupied by ${occupant.fileName}. Do you want to delete ${occupant.fileName} and replace it with ${source.fileName}?`)) return;
-        await moveSaveSlot(sourceId, destinationId);
+        showSecretText(occupant ? `Deleting ${occupant.fileName} and moving ${source.fileName} to save slot ${number}...` : `Moving ${source.fileName} to save slot ${number}...`, 2500)
+		fadeTransition(async () => {
+		await moveSaveSlot(sourceId, destinationId);
         await renderSaveSlotPopup();
+		}, 2500, false);
     } catch (e) {
         alert("Could not move this save file.");
         logError(e);
