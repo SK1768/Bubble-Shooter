@@ -4720,13 +4720,13 @@ function drawContainer() {
     // Draw behind bubbles and warnings, within the container's inner border.
     const fuelColor = containerFuel <= 20 ? '#ff3333' : containerFuel <= 50 ? '#ffdd33' : '#33ff66';
     const innerX = 4, innerY = 4, innerW = c.width - 8, innerH = c.height - 8;
-    g.fillStyle = 'rgba(15,25,35,.8)';
+    g.fillStyle = 'rgba(15,25,35,.65)';
     g.fillRect(innerX, innerY, innerW, innerH);
     const fuelHeight = innerH * Math.max(0, Math.min(100, containerFuel)) / 100;
     const fuelTop = innerY + innerH - fuelHeight;
     if (fuelHeight > 0) {
         g.fillStyle = fuelColor;
-        g.globalAlpha = 0.22;
+        g.globalAlpha = 0.42;
         g.fillRect(innerX, fuelTop, innerW, fuelHeight);
         g.globalAlpha = 1;
         g.save();
@@ -10296,6 +10296,7 @@ if (!autosaveEnabled && gameRunning && !gameOver && !gameWin && !isCustomMode &&
     fadeTransition(() => {
     containerMode=false;
     updateContainerFuelUI(); // Hide the fuel ring when returning to the main menu.
+    // The vertical fuel background is drawn on containerCanvas, which is hidden with its panel below.
     container_mode=false;
     container_bubbles=[];
     containerEndQueue=[];
