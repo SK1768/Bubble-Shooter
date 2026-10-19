@@ -4712,17 +4712,39 @@ function updateContainer(dt) {
     
 }
 let containerDrawFrame = 0;
+// Visual-only gauge state: smoothly interpolates both height and RGB colour.
+let containerFuelVisual = 100;
+let containerFuelVisualRGB = [51, 255, 102];
+let containerFuelVisualTime = 0;
+function resetContainerFuelVisual() {
+    containerFuelVisual = containerFuel;
+    containerFuelVisualRGB = containerFuel <= 20 ? [255, 51, 51] : containerFuel <= 50 ? [255, 221, 51] : [51, 255, 102];
+    containerFuelVisualTime = 0;
+}
 function drawContainer() {
     if(!containerMode) return;
     const c=document.getElementById('containerCanvas'),g=c.getContext('2d');
     g.clearRect(0,0,c.width,c.height);
     // Vertical fuel gauge: rises from bottom to top as fuel increases.
     // Draw behind bubbles and warnings, within the container's inner border.
-    const fuelColor = containerFuel <= 20 ? '#ff3333' : containerFuel <= 50 ? '#ffdd33' : '#33ff66';
+    const fuelNow = performance.now();
+    const fuelDt = containerFuelVisualTime ? Math.min(0.1, (fuelNow - containerFuelVisualTime) / 1000) : 0;
+    containerFuelVisualTime = fuelNow;
+    // Linear movement at 45 percentage points per second; never overshoots.
+    const step = 45 * fuelDt;
+    containerFuelVisual += Math.sign(containerFuel - containerFuelVisual) * Math.min(step, Math.abs(containerFuel - containerFuelVisual));
+    const targetRGB = containerFuel <= 20 ? [255, 51, 51] : containerFuel <= 50 ? [255, 221, 51] : [51, 255, 102];
+    // Linear RGB interpolation over roughly 0.5 seconds on threshold changes.
+    const colorStep = 510 * fuelDt;
+    for (let i = 0; i < 3; i++) {
+        const diff = targetRGB[i] - containerFuelVisualRGB[i];
+        containerFuelVisualRGB[i] += Math.sign(diff) * Math.min(Math.abs(diff), colorStep);
+    }
+    const fuelColor = `rgb(${containerFuelVisualRGB.map(Math.round).join(',')})`;
     const innerX = 4, innerY = 4, innerW = c.width - 8, innerH = c.height - 8;
     g.fillStyle = 'rgba(15,25,35,.65)';
     g.fillRect(innerX, innerY, innerW, innerH);
-    const fuelHeight = innerH * Math.max(0, Math.min(100, containerFuel)) / 100;
+    const fuelHeight = innerH * Math.max(0, Math.min(100, containerFuelVisual)) / 100;
     const fuelTop = innerY + innerH - fuelHeight;
     if (fuelHeight > 0) {
         g.fillStyle = fuelColor;
@@ -8744,6 +8766,7 @@ function startMode(m, isLoad = false, isNextLevel = false) {
     if (!containerMode || isNextLevel) container_bubbles=[];
     if (containerMode && !isLoad && !isNextLevel) setContainerFuel(100);
     containerFuelLastTick = performance.now();
+    resetContainerFuelVisual();
     updateContainerFuelUI();
     containerEndQueue=[];containerFinishing=false;containerParticles=[];containerBonusPending=false;containerRetryPending=false;containerBonusTotal=0;
     document.getElementById('containerPanel').style.display=containerMode?'block':'none';
