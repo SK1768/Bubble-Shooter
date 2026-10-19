@@ -4716,7 +4716,29 @@ function drawContainer() {
     if(!containerMode) return;
     const c=document.getElementById('containerCanvas'),g=c.getContext('2d');
     g.clearRect(0,0,c.width,c.height);
-    g.fillStyle='rgba(15,25,35,.8)';g.fillRect(2,2,c.width-4,c.height-4);
+    // Vertical fuel gauge: rises from bottom to top as fuel increases.
+    // Draw behind bubbles and warnings, within the container's inner border.
+    const fuelColor = containerFuel <= 20 ? '#ff3333' : containerFuel <= 50 ? '#ffdd33' : '#33ff66';
+    const innerX = 4, innerY = 4, innerW = c.width - 8, innerH = c.height - 8;
+    g.fillStyle = 'rgba(15,25,35,.8)';
+    g.fillRect(innerX, innerY, innerW, innerH);
+    const fuelHeight = innerH * Math.max(0, Math.min(100, containerFuel)) / 100;
+    const fuelTop = innerY + innerH - fuelHeight;
+    if (fuelHeight > 0) {
+        g.fillStyle = fuelColor;
+        g.globalAlpha = 0.22;
+        g.fillRect(innerX, fuelTop, innerW, fuelHeight);
+        g.globalAlpha = 1;
+        g.save();
+        g.strokeStyle = fuelColor;
+        g.globalAlpha = 0.65;
+        g.lineWidth = 2;
+        g.beginPath();
+        g.moveTo(innerX, fuelTop);
+        g.lineTo(innerX + innerW, fuelTop);
+        g.stroke();
+        g.restore();
+    }
     g.strokeStyle=(containerFuel<=20 || container_bubbles.some(b=>b.hasLanded && b.y-containerRadius(b)<=CONTAINER_RED_LINE_Y+CONTAINER_PANIC_DISTANCE))?'#ff3333':'#00ffcc';g.lineWidth=4;
     g.strokeRect(2,2,c.width-4,c.height-4);
     // Overflow threshold: only landed bubbles count toward panic/failure.
@@ -10273,6 +10295,7 @@ if (!autosaveEnabled && gameRunning && !gameOver && !gameWin && !isCustomMode &&
  showSecretText('Loading: Main Menu...', 2500)   
     fadeTransition(() => {
     containerMode=false;
+    updateContainerFuelUI(); // Hide the fuel ring when returning to the main menu.
     container_mode=false;
     container_bubbles=[];
     containerEndQueue=[];
@@ -10280,7 +10303,6 @@ if (!autosaveEnabled && gameRunning && !gameOver && !gameWin && !isCustomMode &&
     containerParticles=[];
     document.getElementById("containerPanel").style.display="none";
     console.clear();
-	updateContainerFuelUI();
     setBrowserTitle("⭐ SK's Bubble Shooter");
     gameRunning = false;
     document.getElementById('mainMenu').style.display = 'block';
