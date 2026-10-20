@@ -6459,6 +6459,11 @@ function popBubbles(m, startBubble = null) {
             if (byCell > -1) bubbles.splice(byCell, 1);
         }
         spawnPopParticles(b.x, b.y, b.color);
+        // In Container Mode, every popped board bubble also becomes a
+        // container drop, just like a bubble that falls past the red line.
+        if (containerMode && !gameOver && !gameWin && !containerFinishing) {
+            addContainerBubble(b);
+        }
         // ✅ Award the chain total in small slices, one slice per popped bubble.
         // The streak counter/multiplier still only increments once for the whole chain.
         score += scorePerPop;
