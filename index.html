@@ -1260,6 +1260,13 @@ body.rainbow-mode #debugBtn.debug-locked {
 .container-fuel-wrapper.fuel-danger .container-fuel-ring {animation:campaignRingPulse .6s ease-in-out infinite;}
 #containerFuelWarning {color:#ff3333;font-weight:bold;text-align:center;font-size:12px;line-height:1.35;animation:none;}
 @media(max-width:1100px){.container-fuel-wrapper{left:calc(100% + 565px);}}
+#containerFlightLayer { position:fixed; inset:0; pointer-events:none; overflow:visible; z-index:90; display:none; }
+.container-flight-poof {position:fixed; width:12px;height:12px;border-radius:50%;pointer-events:none; transform:translate(-50%,-50%); transform-origin:center center; animation:containerFlightPoof .5s ease-out forwards; background:var(--orb-color);box-shadow:0 0 14px 5px var(--orb-color); display:flex;align-items:center;justify-content:center;}
+.container-flight-poof-symbol {position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font:16px sans-serif;line-height:1;white-space:nowrap;pointer-events:none;filter:drop-shadow(0 0 3px #000);}
+body.container-flight-paused .container-flight-poof { animation-play-state: paused !important; }
+@keyframes containerFlightPoof {0%{opacity:1;transform:translate(-50%,-50%) scale(.5)}60%{opacity:.85;transform:translate(-50%,-50%) scale(2.7)}100%{opacity:0;transform:translate(-50%,-50%) scale(4.2)}}
+.container-flight-symbol {position:absolute;left:50%;top:50%;font:16px sans-serif;line-height:1;transform-origin:0 0;filter:drop-shadow(0 0 3px #000);pointer-events:none;}
+.container-flight-orb { position:fixed; width:13px; height:13px; border-radius:50%; pointer-events:none; will-change:transform,opacity; box-shadow:0 0 12px 4px var(--orb-color),0 0 24px var(--orb-color); background:radial-gradient(circle at 30% 25%,white,var(--orb-color) 55%,transparent 100%); }
 </style>
 </head>
 <div id="unsupportedBrowserMessage">
@@ -1272,6 +1279,7 @@ body.rainbow-mode #debugBtn.debug-locked {
     <hint>(If this text fades away then your browser supports JavaScript / HTML5 and you can play the game.)</hint>
 </div>
 <body oncontextmenu="return false">
+<div id="containerFlightLayer" aria-hidden="true"></div>
 
 <div id="gameErrorScreen" role="alert" aria-live="assertive">
     <div class="game-error-box">
@@ -4082,7 +4090,14 @@ const sounds = { // Webkit SFX
 
         const now = audioCtx.currentTime;
 
-        if (type === 'container_combine') {
+        if (type === 'fly') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(520, now);
+            osc.frequency.exponentialRampToValueAtTime(1050, now + 0.22);
+            gain.gain.setValueAtTime(0.065, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+            osc.start(); osc.stop(now + 0.24);
+        } else if (type === 'container_combine') {
             osc.type='triangle'; osc.frequency.setValueAtTime(420,now); osc.frequency.exponentialRampToValueAtTime(760,now+0.13);
             gain.gain.setValueAtTime(0.11,now);gain.gain.exponentialRampToValueAtTime(0.001,now+0.14);
             osc.start();osc.stop(now+0.14);
@@ -4500,6 +4515,106 @@ function startContainerMode() {
     startMode('puzzle');
     }, 2500, false);
 }
+// Cross-canvas flight: screen-space DOM particles remain above both canvases.
+let containerFlights = [];
+let containerFlightLastTime = 0;
+function clearContainerFlights() {
+    for (const flight of containerFlights) flight.el.remove();
+    containerFlights = [];
+    const layer = document.getElementById('containerFlightLayer');
+    layer.querySelectorAll('.container-flight-poof').forEach(poof => poof.remove());
+    layer.style.display = 'none';
+}
+function containerCanvasPoint(element, x, y) {
+    const r = element.getBoundingClientRect();
+    // Canvas CSS borders must not be included in its drawable content dimensions.
+    const style = getComputedStyle(element);
+    const left = parseFloat(style.borderLeftWidth) || 0;
+    const top = parseFloat(style.borderTopWidth) || 0;
+    const w = element.clientWidth || r.width;
+    const h = element.clientHeight || r.height;
+    return {x:r.left+left+x/element.width*w, y:r.top+top+y/element.height*h};
+}
+function spawnContainerFlightPoof(x,y,color,symbolText = null) {
+    const layer=document.getElementById('containerFlightLayer');
+    const poof=document.createElement('div');
+    poof.className='container-flight-poof';
+    if (isPaused || isLoading) poof.style.animationPlayState='paused';
+    poof.style.setProperty('--orb-color',color||'#ffffff');
+    poof.style.left=x+'px';poof.style.top=y+'px';
+    if (symbolText) {
+        const icon=document.createElement('span');
+        icon.className='container-flight-poof-symbol';
+        icon.textContent=symbolText;
+        poof.appendChild(icon);
+    }
+    layer.appendChild(poof);
+    poof.addEventListener('animationend',()=>{
+        poof.remove();
+        if (!containerFlights.length && !layer.querySelector('.container-flight-poof')) layer.style.display='none';
+    },{once:true});
+}
+function queueContainerFlight(b, sourceY = DEADLINE) {
+    if (!containerMode || gameOver || gameWin || containerFinishing) return;
+    const layer = document.getElementById('containerFlightLayer');
+    const containerCanvas=document.getElementById('containerCanvas');
+    const dropX=Math.max(CONTAINER_R,Math.min(containerCanvas.width-CONTAINER_R,b.x/canvas.width*containerCanvas.width));
+    const source=containerCanvasPoint(canvas,b.x,sourceY);
+    // The bubble actually spawns at (dropX,-CONTAINER_R), not at the container centre.
+    const target=containerCanvasPoint(containerCanvas,dropX,-CONTAINER_R);
+    const el=document.createElement('div');
+    el.className='container-flight-orb';
+    el.style.setProperty('--orb-color',b.color||'#ffffff');
+    if(colorblindMode){
+        const symbol=document.createElement('span');
+        symbol.className='container-flight-symbol';
+        symbol.textContent=b.color==null?'❔':(COLOR_EMOJIS[b.color]||'❔');
+        el.appendChild(symbol);
+    }
+    layer.style.display='block';
+    layer.appendChild(el);
+    sounds.play('fly');
+    // Absorption happens at the actual source, not at the later container drop.
+    spawnContainerAbsorb(b.x,sourceY,b.color);
+    containerFlights.push({el,x:source.x,y:source.y,tx:target.x,ty:target.y,
+        age:0,duration:1.15+Math.random()*0.35,bend:-35-Math.random()*65,
+        bubble:{x:b.x,color:b.color},color:b.color||'#ffffff'});
+    el.style.transform=`translate3d(${source.x-6.5}px,${source.y-6.5}px,0)`;
+}
+function updateContainerFlights(dt) {
+    if (!containerFlights.length) return;
+    if (isPaused || isLoading) return;
+    for(let i=containerFlights.length-1;i>=0;i--){
+        const f=containerFlights[i];
+        f.age+=Math.min(0.06,dt);
+        const t=Math.min(1,f.age/f.duration);
+        const eased=t*t*(3-2*t);
+        const x=f.x+(f.tx-f.x)*eased;
+        const y=f.y+(f.ty-f.y)*eased+Math.sin(Math.PI*t)*f.bend;
+        f.el.style.transform=`translate3d(${x-6.5}px,${y-6.5}px,0) scale(${1-0.35*t})`;
+        f.el.style.opacity=String(1-0.2*t);
+        const symbol=f.el.querySelector('.container-flight-symbol');
+        if(symbol){
+            // Keep orbiting at first, then smoothly spiral into the orb's centre
+            // during the final 35% of its journey. At arrival the offset is zero.
+            const approach=Math.max(0,Math.min(1,(t-0.65)/0.35));
+            const settle=approach*approach*(3-2*approach);
+            const radius=19*(1-settle);
+            const angle=f.age*12;
+            symbol.style.transform=`translate(${Math.cos(angle)*radius-8}px,${Math.sin(angle)*radius-8}px)`;
+        }
+        if(t>=1){
+            spawnContainerFlightPoof(f.tx,f.ty,f.color, colorblindMode ? (COLOR_EMOJIS[f.bubble.color] || '❔') : null);
+            f.el.remove();containerFlights.splice(i,1);
+            if(containerMode&&!gameOver&&!gameWin)addContainerBubble(f.bubble,0);
+        }
+    }
+    if(!containerFlights.length){
+        // Allow the poof animations to finish before hiding the overlay.
+        const layer=document.getElementById('containerFlightLayer');
+        setTimeout(()=>{if(!containerFlights.length&&!layer.querySelector('.container-flight-poof'))layer.style.display='none';},720);
+    }
+}
 function addContainerBubble(b, sourceY = DEADLINE) {
     if (!containerMode || gameOver || gameWin || containerFinishing) return;
     const c = document.getElementById('containerCanvas');
@@ -4507,7 +4622,6 @@ function addContainerBubble(b, sourceY = DEADLINE) {
     container_bubbles.push({x,y:-CONTAINER_R,color:b.color,radius:CONTAINER_R,units:1,vy:0,vx:0,isFalling:true,hasLanded:false});
     stats.containerBubblesCaught=(Number(stats.containerBubblesCaught)||0)+1;
     checkProgressAchievements(); saveStats();
-    spawnContainerAbsorb(b.x,sourceY,b.color);
     spawnContainerEffect(x,0,b.color,'pop',containerRadius(b));
     sounds.play('container_drop');
     // Failure is based on a LANDED bubble reaching the red line, not bubble count.
@@ -6034,6 +6148,10 @@ canvas.addEventListener('mouseleave', () => {
 
 function setPause(state) {
     isPaused = state;
+    document.body.classList.toggle('container-flight-paused', isPaused);
+    document.querySelectorAll('#containerFlightLayer .container-flight-poof').forEach(poof => {
+        poof.style.animationPlayState = isPaused ? 'paused' : 'running';
+    });
     stopHurryTimer();
     document.getElementById('pauseBtn').innerText = isPaused ? "RESUME" : "PAUSE";
     refreshFavicon();
@@ -6462,7 +6580,7 @@ function popBubbles(m, startBubble = null) {
         // In Container Mode, every popped board bubble also becomes a
         // container drop, just like a bubble that falls past the red line.
         if (containerMode && !gameOver && !gameWin && !containerFinishing) {
-            addContainerBubble(b, b.y);
+            queueContainerFlight(b, b.y);
         }
         // ✅ Award the chain total in small slices, one slice per popped bubble.
         // The streak counter/multiplier still only increments once for the whole chain.
@@ -6479,9 +6597,9 @@ function popBubbles(m, startBubble = null) {
             text: `+${fmt(scorePerPop)} (${popProgressText})`,
             life: 1.0
         });
-        if (!containerMode) {
+       if (!containerMode) {
         sounds.play('pop');
-        }
+       }
         popped++;
         chainPopIndex = popped;
         updateChainPendingFallPreview(chain, popped);
@@ -6671,6 +6789,7 @@ function beginContainerRetry() {
         
 }
 function triggerWin() {
+    if (containerMode && (containerFlights.length || document.querySelector("#containerFlightLayer .container-flight-poof"))) { winPending = true; return; }
     if(containerMode && container_bubbles.length && !containerBonusPending) {
         containerBonusPending=true;
         containerBonusTotal=containerBonusValue();
@@ -7115,6 +7234,7 @@ if (containerMode && gameRunning && !gameOver && !gameWin && !containerFinishing
     setContainerFuel(containerFuel - CONTAINER_FUEL_DRAIN_PER_SECOND * fuelDt);
     if (containerFuel <= 0) { triggerFail('The container ran out of fuel!'); return; }
 }
+updateContainerFlights(Math.max(0.001, (performance.now() - lastTimeMs) / 1000));
 updateContainer(Math.min(0.05, Math.max(0.001, (performance.now() - lastTimeMs) / 1000)));
 if (isDailyPuzzle)
 {
@@ -7132,7 +7252,7 @@ if (
     fallingBubbles.length === 0 &&
     projectiles.length === 0 &&
     // Container Mode: wait until every collected bubble has landed.
-    (!containerMode || !container_bubbles.some(b => b.isFalling === true)) &&
+    (!containerMode || (!containerFlights.length && !document.querySelector("#containerFlightLayer .container-flight-poof") && !container_bubbles.some(b => b.isFalling === true))) &&
     !gameWin &&
     !gameOver
 ) {
@@ -7206,7 +7326,7 @@ for (let i = fallingBubbles.length - 1; i >= 0; i--) {
 if (b.y >= DEADLINE) {
     // Capture the falling bubble before the red-line pop removes it.
     if (containerMode && !gameOver && !gameWin) {
-        addContainerBubble(b);
+        queueContainerFlight(b, DEADLINE);
         fallingBubbles.splice(i, 1);
         continue;
     }
@@ -8774,7 +8894,7 @@ function startMode(m, isLoad = false, isNextLevel = false) {
     containerFuelLastTick = performance.now();
     resetContainerFuelVisual();
     updateContainerFuelUI();
-    containerEndQueue=[];containerFinishing=false;containerParticles=[];containerBonusPending=false;containerRetryPending=false;containerBonusTotal=0;
+    clearContainerFlights();containerEndQueue=[];containerFinishing=false;containerParticles=[];containerBonusPending=false;containerRetryPending=false;containerBonusTotal=0;
     document.getElementById('containerPanel').style.display=containerMode?'block':'none';
     mode = m;
     deathSfxPlayed = false; 
@@ -8786,7 +8906,7 @@ function startMode(m, isLoad = false, isNextLevel = false) {
         lastTickSecond = null;
 		campaignFinished = false;
     }
-    gameRunning = true; gameOver = false; gameWin = false; isPaused = false; isCustomMode = false; isPlaytesting = false;
+    gameRunning = true; gameOver = false; gameWin = false; isPaused = false; document.body.classList.remove('container-flight-paused'); isCustomMode = false; isPlaytesting = false;
     lastClearWasPerfect = false;
     if (!isLoad) {
 
@@ -10241,40 +10361,49 @@ function closeCustomSavePopup() {
     "whoosh_out",
     "error_buzz",
     "container_drop",
-    "container_combine"
+    "container_combine",
+    "fly"
 ];
 
-function openSfxMenu() {
-    const menu = document.getElementById('sfxMenu');
+const SFX_PAGE_SIZE = 6;
+let sfxCurrentPage = 0;
+
+function renderSfxPage() {
     const list = document.getElementById('sfxList');
-    list.innerHTML = '';
-
-    SFX_TYPES.forEach(type => {
+    if (!list) return;
+    const totalPages = Math.max(1, Math.ceil(SFX_TYPES.length / SFX_PAGE_SIZE));
+    sfxCurrentPage = Math.max(0, Math.min(sfxCurrentPage, totalPages - 1));
+    list.replaceChildren();
+    const start = sfxCurrentPage * SFX_PAGE_SIZE;
+    SFX_TYPES.slice(start, start + SFX_PAGE_SIZE).forEach(type => {
         const row = document.createElement('div');
-        row.style.margin = '8px 0';
-        row.style.display = 'flex';
-        row.style.justifyContent = 'space-between';
-        row.style.alignItems = 'center';
-
+        row.className = 'sfx-tester-row';
         const label = document.createElement('span');
-        label.innerText = type;
-        label.style.flex = '1';
-
+        label.className = 'sfx-tester-name';
+        label.textContent = type.replace(/_/g, ' ').toUpperCase();
+        label.title = type;
         const btn = document.createElement('button');
-        btn.innerText = '▶ PLAY';
-        btn.style.background = '#00ffcc';
-        btn.style.color = '#000';
-        btn.style.border = 'none';
-        btn.style.padding = '5px 10px';
-        btn.style.borderRadius = '5px';
+        btn.className = 'sfx-tester-play';
+        btn.textContent = '▶ PLAY';
         btn.onclick = () => sounds.play(type);
-
-        row.appendChild(label);
-        row.appendChild(btn);
+        row.append(label, btn);
         list.appendChild(row);
     });
+    document.getElementById('sfxPageLabel').textContent = `Page ${sfxCurrentPage + 1} / ${totalPages}`;
+    document.getElementById('sfxCountLabel').textContent = `${SFX_TYPES.length} sound effects`;
+    document.getElementById('sfxPrevPage').disabled = sfxCurrentPage === 0;
+    document.getElementById('sfxNextPage').disabled = sfxCurrentPage >= totalPages - 1;
+}
 
-    menu.style.display = 'flex';
+function changeSfxPage(direction) {
+    sfxCurrentPage += direction;
+    renderSfxPage();
+}
+
+function openSfxMenu() {
+    sfxCurrentPage = 0;
+    renderSfxPage();
+    document.getElementById('sfxMenu').style.display = 'flex';
 }
 
 function closeSfxMenu() {
@@ -10307,6 +10436,7 @@ document.getElementById('streakTimerText').innerText = "0s";
 }
 function clearEditor() { if(confirm("Clear level?")) bubbles = []; }
 async function exitToMenu() {
+    clearContainerFlights();
     if (winPending) return;
 
     if (isSecretLevel)
@@ -10465,37 +10595,33 @@ addSecretLevelButton();
         
 </div>
 </div>
-    <div id="sfxMenu" style="
-display:none;
-position:fixed;
-inset:0;
-background:rgba(0,0,0,0.9);
-z-index:9999;
-align-items:center;
-justify-content:center;
-">
-  <div style="
-    background:#222;
-    padding:25px;
-    border-radius:12px;
-    border:2px solid #00e5ff;
-    width:320px;
-    text-align:center;
-    color:white;
-  ">
-    <h2 style="color:#00e5ff;">SFX Tester</h2>
-
-    <div id="sfxList" style="margin-top:15px;"></div>
-
-    <button onclick="closeSfxMenu()" style="
-      margin-top:20px;
-      background:#ff5555;
-      padding:8px 20px;
-      border:none;
-      border-radius:6px;
-      color:white;
-      font-weight:bold;
-    ">CLOSE</button>
+<style>
+#sfxMenu {display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:14px;box-sizing:border-box;}
+.sfx-tester-dialog {width:min(440px,100%);max-height:calc(100dvh - 28px);overflow-y:auto;box-sizing:border-box;background:linear-gradient(155deg,#182a32,#101519 70%);border:2px solid #00e5ff;border-radius:18px;box-shadow:0 0 35px rgba(0,229,255,.25);padding:clamp(12px,3vw,22px);color:white;text-align:center;}
+.sfx-tester-heading {margin:0;color:#00e5ff;font-size:clamp(18px,4vw,24px);}
+.sfx-tester-subtitle {color:#9cbac0;font-size:12px;margin:7px 0 14px;}
+#sfxList {display:grid;gap:7px;}
+.sfx-tester-row {display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1b3038;border:1px solid #34545d;border-radius:10px;padding:6px 9px;min-width:0;}
+.sfx-tester-name {min-width:0;overflow-wrap:anywhere;text-align:left;font-size:clamp(11px,2.8vw,14px);}
+.sfx-tester-play {flex-shrink:0;background:#00e5ff;color:#001b22;margin:0;padding:8px 11px;font-size:12px;border-radius:8px;}
+.sfx-tester-nav {display:flex;align-items:center;justify-content:space-between;gap:5px;margin-top:14px;}
+.sfx-tester-nav button {background:#245360;color:white;margin:0;padding:8px 11px;font-size:12px;}
+.sfx-tester-nav button:disabled {opacity:.35;cursor:default;}
+#sfxPageLabel {font-size:12px;white-space:nowrap;color:#b8f7ff;}
+.sfx-tester-close {background:#e34d5c;color:white;margin:15px 0 0;width:100%;max-width:190px;}
+@media(max-height:460px){.sfx-tester-dialog{padding:10px}.sfx-tester-row{padding:3px 7px}.sfx-tester-play{padding:5px 9px}.sfx-tester-subtitle{margin:3px 0 7px}}
+</style>
+<div id="sfxMenu" role="dialog" aria-modal="true" aria-label="SFX Tester">
+  <div class="sfx-tester-dialog">
+    <h2 class="sfx-tester-heading">🎵 SFX TESTER</h2>
+    <p class="sfx-tester-subtitle" id="sfxCountLabel">Sound effects</p>
+    <div id="sfxList"></div>
+    <div class="sfx-tester-nav">
+      <button id="sfxPrevPage" onclick="changeSfxPage(-1)">◀ PREVIOUS</button>
+      <span id="sfxPageLabel" aria-live="polite">Page 1 / 1</span>
+      <button id="sfxNextPage" onclick="changeSfxPage(1)">NEXT ▶</button>
+    </div>
+    <button class="sfx-tester-close" onclick="closeSfxMenu()">✕ CLOSE</button>
   </div>
 </div>
 <div id="achievementsPanel" class="panel hidden">
