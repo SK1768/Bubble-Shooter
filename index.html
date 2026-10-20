@@ -4500,14 +4500,14 @@ function startContainerMode() {
     startMode('puzzle');
     }, 2500, false);
 }
-function addContainerBubble(b) {
+function addContainerBubble(b, sourceY = DEADLINE) {
     if (!containerMode || gameOver || gameWin || containerFinishing) return;
     const c = document.getElementById('containerCanvas');
     const x = Math.max(CONTAINER_R,Math.min(c.width-CONTAINER_R, b.x / canvas.width * c.width));
     container_bubbles.push({x,y:-CONTAINER_R,color:b.color,radius:CONTAINER_R,units:1,vy:0,vx:0,isFalling:true,hasLanded:false});
     stats.containerBubblesCaught=(Number(stats.containerBubblesCaught)||0)+1;
     checkProgressAchievements(); saveStats();
-    spawnContainerAbsorb(b.x,DEADLINE,b.color);
+    spawnContainerAbsorb(b.x,sourceY,b.color);
     spawnContainerEffect(x,0,b.color,'pop',containerRadius(b));
     sounds.play('container_drop');
     // Failure is based on a LANDED bubble reaching the red line, not bubble count.
@@ -6458,11 +6458,11 @@ function popBubbles(m, startBubble = null) {
             const byCell = bubbles.findIndex(o => o.row === b.row && o.col === b.col);
             if (byCell > -1) bubbles.splice(byCell, 1);
         }
-        spawnPopParticles(b.x, b.y, b.color);
+        if (!containerMode) spawnPopParticles(b.x, b.y, b.color);
         // In Container Mode, every popped board bubble also becomes a
         // container drop, just like a bubble that falls past the red line.
         if (containerMode && !gameOver && !gameWin && !containerFinishing) {
-            addContainerBubble(b);
+            addContainerBubble(b, b.y);
         }
         // ✅ Award the chain total in small slices, one slice per popped bubble.
         // The streak counter/multiplier still only increments once for the whole chain.
@@ -6479,8 +6479,9 @@ function popBubbles(m, startBubble = null) {
             text: `+${fmt(scorePerPop)} (${popProgressText})`,
             life: 1.0
         });
-
+        if (!containerMode) {
         sounds.play('pop');
+        }
         popped++;
         chainPopIndex = popped;
         updateChainPendingFallPreview(chain, popped);
