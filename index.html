@@ -7242,12 +7242,12 @@ function drawHurryWarning(sec) {
     const accent=remaining<=3?'#ff505c':'#ffbc47';
     ctx.save();
     const x=canvas.width/2,y=canvas.height/2-85;
-    ctx.fillStyle='rgba(8,15,34,.92)';ctx.strokeStyle=accent;ctx.lineWidth=2;
+    ctx.fillStyle='rgba(8,15,34,.28)';ctx.strokeStyle=accent;ctx.globalAlpha=.72;ctx.lineWidth=2;
     ctx.shadowColor=accent;ctx.shadowBlur=15;
     ctx.beginPath();ctx.roundRect(x-155,y-55,310,110,17);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
     ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle=accent;ctx.font='bold 27px Storopia, sans-serif';ctx.fillText('HURRY UP!',x,y-21);
-    ctx.fillStyle='#fff';ctx.font='bold 20px Storopia, sans-serif';ctx.fillText(`${remaining}s  •  SHOOT NOW`,x,y+20);
+    ctx.globalAlpha=.82;ctx.fillStyle=accent;ctx.font='bold 27px Storopia, sans-serif';ctx.fillText('HURRY UP!',x,y-21);
+    ctx.globalAlpha=.85;ctx.fillStyle='#fff';ctx.font='bold 20px Storopia, sans-serif';ctx.fillText(`${remaining}s  •  SHOOT NOW`,x,y+20);
     ctx.restore();
 }
 function autoShootCurrentBubble() {
