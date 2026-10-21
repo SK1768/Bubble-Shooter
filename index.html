@@ -7696,16 +7696,16 @@ streakTimerText.innerText = streakCount > 0 ? `${streakTimer.toFixed(1)}s` : "0.
 streakTimerText.style.display = "flex";
 
         projectiles.forEach((p, i) => {
-            // Safety: a fired bubble must never pass entirely beneath the red line.
-            // Use the bubble's top edge, not its centre, to detect a complete crossing.
-            if (p.y - RADIUS > DEADLINE) {
-                safelyReturnFromLostProjectile();
-                return;
-            }
+            // Projectiles spawn BELOW the red line. Arm this safety check only
+            // after the whole projectile has travelled ABOVE the red line.
+            if (p.y + RADIUS < DEADLINE) p.hasClearedRedLine = true;
 
             particles.push({ x: p.x, y: p.y, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2, life: 0.5, color: p.color, size: Math.random()*4+2 });
             p.x += p.dx; p.y += p.dy;
-            if (p.y - RADIUS > DEADLINE) {
+            // Only a projectile that previously cleared the line and is now
+            // travelling DOWNWARD can be considered lost.
+            if (p.y + RADIUS < DEADLINE) p.hasClearedRedLine = true;
+            if (p.hasClearedRedLine && p.dy > 0 && p.y - RADIUS > DEADLINE) {
                 safelyReturnFromLostProjectile();
                 return;
             }
