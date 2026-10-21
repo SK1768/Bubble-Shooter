@@ -5090,18 +5090,35 @@ let perfectStreak = 0;
 
 function updateFavicon(color) {
     const favicon = document.getElementById('dynamicFavicon');
-
-    const svgIcon =
-        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="45"
-                fill="${color}"
-                stroke="white"
-                stroke-width="8"/>
-        </svg>`;
-
+    if (!favicon) return;
+    // Use an SVG rather than an emoji so the favicon matches the actual bubble colour.
+    // A clipped gloss and highlight arc give it the same shiny finish as game bubbles.
+    const validColor = typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color);
+    const fill = validColor ? color : '#dce8ef';
+    const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <defs>
+        <radialGradient id="bubble" cx="32%" cy="25%" r="79%">
+          <stop offset="0" stop-color="#fff" stop-opacity=".58"/>
+          <stop offset=".29" stop-color="${fill}"/>
+          <stop offset=".75" stop-color="${fill}"/>
+          <stop offset="1" stop-color="#09101c" stop-opacity=".9"/>
+        </radialGradient>
+        <linearGradient id="shine" x1="0" y1="0" x2=".3" y2="1">
+          <stop offset="0" stop-color="#fff" stop-opacity=".9"/>
+          <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+        </linearGradient>
+        <clipPath id="bubbleClip"><circle cx="50" cy="50" r="44"/></clipPath>
+      </defs>
+      <circle cx="50" cy="50" r="44" fill="url(#bubble)" stroke="#e6faff" stroke-width="2"/>
+      <g clip-path="url(#bubbleClip)">
+        <ellipse cx="36" cy="27" rx="26" ry="12" transform="rotate(-25 36 27)" fill="url(#shine)"/>
+        <ellipse cx="68" cy="75" rx="15" ry="5" transform="rotate(-28 68 75)" fill="#fff" opacity=".16"/>
+      </g>
+      ${validColor ? '' : '<circle cx="50" cy="50" r="31" fill="none" stroke="#ffffff" stroke-width="3" opacity=".8"/>'}
+    </svg>`;
     favicon.href = 'data:image/svg+xml,' + encodeURIComponent(svgIcon);
 }
-    
+
     function setFaviconEmoji(emoji) {
     const favicon = document.getElementById('dynamicFavicon');
     favicon.href =
@@ -6467,7 +6484,11 @@ if (nb.color != COLORLESS && colorlessNeighbors.length >= 2) {
 
     let m = convertedColorless ? [] : findMatches(nb);
 
-    if (m.length >= 3) {
+    // Colourless-only rounds: a colourless projectile clears the existing
+    // connected colourless group on its first hit (even if only one was left).
+    // Regular coloured bubbles still require the usual 3-bubble match.
+    const isColourlessHit = nb.color === COLORLESS && m.length >= 2;
+    if (m.length >= 3 || isColourlessHit) {
         lastShotWasMatch = true;
         popBubbles(m, nb);
     } else {
@@ -7253,7 +7274,7 @@ function drawHurryWarning(sec) {
 function autoShootCurrentBubble() {
     if (winPending) return;
 
-    if (!currentBall || ammo <= 0 || mouseY > DEADLINE) 
+    if (ammo <= 0 || mouseY > DEADLINE) 
     {
       hurryWarningActive = false;
       hurryWarningSeconds = null;
@@ -8269,12 +8290,8 @@ if (panicMode) {
         // Confetti is drawn on a separate overlay above the entire game canvas.
         ctx.restore();
         projectiles.forEach(p => {
-    // bubble
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, RADIUS - 2, 0, Math.PI * 2);
-    ctx.fill();
-    drawBubbleSheen(ctx,p.x,p.y,RADIUS - 2);
+    // Render colourless projectiles as hollow white outlines, matching the grid.
+    drawAmmoBubble(ctx, p.x, p.y, RADIUS - 2, p.color);
 
     // colorblind emoji overlay
     if (colorblindMode) {
@@ -8315,26 +8332,8 @@ if (ammo => -1) {
 
     ctx.restore();
 }
-// 🌟 Glow when aiming
-if (isAiming) {
-    const pulse = (Math.sin(aimGlowPulse) + 1) / 2;
-
-    ctx.save();
-    ctx.shadowBlur = 20 + pulse * 15;
-    ctx.shadowColor = currentBall || "#ffffff";
-    ctx.fillStyle = currentBall || "#ffffff";
-    ctx.beginPath();
-    ctx.arc(cx, cy, RADIUS, 0, Math.PI * 2);
-    ctx.fill();
-    drawBubbleSheen(ctx,cx,cy,RADIUS);
-    ctx.restore();
-} else {
-    ctx.fillStyle = currentBall;
-    ctx.beginPath();
-    ctx.arc(cx, cy, RADIUS, 0, Math.PI * 2);
-    ctx.fill();
-    drawBubbleSheen(ctx,cx,cy,RADIUS);
-}
+// Current bubble (including colourless) with aiming glow.
+drawAmmoBubble(ctx, cx, cy, RADIUS, currentBall, isAiming);
 if (isAiming) {
     ctx.save();
     ctx.strokeStyle = currentBall || "#ffffff";
@@ -8361,13 +8360,8 @@ if (isAiming) {
 
             // ---- NEXT BALL ----
             if (ammo > 1) {
-                ctx.fillStyle = nextBall;
-                ctx.beginPath();
-                ctx.arc(canvas.width / 2 + 60, canvas.height - 80, RADIUS * 0.7, 0, Math.PI * 2);
-                ctx.fill();
-                // Match the glossy sheen used on the current and board bubbles.
-                drawBubbleSheen(ctx, canvas.width / 2 + 60, canvas.height - 80, RADIUS * 0.7);
-		
+                drawAmmoBubble(ctx, canvas.width / 2 + 60, canvas.height - 80, RADIUS * 0.7, nextBall);
+
                 if (colorblindMode) {
                     ctx.fillStyle = "black";
                     ctx.font = "16px Storopia";
@@ -9504,7 +9498,7 @@ function findMatches(s) {
             if (!nb) return;
             const key = `${nb.row},${nb.col}`;
             if (seen.has(key)) return;
-            if (nb.color !== s.color) return;
+            if (s.color == null ? nb.color != null : nb.color !== s.color) return;
 
             seen.add(key);
             m.push(nb);
@@ -9575,22 +9569,44 @@ function dropFloatingBubbles() {
     bubbles = remaining;
 }
 	
+function drawAmmoBubble(context, x, y, radius, color, glow = false) {
+    context.save();
+    if (color == null) {
+        context.beginPath();
+        context.arc(x, y, radius - 2, 0, Math.PI * 2);
+        context.strokeStyle = '#ffffff';
+        context.lineWidth = 2;
+        if (glow) { context.shadowColor = '#ffffff'; context.shadowBlur = 12; }
+        context.stroke();
+    } else {
+        context.fillStyle = color;
+        if (glow) { context.shadowColor = color; context.shadowBlur = 20; }
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fill();
+        drawBubbleSheen(context, x, y, radius);
+    }
+    context.restore();
+}
+
 function updateAmmo(rollNext = false) {
     // Pool = colors that exist on board (ignore colorless)
-    const pool = bubbles.length > 0
-        ? Array.from(new Set(bubbles.map(b => b.color).filter(c => c)))
-        : ALL_COLORS;
+    const gridColors = Array.from(new Set(bubbles.map(b => b.color).filter(c => c)));
+    // A board containing only colourless bubbles has no shootable colours.
+    // Use the normal palette so the current/next bubbles stay visible and
+    // can still convert the colourless bubbles on impact.
+    const pool = gridColors.length ? gridColors : (bubbles.length ? [null] : ALL_COLORS);
 if (isLoadingSave) {
         refreshFavicon();
         return;
     }
     // If current is missing/invalid, fix it
-    if (!currentBall || !pool.includes(currentBall)) {
+    if (!pool.includes(currentBall)) {
         currentBall = pool[Math.floor(Math.random() * pool.length)];
     }
 
     // Only roll next when requested OR if next is invalid
-    if (rollNext || !nextBall || !pool.includes(nextBall)) {
+    if (rollNext || !pool.includes(nextBall)) {
         nextBall = pool[Math.floor(Math.random() * pool.length)];
     }
 
@@ -10366,18 +10382,20 @@ function loadSecretLevelData(s, fileName = "save file") {
     ammo = s.ammo ?? ammo;
     initialBubbleCount = bubbles.length;
 
-    const pool = bubbles.length > 0
-        ? Array.from(new Set(bubbles.map(b => b.color).filter(c => c)))
-        : ALL_COLORS;
+    const gridColors = Array.from(new Set(bubbles.map(b => b.color).filter(c => c)));
+    // A board containing only colourless bubbles has no shootable colours.
+    // Use the normal palette so the current/next bubbles stay visible and
+    // can still convert the colourless bubbles on impact.
+    const pool = gridColors.length ? gridColors : (bubbles.length ? [null] : ALL_COLORS);
 
     currentBall = s.currentBubble ?? null;
     nextBall = s.nextBubble ?? null;
 
-    if (!currentBall || !pool.includes(currentBall)) {
+    if (!pool.includes(currentBall)) {
         currentBall = null;
     }
 
-    if (!nextBall || !pool.includes(nextBall)) {
+    if (!pool.includes(nextBall)) {
         nextBall = null;
     }
 
@@ -10476,15 +10494,14 @@ function loadSaveData(s, fileName = "save file") {
         ammo = s.ammo ?? ammo;
         initialBubbleCount = bubbles.length;
 
-        const pool = bubbles.length > 0
-            ? Array.from(new Set(bubbles.map(b => b.color).filter(c => c)))
-            : ALL_COLORS;
+        const gridColors = Array.from(new Set(bubbles.map(b => b.color).filter(c => c)));
+        const pool = gridColors.length ? gridColors : (bubbles.length ? [null] : ALL_COLORS);
 
         currentBall = s.currentBubble ?? null;
         nextBall = s.nextBubble ?? null;
 
-        if (!currentBall || !pool.includes(currentBall)) currentBall = null;
-        if (!nextBall || !pool.includes(nextBall)) nextBall = null;
+        if (!pool.includes(currentBall)) currentBall = null;
+        if (!pool.includes(nextBall)) nextBall = null;
 
         isLoadingSave = false;
         updateAmmo(false);
