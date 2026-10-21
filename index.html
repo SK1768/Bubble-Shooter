@@ -1377,6 +1377,16 @@ body{background:radial-gradient(ellipse at 50% 10%,color-mix(in srgb,var(--theme
 .theme-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}.theme-actions button{margin:0}
 @media(max-width:680px){.save-slot-row{grid-template-columns:1fr}.save-slot-buttons{justify-content:center}.save-slot-buttons button{flex:1 0 18%;min-width:45px}.theme-grid{grid-template-columns:1fr}}
 #secretOverlay .secret-text {font-size:clamp(18px,3vw,24px);color:#aaffee;text-shadow:0 0 10px #00ffcc,0 0 22px #00ddee;}
+
+/* Optional persistent custom pictures behind the menu and loading overlay. */
+body.theme-background-image{background-image:linear-gradient(#04091655,#04091655),var(--custom-background-image)!important;background-position:center!important;background-size:cover!important;background-repeat:no-repeat!important;background-attachment:fixed!important}
+#secretOverlay.theme-loading-image{background-image:linear-gradient(#02081755,#02081755),var(--custom-loading-image)!important;background-position:center!important;background-size:cover!important;background-repeat:no-repeat!important}
+.theme-image-options{display:grid;gap:10px;margin:12px 0 18px}
+.theme-image-row{display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding:11px;border:1px solid #85b7d14a;border-radius:12px;background:#14253e;text-align:left}
+.theme-image-row strong{flex:1 0 100%;font-size:13px}
+.theme-image-row button{margin:0;padding:8px 11px;font-size:12px}
+.theme-image-row .theme-image-status{font-size:11px;color:#a9c8d9;flex:1 0 100%;overflow-wrap:anywhere}
+.theme-image-row input[type=file]{display:none}
 </style>
 </head>
 <div id="unsupportedBrowserMessage">
@@ -1487,7 +1497,7 @@ body{background:radial-gradient(ellipse at 50% 10%,color-mix(in srgb,var(--theme
         id="fpsSlider"
         min="1"
         max="200"
-        value="60"
+        value="30"
         style="width:200px;"
     >
 </div>
@@ -10928,7 +10938,7 @@ addSecretLevelButton();
  update();
 })();
 </script>
-<div id="themeStudio" role="dialog" aria-modal="true" aria-label="Colour customisation"><div class="theme-dialog"><h2>🎨 COLOUR STUDIO</h2><p>Customise your menu, gameplay, popups, background and messages. Changes preview instantly and are saved on this device.</p><div class="theme-grid" id="themeGrid"></div><div class="theme-actions"><button type="button" onclick="resetThemeStudio()">↺ RESET DEFAULTS</button><button type="button" onclick="closeThemeStudio()">✓ DONE</button></div></div></div>
+<div id="themeStudio" role="dialog" aria-modal="true" aria-label="Colour customisation"><div class="theme-dialog"><h2>🎨 COLOUR STUDIO</h2><p>Customise your menu, gameplay, popups, background and messages. Changes preview instantly and are saved on this device.</p><div class="theme-grid" id="themeGrid"></div><div class="theme-image-options" id="themeImageOptions"></div><div class="theme-actions"><button type="button" onclick="resetThemeStudio()">↺ RESET DEFAULTS</button><button type="button" onclick="closeThemeStudio()">✓ DONE</button></div></div></div>
 <script>
 (function(){
 const choices=[['menu','Main menu','#53f5e0'],['game','Gameplay & container','#70ebf0'],['pop','Popups & panels','#53f5e0'],['back','Background','#101e38'],['wall','Panel / wall surfaces','#192b49'],['alert','Error messages','#ff565e'],['warn','Warning messages','#ffd454'],['loading','Loading screen','#142641']];
@@ -10937,9 +10947,58 @@ function apply(key,value){if(!/^#[0-9a-f]{6}$/i.test(value))return;root.style.se
 function save(){try{localStorage.setItem('skBubbleTheme',JSON.stringify(Object.fromEntries(choices.map(([k])=>[k,document.getElementById('theme-'+k).value]))));}catch(e){}}
 let stored={};try{stored=JSON.parse(localStorage.getItem('skBubbleTheme')||'{}')||{}}catch(e){}
 for(const [key,label,defaultValue] of choices){const el=document.createElement('label');el.className='theme-option';const span=document.createElement('span');span.textContent=label;const input=document.createElement('input');input.type='color';input.id='theme-'+key;input.value=/^#[0-9a-f]{6}$/i.test(stored[key])?stored[key]:defaultValue;apply(key,input.value);input.addEventListener('input',()=>{apply(key,input.value);save()});el.append(span,input);grid.append(el)}
+
+// Images are stored as Blobs in IndexedDB, so they persist across browser restarts
+// without overflowing localStorage. Blob URLs are recreated on each page load.
+const imageSlots=[['back','Background'],['loading','Loading screen']];
+const imageURLs={};
+let themeImageDB=null;
+function openThemeImageDB(){return new Promise((resolve,reject)=>{
+  if(!('indexedDB' in window)){reject(new Error('IndexedDB is unavailable'));return;}
+  const req=indexedDB.open('SKBubbleThemeImages',1);
+  req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('images'))req.result.createObjectStore('images')};
+  req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('Cannot open image cache'));
+})}
+function imageTransaction(key,method,blob){return new Promise((resolve,reject)=>{
+  const tx=themeImageDB.transaction('images','readwrite');
+  const req=method==='put'?tx.objectStore('images').put(blob,key):method==='delete'?tx.objectStore('images').delete(key):tx.objectStore('images').get(key);
+  req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+})}
+function displayThemeImage(key,blob){
+  if(imageURLs[key]){URL.revokeObjectURL(imageURLs[key]);delete imageURLs[key]}
+  const element=key==='back'?document.body:document.getElementById('secretOverlay');
+  const className=key==='back'?'theme-background-image':'theme-loading-image';
+  const cssVar=key==='back'?'--custom-background-image':'--custom-loading-image';
+  element.classList.remove(className);element.style.removeProperty(cssVar);
+  if(blob){imageURLs[key]=URL.createObjectURL(blob);element.style.setProperty(cssVar,'url("'+imageURLs[key]+'")');element.classList.add(className)}
+  const status=document.getElementById('theme-image-status-'+key);
+  if(status)status.textContent=blob?'Custom image saved in browser storage':'Using selected background colour';
+}
+for(const [key,label] of imageSlots){
+  const row=document.createElement('div');row.className='theme-image-row';
+  const title=document.createElement('strong');title.textContent='🖼️ '+label+' image';
+  const file=document.createElement('input');file.type='file';file.accept='.png,.jpg,.jpeg,image/png,image/jpeg';
+  const upload=document.createElement('button');upload.type='button';upload.textContent='📁 CHOOSE IMAGE';upload.onclick=()=>file.click();
+  const remove=document.createElement('button');remove.type='button';remove.textContent='✕ REMOVE IMAGE';
+  const status=document.createElement('span');status.className='theme-image-status';status.id='theme-image-status-'+key;status.textContent='Using selected background colour';
+  file.addEventListener('change',async()=>{
+    const blob=file.files&&file.files[0];if(!blob)return;
+    if(!['image/png','image/jpeg'].includes(blob.type)){alert('Please select a PNG or JPG image.');file.value='';return;}
+    if(!themeImageDB){alert('Browser image storage is unavailable.');file.value='';return;}
+    try{await imageTransaction(key,'put',blob);displayThemeImage(key,blob)}catch(err){alert('Could not save the image in browser storage: '+err.message)}
+    file.value='';
+  });
+  remove.onclick=async()=>{if(!themeImageDB){alert('Browser image storage is unavailable.');return}try{await imageTransaction(key,'delete');displayThemeImage(key,null)}catch(err){alert('Could not remove image: '+err.message)}};
+  row.append(title,upload,remove,file,status);document.getElementById('themeImageOptions').append(row);
+}
+openThemeImageDB().then(async db=>{
+  themeImageDB=db;
+  for(const [key] of imageSlots){try{const blob=await imageTransaction(key,'get');if(blob)displayThemeImage(key,blob)}catch(e){console.warn('Theme image could not be loaded:',e)}}
+}).catch(e=>{for(const [key] of imageSlots){const status=document.getElementById('theme-image-status-'+key);if(status)status.textContent='Image caching unavailable in this browser'}console.warn('Theme image storage unavailable:',e)});
+
 window.openThemeStudio=()=>document.getElementById('themeStudio').classList.add('open');
 window.closeThemeStudio=()=>document.getElementById('themeStudio').classList.remove('open');
-window.resetThemeStudio=()=>{if(!confirm("Are you sure you want to reset the colours back to its default settings?"))return;for(const [k,,v] of choices){document.getElementById('theme-'+k).value=v;apply(k,v)}save()};
+window.resetThemeStudio=()=>{if(!confirm("Are you sure you want to reset the colours back to its default settings?"))return;for(const [k,,v] of choices){document.getElementById('theme-'+k).value=v;apply(k,v)}save();if(themeImageDB){for(const [key] of imageSlots){imageTransaction(key,'delete').then(()=>displayThemeImage(key,null)).catch(e=>console.warn('Could not clear image',e))}}};
 const menu=document.getElementById('mainMenu');if(menu){const btn=document.createElement('button');btn.id='themeStudioBtn';btn.textContent='🎨 COLOUR STUDIO';btn.onclick=window.openThemeStudio;btn.onmouseenter=()=>{if(typeof setMenuDesc==='function')setMenuDesc('Customise the colours of the menu, gameplay, backgrounds, popups and error screens.')};btn.onmouseleave=()=>{if(typeof clearMenuDesc==='function')clearMenuDesc()};const target=menu.querySelector('#autosaveToggle');if(target)target.before(btn,document.createElement('br'));else menu.append(btn)}
 document.getElementById('themeStudio').addEventListener('click',e=>{if(e.target.id==='themeStudio')closeThemeStudio()});
 })();
