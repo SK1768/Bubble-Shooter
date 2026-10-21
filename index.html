@@ -6499,7 +6499,7 @@ const neighbors = getNeighbors(nb);
 
 let colorlessNeighbors = neighbors.filter(n => n.color == COLORLESS);
 
-if (nb.color != COLORLESS && colorlessNeighbors.length >= 3) {
+if (nb.color != COLORLESS && colorlessNeighbors.length >= 2) {
 
     for (const n of colorlessNeighbors) {
         queueColorlessCluster(n, nb.color);
