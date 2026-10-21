@@ -6499,7 +6499,7 @@ const neighbors = getNeighbors(nb);
 
 let colorlessNeighbors = neighbors.filter(n => n.color == COLORLESS);
 
-if (nb.color != COLORLESS && colorlessNeighbors.length >= 2) {
+if (nb.color != COLORLESS && colorlessNeighbors.length >= 3) {
 
     for (const n of colorlessNeighbors) {
         queueColorlessCluster(n, nb.color);
@@ -6512,7 +6512,7 @@ if (nb.color != COLORLESS && colorlessNeighbors.length >= 2) {
     // Colourless-only rounds: a colourless projectile clears the existing
     // connected colourless group on its first hit (even if only one was left).
     // Regular coloured bubbles still require the usual 3-bubble match.
-    const isColourlessHit = nb.color === COLORLESS && m.length >= 2;
+    const isColourlessHit = nb.color === COLORLESS && m.length >= 3;
     if (m.length >= 3 || isColourlessHit) {
         lastShotWasMatch = true;
         popBubbles(m, nb);
