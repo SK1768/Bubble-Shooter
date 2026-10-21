@@ -7696,16 +7696,18 @@ streakTimerText.innerText = streakCount > 0 ? `${streakTimer.toFixed(1)}s` : "0.
 streakTimerText.style.display = "flex";
 
         projectiles.forEach((p, i) => {
-            // Projectiles spawn BELOW the red line. Arm this safety check only
-            // after the whole projectile has travelled ABOVE the red line.
-            if (p.y + RADIUS < DEADLINE) p.hasClearedRedLine = true;
-
+            // A projectile starts below the red line, so its initial position
+            // must NEVER count as a downward crossing. Remember its previous Y.
+            const previousY = p.y;
             particles.push({ x: p.x, y: p.y, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2, life: 0.5, color: p.color, size: Math.random()*4+2 });
             p.x += p.dx; p.y += p.dy;
-            // Only a projectile that previously cleared the line and is now
-            // travelling DOWNWARD can be considered lost.
-            if (p.y + RADIUS < DEADLINE) p.hasClearedRedLine = true;
-            if (p.hasClearedRedLine && p.dy > 0 && p.y - RADIUS > DEADLINE) {
+
+            // Trigger only on an actual crossing FROM ABOVE to BELOW the line.
+            // Also catch a malformed/downward shot that exits the bottom of the
+            // canvas, but never while it is still at its normal launch point.
+            const crossedRedLineDownward = previousY <= DEADLINE && p.y > DEADLINE;
+            const escapedBottom = p.y - RADIUS > canvas.height;
+            if (crossedRedLineDownward || escapedBottom) {
                 safelyReturnFromLostProjectile();
                 return;
             }
