@@ -1386,7 +1386,7 @@ body{background:radial-gradient(ellipse at 50% 10%,color-mix(in srgb,var(--theme
     <p>Your browser doesn't support JavaScript / HTML5.</p>
     <p>This game cannot run properly.</p>
     <small>Try Chrome, Firefox, Edge or Safari.</small>
-    <hint>(If this message disappears and you see a text saying "Initialising..." then your browser supports JavaScript / HTML5 and you can play the game.)</hint>
+    <hint>(If this text fades away then your browser supports JavaScript / HTML5 and you can play the game.)</hint>
 </div>
 <body oncontextmenu="return false">
 <div id="containerFlightLayer" aria-hidden="true"></div>
@@ -7696,9 +7696,19 @@ streakTimerText.innerText = streakCount > 0 ? `${streakTimer.toFixed(1)}s` : "0.
 streakTimerText.style.display = "flex";
 
         projectiles.forEach((p, i) => {
+            // Safety: a fired bubble must never pass entirely beneath the red line.
+            // Use the bubble's top edge, not its centre, to detect a complete crossing.
+            if (p.y - RADIUS > DEADLINE) {
+                safelyReturnFromLostProjectile();
+                return;
+            }
 
             particles.push({ x: p.x, y: p.y, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2, life: 0.5, color: p.color, size: Math.random()*4+2 });
             p.x += p.dx; p.y += p.dy;
+            if (p.y - RADIUS > DEADLINE) {
+                safelyReturnFromLostProjectile();
+                return;
+            }
                                   // every few frames only (cheap)
 p.trailTime = (p.trailTime || 0) + 0.1;
 
@@ -9021,7 +9031,7 @@ function startMode(m, isLoad = false, isNextLevel = false) {
         lastTickSecond = null;
 		campaignFinished = false;
     }
-    gameRunning = true; gameOver = false; gameWin = false; isPaused = false; document.body.classList.remove('container-flight-paused'); isCustomMode = false; isPlaytesting = false;
+    lostProjectileReturnInProgress = false; gameRunning = true; gameOver = false; gameWin = false; isPaused = false; document.body.classList.remove('container-flight-paused'); isCustomMode = false; isPlaytesting = false;
     lastClearWasPerfect = false;
     if (!isLoad) {
 
@@ -9108,7 +9118,7 @@ function enterCustomEditor() {
     containerMode = false;
     container_mode = false;
     document.getElementById("containerPanel").style.display = "none";
-    mode = 'custom'; isCustomMode = true; gameRunning = true; gameOver = false; gameWin = false; isPlaytesting = false; isCampaignMode = false; 
+    lostProjectileReturnInProgress = false; mode = 'custom'; isCustomMode = true; gameRunning = true; gameOver = false; gameWin = false; isPlaytesting = false; isCampaignMode = false; 
     hideCampaignTimer();
     document.getElementById('mainMenu').style.display = 'none';
     document.getElementById('customUI').style.display = 'block';
@@ -10619,18 +10629,32 @@ document.getElementById('streakTimerText').innerText = "0s";
     setSideRingsVisible(false);
 }
 function clearEditor() { if(confirm("Clear level?")) bubbles = []; }
+// Prevent repeated warnings and transitions while the game loop is still active.
+let lostProjectileReturnInProgress = false;
+let skipExitSavePromptForSafety = false;
+function safelyReturnFromLostProjectile() {
+    if (lostProjectileReturnInProgress || !gameRunning) return;
+    lostProjectileReturnInProgress = true;
+    logWarning("You were safely returned to the menu because a bubble projectile fell below the red line.");
+    projectiles.length = 0;
+    skipExitSavePromptForSafety = true;
+    // Reuse the game's existing menu transition and cleanup.
+    Promise.resolve(exitToMenu()).finally(() => {
+        skipExitSavePromptForSafety = false;
+    });
+}
 async function exitToMenu() {
     clearContainerFlights();
-    if (winPending) return;
+    if (winPending && !skipExitSavePromptForSafety) return;
 
-    if (isSecretLevel)
+    if (isSecretLevel && !skipExitSavePromptForSafety)
     {  
         fadeOverlayIn();
         await showSecretText(`I'm afraid you can't do that, ${playerName}.`, 5000);
         fadeOverlayOut();
         return;
     }
-if (!autosaveEnabled && gameRunning && !gameOver && !gameWin && !isCustomMode && !isPlaytesting && !isDailyPuzzle && !isSecretLevel) {
+if (!skipExitSavePromptForSafety && !autosaveEnabled && gameRunning && !gameOver && !gameWin && !isCustomMode && !isPlaytesting && !isDailyPuzzle && !isSecretLevel) {
     if (confirm("Autosave is off.\nDo you want to save your progress before exiting to the main menu?")) {
         saveGame(false);
     }
