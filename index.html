@@ -11431,65 +11431,181 @@ window.bubbleGoogleLogin=()=>{
 };
 // Delete data belonging to the logged in user only; never delete browser saves or the Google account.
 // Three independent confirmation dialogs provide chances to cancel.
+
+function deleteBubbleBrowserDatabase(name) {
+    return new Promise((resolve, reject) => {
+        if (!('indexedDB' in window)) {
+            reject(new Error('IndexedDB is unavailable.'));
+            return;
+        }
+
+        const request = indexedDB.deleteDatabase(name);
+
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(
+            request.error || new Error('Could not delete ' + name)
+        );
+        request.onblocked = () => reject(
+            new Error(
+                'The database ' + name +
+                ' is open on another tab. Close a tab that is running this game and try again.'
+            )
+        );
+    });
+}
+
 window.bubbleDeleteAllCloudData = async () => {
- if(!requireAccount() || busy || cloudDeleteInProgress)return;
- if(!confirm('Are you sure you want to delete all the cloud data from your account?'))return;
- if(!confirm('This will permanently delete your cloud save slots, level checkpoints, achievements, statistics and Colour Studio settings. Your local saves will remain. Do you really want to continue?'))return;
- if(!confirm('FINAL WARNING: This is not a joke! All of your cloud data on your account WILL be erased and can never be recovered! Are you really sure you want to do this?'))return;
- busy=true;
- cloudDeleteInProgress=true;
- const uid=activeUser.uid;
- const status=$('bubbleDeleteCloudStatus');
- const btn=$('bubbleDeleteCloudButton');
- if(btn)btn.disabled=true;
- if(progressSyncTimer){clearTimeout(progressSyncTimer);progressSyncTimer=null;}
- if(themeSyncTimer){clearTimeout(themeSyncTimer);themeSyncTimer=null;}
- if(status)status.textContent='🗑️ Deleting your cloud data...';
- try{
-  // Persist a per-user reset marker FIRST. It survives logout, browser storage
-  // clearing and logging in on other devices, which still hold local progress.
-  // It contains NO achievements or statistics, only the deletion timestamp.
-  await setDoc(doc(db,'bubbleUsers',uid,'progress','achievements'),
-               {cloudReset:true,cloudResetAt:Date.now()});
-  // Firestore does not recursively delete subcollections when a parent is removed.
-  // Delete each saved slot, then the other singleton documents.
-  const slots=await getDocs(collection(db,'bubbleUsers',uid,'saveSlots'));
-  if(activeUser?.uid!==uid)throw Error('The logged in account changed.');
-  let deleted=0;
-  for(const snap of slots.docs){await deleteDoc(snap.ref);deleted++;}
-  const paths=[
-   ['checkpoints','puzzle_checkpoint'],
-   ['checkpoints','container_checkpoint'],
-   ['preferences','colourStudio']
-  ];
-  for(const [group,key] of paths){
-   await deleteDoc(doc(db,'bubbleUsers',uid,group,key));
-   deleted++;
-  }
-  if(status)status.textContent='✅ Cloud data deleted. Signing out to prevent automatic re-upload...';
-  cloudStatus('✅ Bubble Shooter cloud data deleted.');
-  // Sign out so the remaining local progress is not immediately copied back online.
-  await signOut(auth);
-  $('bubbleAccountDialog').style.display='none';
-  alert('Your Bubble Shooter cloud data has been deleted. Local saves are untouched. You have been logged out.');
- }catch(err){
-  console.warn('Cloud data deletion failed:',err);
-  if(status)status.textContent='⚠️ Cloud deletion incomplete: '+(err.message||String(err));
-  alert('Cloud deletion could not finish. Some cloud data may still remain. Check your Firestore rules or connection, then retry. '+(err.message||String(err)));
-  // Remain blocked until sign-out rather than allowing automatic uploads to restore deleted data.
- }finally{
-  busy=false;
-  if(btn)btn.disabled=false;
- }
+    if (!requireAccount() || busy || cloudDeleteInProgress) return;
+
+    if (!confirm(
+        'Are you sure you want to delete all your cloud and local data?'
+    )) return;
+
+    if (!confirm(
+        'This will permanently erase cloud save slots, checkpoints, achievements, ' +
+        'statistics, Colour Studio settings, and local saves/images ' +
+        'on THIS browser. Other devices will keep its own local data. Do you really want to continue?'
+    )) return;
+
+    if (!confirm(
+        'FINAL WARNING: This is not a joke! Your cloud data and local data\'s saves/settings will be ' +
+        'permanently erased and cannot be recovered! Are you absolutely sure you want to do this?'
+    )) return;
+
+    busy = true;
+    cloudDeleteInProgress = true;
+
+    const uid = activeUser.uid;
+    const status = $('bubbleDeleteCloudStatus');
+    const btn = $('bubbleDeleteCloudButton');
+
+    if (btn) btn.disabled = true;
+
+    if (progressSyncTimer) {
+        clearTimeout(progressSyncTimer);
+        progressSyncTimer = null;
+    }
+
+    if (themeSyncTimer) {
+        clearTimeout(themeSyncTimer);
+        themeSyncTimer = null;
+    }
+
+    if (status) status.textContent = '🗑️ Deleting your cloud data...';
+
+    try {
+        // Keep the cloud reset marker to prevent old progress reuploading.
+        await setDoc(
+            doc(db, 'bubbleUsers', uid, 'progress', 'achievements'),
+            {
+                cloudReset: true,
+                cloudResetAt: Date.now()
+            }
+        );
+
+        const slots = await getDocs(
+            collection(db, 'bubbleUsers', uid, 'saveSlots')
+        );
+
+        if (activeUser?.uid !== uid) {
+            throw Error('The signed-in account changed.');
+        }
+
+        for (const snap of slots.docs) {
+            await deleteDoc(snap.ref);
+        }
+
+        const paths = [
+            ['checkpoints', 'puzzle_checkpoint'],
+            ['checkpoints', 'container_checkpoint'],
+			['progress', 'achievements']
+            ['preferences', 'colourStudio']
+        ];
+
+        for (const [group, key] of paths) {
+            await deleteDoc(
+                doc(db, 'bubbleUsers', uid, group, key)
+            );
+        }
+
+        // Sign out before deleting Firebase's locally stored auth state.
+        if (status) {
+            status.textContent =
+                '✅ Cloud deleted. Logging out and clearing this browser...';
+        }
+
+        await signOut(auth);
+
+    } catch (err) {
+        console.warn('Cloud data deletion failed:', err);
+
+        if (status) {
+            status.textContent =
+                '⚠️ Cloud deletion incomplete: ' + (err.message || String(err));
+        }
+
+        alert(
+            'Cloud deletion could not finish, so local data was NOT erased. ' +
+            'Check your connection and retry. ' + (err.message || String(err))
+        );
+
+        busy = false;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    try {
+        if (status) {
+            status.textContent = '🧹 Clearing localStorage and IndexedDB...';
+        }
+
+        // Clear locally saved progress, statistics and settings.
+        localStorage.clear();
+        sessionStorage.clear();
+
+        // Close Colour Studio's database connection first.
+        if (typeof themeImageDB !== 'undefined' && themeImageDB) {
+            themeImageDB.close();
+            themeImageDB = null;
+        }
+
+        // Delete saved game slots and custom Colour Studio images.
+        await Promise.all([
+            deleteBubbleBrowserDatabase('SKBubbleShooterSaveFiles'),
+            deleteBubbleBrowserDatabase('SKBubbleThemeImages')
+        ]);
+
+        alert(
+            'Your Bubble Shooter cloud data, local storage, ' +
+            'IndexedDB save slots and custom images have been deleted. ' +
+            'You have been logged out. ' +
+			'After you press OK, the game will refresh.'
+        );
+
+        // Refresh the page to reset in-memory game data.
+        window.location.reload();
+
+    } catch (err) {
+        console.warn('Browser data clearing failed:', err);
+
+        if (status) {
+            status.textContent =
+                '⚠️ Cloud deleted, but browser cleanup was incomplete: ' +
+                (err.message || String(err));
+        }
+
+        alert(
+            'Cloud data was deleted and you were logged out, ' +
+            'but local cleanup was incomplete: ' +
+            (err.message || String(err)) +
+            '\nClose other game tabs and clear this site\'s data if necessary.'
+        );
+
+        busy = false;
+        if (btn) btn.disabled = false;
+    }
 };
-window.bubbleLogout=()=>safeAction(async()=> {
-if (auth && confirm("Are you sure you want to log out?")) {
-	await signOut(auth);
-	$('bubbleAccountDialog').style.display='none';
-	cloudStatus('Logged out. Your local saves are still here.');
-	}
-});
-	
+
 window.bubbleOpenAccountSettings=async()=>{
  if(!requireAccount())return;
  const reset=await refreshCloudResetStatus(activeUser.uid);
