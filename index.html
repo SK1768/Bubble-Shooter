@@ -1502,7 +1502,7 @@ body.theme-background-image{background-image:linear-gradient(#04091655,#04091655
 </div>
 <div id="bubbleAccountCard">
   <div class="account-heading">☁️ PLAYER ACCOUNT</div>
-  <div id="bubbleAccountGuest"><div>Not logged in.</div><div class="account-buttons"><button type="button" onclick="bubbleGoogleLogin()">🔑 Log in with Google</button></div></div>
+  <div id="bubbleAccountGuest"><div>Not signed in.</div><div class="account-buttons"><button type="button" onclick="bubbleGoogleLogin()">🔑 Log in with Google</button></div></div>
   <div id="bubbleAccountUser" style="display:none"><div><img id="bubbleAccountAvatar" alt="" style="display:none"><span id="bubbleAccountName">Logged in as:</span></div><div class="account-buttons"><button type="button" onclick="bubbleOpenAccountSettings()">⚙️ Account settings</button></div></div>
   <div id="bubbleAccountStatus" role="status">Local saves work without an account.</div>
   <a class="account-privacy-link" href="./privacy.html">Privacy Policy</a>
@@ -11122,8 +11122,6 @@ document.getElementById('themeStudio').addEventListener('click',e=>{if(e.target.
   <div><button onclick="bubbleLoadCloudCheckpoint()">▶️ Continue cloud level</button><button onclick="bubbleLogout()">🚪 Log out</button></div>
   <div><button id="bubbleDeleteCloudButton" class="danger" onclick="bubbleDeleteAllCloudData()">🗑️ Delete all cloud data</button></div>
   <p id="bubbleDeleteCloudStatus" class="account-note" role="status" aria-live="polite"></p>
-  <p class="account-note">Achievement syncing merges unlocked trophies and keeps the higher statistic values from each device. Reset achievements while signed in will not delete cloud trophies; they can return on the next sync.</p>
-  <p class="account-note">Cloud saves are linked to your Google account. Download keeps newer local slots unless you explicitly approve replacing them. Keep your original save exports as backups.</p>
   <button class="back-btn" onclick="document.getElementById('bubbleAccountDialog').style.display='none'">Close</button>
  </div>
 </div>
@@ -11203,7 +11201,7 @@ function updateCard(){
  $('bubbleAccountGuest').style.display = activeUser ? 'none' : 'block';
  $('bubbleAccountUser').style.display = activeUser ? 'block' : 'none';
  if(activeUser){
-   $('bubbleAccountName').textContent = 'Logged in as: ' + (activeUser.displayName || activeUser.email || 'Google player');
+   $('bubbleAccountName').textContent = (activeUser.displayName || activeUser.email || 'Google player');
    const avatar=$('bubbleAccountAvatar');
    if(activeUser.photoURL && /^https:\/\//.test(activeUser.photoURL)){avatar.src=activeUser.photoURL;avatar.style.display='inline-block';}else{avatar.style.display='none';avatar.removeAttribute('src');}
  }
@@ -11484,11 +11482,20 @@ window.bubbleDeleteAllCloudData = async () => {
   if(btn)btn.disabled=false;
  }
 };
-window.bubbleLogout=()=>safeAction(async()=>{if(auth)await signOut(auth);$('bubbleAccountDialog').style.display='none';cloudStatus('Logged out. Your local saves are still here.');});
+window.bubbleLogout=()=>safeAction(async()=> {
+if (auth) {
+	if (confirm("Are you sure you want to log out?") {
+	await signOut(auth);
+	$('bubbleAccountDialog').style.display='none';
+	cloudStatus('Logged out. Your local saves are still here.');
+	}
+  }
+});
+	
 window.bubbleOpenAccountSettings=async()=>{
  if(!requireAccount())return;
  const reset=await refreshCloudResetStatus(activeUser.uid);
- if(reset){$('bubbleAccountDialog').style.display='flex';$('bubbleAccountDetails').textContent=(activeUser.displayName||'Player')+' — '+(activeUser.email||'Google account');$('bubbleCloudSummary').textContent='Cloud sync paused after deletion. Local data is safe.';return;}
+ if(reset){$('bubbleAccountDialog').style.display='flex';$('bubbleAccountDetails').textContent=(activeUser.displayName||'Player')+'\n('+(activeUser.email||'Google account') + ")";$('bubbleCloudSummary').textContent='Cloud sync paused after deletion. Local data is safe.';return;}
  $('bubbleAccountDetails').textContent=(activeUser.displayName||'Player')+' — '+(activeUser.email||'Google account');
  $('bubbleAccountDialog').style.display='flex';
  $('bubbleCloudSummary').textContent='Signed in. Local saves and cloud saves are separate until synchronised.';
@@ -11576,7 +11583,7 @@ if(configured){
    if(prior !== user?.uid)pendingCloudCategoryResets.clear();
    activeUser=user;
    updateCard();
-   cloudStatus(user?'✅ Google account connected. Cloud saves enabled.':'Not logged in. Your local saves are available.');
+   cloudStatus(user?'✅ Google account connected. Cloud saves enabled.':'Not signed in. Your local saves are available.');
    // Never auto-import a different user's cloud data over local saves.
    if(user && user.uid!==prior){
     cloudDeleteInProgress=false;
@@ -11591,7 +11598,7 @@ if(configured){
   });
   getRedirectResult(auth).catch(err=>{console.warn(err);cloudStatus('Google sign-in: '+err.message);});
  }catch(err){console.warn(err);cloudStatus('Firebase setup error: '+err.message);}
-}else cloudStatus('Not logged in. Firebase setup is required for Google sign-in.');
+}else cloudStatus('Not signed in. Firebase setup is required for Google sign-in.');
 async function uploadCheckpointOnSignIn(){
  // Deliberately do NOT upload the active game on sign-in: it could overwrite advanced cloud progress.
  try{const count=(await getDocs(userPath())).size;cloudStatus(`✅ Signed in.`);}
