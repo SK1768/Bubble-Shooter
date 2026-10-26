@@ -1502,7 +1502,7 @@ body.theme-background-image{background-image:linear-gradient(#04091655,#04091655
 </div>
 <div id="bubbleAccountCard">
   <div class="account-heading">☁️ PLAYER ACCOUNT</div>
-  <div id="bubbleAccountGuest"><div>Not signed in.</div><div class="account-buttons"><button type="button" onclick="bubbleGoogleLogin()">🔑 Log in with Google</button></div></div>
+  <div id="bubbleAccountGuest"><div>Not logged in.</div><div class="account-buttons"><button type="button" onclick="bubbleGoogleLogin()">🔑 Log in with Google</button></div></div>
   <div id="bubbleAccountUser" style="display:none"><div><img id="bubbleAccountAvatar" alt="" style="display:none"><span id="bubbleAccountName">Logged in as:</span></div><div class="account-buttons"><button type="button" onclick="bubbleOpenAccountSettings()">⚙️ Account settings</button></div></div>
   <div id="bubbleAccountStatus" role="status">Local saves work without an account.</div>
   <a class="account-privacy-link" href="./privacy.html">Privacy Policy</a>
@@ -11032,7 +11032,7 @@ addSecretLevelButton();
  update();
 })();
 </script>
-<div id="themeStudio" role="dialog" aria-modal="true" aria-label="Colour customisation"><div class="theme-dialog"><h2>🎨 COLOUR STUDIO</h2><p>Customise your menu, gameplay, popups, background and messages. Changes preview instantly, save locally, and sync colours with your Google account when signed in.</p><div class="theme-grid" id="themeGrid"></div><div class="theme-image-options" id="themeImageOptions"></div><div class="theme-actions"><button type="button" onclick="resetThemeStudio()">↺ RESET DEFAULTS</button><button type="button" onclick="closeThemeStudio()">✓ DONE</button></div></div></div>
+<div id="themeStudio" role="dialog" aria-modal="true" aria-label="Colour customisation"><div class="theme-dialog"><h2>🎨 COLOUR STUDIO</h2><p>Customise your menu, gameplay, popups, background and messages. Changes preview instantly, save locally and sync colours with your Google account when logged in.</p><div class="theme-grid" id="themeGrid"></div><div class="theme-image-options" id="themeImageOptions"></div><div class="theme-actions"><button type="button" onclick="resetThemeStudio()">↺ RESET DEFAULTS</button><button type="button" onclick="closeThemeStudio()">✓ DONE</button></div></div></div>
 <script>
 (function(){
 const choices=[['menu','Main menu','#53f5e0'],['game','Gameplay & container','#70ebf0'],['pop','Popups & panels','#53f5e0'],['back','Background','#101e38'],['wall','Panel / wall surfaces','#192b49'],['alert','Error messages','#ff565e'],['warn','Warning messages','#ffd454'],['loading','Loading screen','#142641']];
