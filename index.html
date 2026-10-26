@@ -11307,7 +11307,7 @@ window.bubbleSyncAchievements=()=>{
  if(progressSyncTimer){clearTimeout(progressSyncTimer);progressSyncTimer=null;}
  void synchronizeAchievements(activeUser.uid,true);
 };
-// Colour Studio settings are small and kept in Firestore per signed-in user.
+// Colour Studio settings are small and kept in Firestore per logged in user.
 // Local custom background images stay in IndexedDB and are not uploaded to Firestore.
 let themeSyncTimer=null, themeReadyUid=null, themeSyncBusy=false;
 const themeKeys=['menu','game','pop','back','wall','alert','warn','loading'];
@@ -11396,18 +11396,18 @@ async function uploadCheckpoint(){
 }
 window.bubbleCloudCheckpoint = ()=>{void uploadCheckpoint();};
 window.bubbleCloudSlotSaved = row=>{void cloudUploadChangedSlot(row);};
-// Android WebView must use native Google sign-in: no Firebase redirect or popup.
+// Android WebView must use native Google log in: no Firebase redirect or popup.
 window.bubbleNativeGoogleCredential = async idToken => {
   if (!idToken || !configured || !auth) return;
   try {
-    cloudStatus('Completing Android Google sign-in...');
+    cloudStatus('Completing Android Google log in...');
     await setPersistence(auth, browserLocalPersistence);
     await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
-    cloudStatus('✅ Signed in with Google. Loading cloud data...');
+    cloudStatus('✅ Logged in with Google. Loading cloud data...');
   } catch(err) {
-    console.warn('Native Google sign-in failed:',err);
-    cloudStatus('⚠️ Android Google sign-in failed: ' + (err.message || err.code));
-    alert('Google sign-in failed: ' + (err.message || String(err)));
+    console.warn('Native Google log in failed:',err);
+    cloudStatus('⚠️ Android Google log in failed: ' + (err.message || err.code));
+    alert('Google log in failed: ' + (err.message || String(err)));
   }
 };
 window.bubbleNativeGoogleError = message => {
@@ -11416,20 +11416,20 @@ window.bubbleNativeGoogleError = message => {
 window.bubbleGoogleLogin=()=>{
  if(typeof window.Android?.startGoogleSignIn==='function'){
    if(!configured){alert('Configure Firebase first.');return;}
-   cloudStatus('Opening Android Google sign-in...');
+   cloudStatus('Opening Android Google log in...');
    window.Android.startGoogleSignIn();
    return;
  }
  return safeAction(async()=>{
  if(!configured){alert('Set up a Firebase project and add its web app config to this HTML file first.');return;}
- cloudStatus('Opening Google sign-in...');
+ cloudStatus('Opening Google log in...');
  await setPersistence(auth,browserLocalPersistence);
  const provider=new GoogleAuthProvider();
  try {await signInWithPopup(auth,provider);}
  catch(err){if(['auth/popup-blocked','auth/operation-not-supported-in-this-environment'].includes(err.code)){await signInWithRedirect(auth,provider);}else throw err;}
  });
 };
-// Delete data belonging to the signed-in user only; never delete browser saves or the Google account.
+// Delete data belonging to the logged in user only; never delete browser saves or the Google account.
 // Three independent confirmation dialogs provide chances to cancel.
 window.bubbleDeleteAllCloudData = async () => {
  if(!requireAccount() || busy || cloudDeleteInProgress)return;
@@ -11454,7 +11454,7 @@ window.bubbleDeleteAllCloudData = async () => {
   // Firestore does not recursively delete subcollections when a parent is removed.
   // Delete each saved slot, then the other singleton documents.
   const slots=await getDocs(collection(db,'bubbleUsers',uid,'saveSlots'));
-  if(activeUser?.uid!==uid)throw Error('The signed-in account changed.');
+  if(activeUser?.uid!==uid)throw Error('The logged in account changed.');
   let deleted=0;
   for(const snap of slots.docs){await deleteDoc(snap.ref);deleted++;}
   const paths=[
@@ -11496,7 +11496,7 @@ window.bubbleOpenAccountSettings=async()=>{
  if(reset){$('bubbleAccountDialog').style.display='flex';$('bubbleAccountDetails').textContent=(activeUser.displayName||'Player')+'\n('+(activeUser.email||'Google account') + ")";$('bubbleCloudSummary').textContent='Cloud sync paused after deletion. Local data is safe.';return;}
  $('bubbleAccountDetails').textContent=(activeUser.displayName||'Player')+'\n('+(activeUser.email||'Google account')+")";
  $('bubbleAccountDialog').style.display='flex';
- $('bubbleCloudSummary').textContent='Signed in. Local saves and cloud saves are separate until synchronised.';
+ $('bubbleCloudSummary').textContent='Logged in. Local saves and cloud saves are separate until synchronised.';
  // Do not replace a completed (or failed) achievement sync status with a permanent 'Checking...' label.
  // The login handler already starts achievement synchronization; retry if it has not completed.
  if(progressSyncBusy){
@@ -11561,7 +11561,7 @@ window.bubbleLoadCloudCheckpoint=()=>safeAction(async()=>{
  const puzzle=await getDoc(doc(db,'bubbleUsers',activeUser.uid,'checkpoints','puzzle_checkpoint'));
  const container=await getDoc(doc(db,'bubbleUsers',activeUser.uid,'checkpoints','container_checkpoint'));
  const options=[puzzle,container].filter(s=>s.exists());
- if(!options.length){alert('No cloud level checkpoint yet. Complete a level while signed in first.');return;}
+ if(!options.length){alert('No cloud level checkpoint yet. Complete a level while logged in first.');return;}
  let chosen=options[0];
  if(options.length===2 && !confirm(`Load puzzle checkpoint (level ${puzzle.data().level})? Choose Cancel for container checkpoint (level ${container.data().level}).`))chosen=container;
  if(!confirm(`Load cloud level ${chosen.data().level}? This replaces your CURRENT running game, but leaves your saved slots untouched.`))return;
@@ -11581,7 +11581,7 @@ if(configured){
    if(prior !== user?.uid)pendingCloudCategoryResets.clear();
    activeUser=user;
    updateCard();
-   cloudStatus(user?'✅ Google account connected. Cloud saves enabled.':'Not signed in. Your local saves are available.');
+   cloudStatus(user?'✅ Google account connected. Cloud saves enabled.':'Not logged in. Your local saves are available.');
    // Never auto-import a different user's cloud data over local saves.
    if(user && user.uid!==prior){
     cloudDeleteInProgress=false;
@@ -11594,13 +11594,13 @@ if(configured){
     })();
    } else if(!user){if($('bubbleResumeCloudButton'))$('bubbleResumeCloudButton').style.display='none';showAchievementCloudStatus('🏆 Achievements saved locally. Log in to sync.');themeStatus('🎨 Colour settings saved locally.');}
   });
-  getRedirectResult(auth).catch(err=>{console.warn(err);cloudStatus('Google sign-in: '+err.message);});
+  getRedirectResult(auth).catch(err=>{console.warn(err);cloudStatus('Google log in: '+err.message);});
  }catch(err){console.warn(err);cloudStatus('Firebase setup error: '+err.message);}
-}else cloudStatus('Not signed in. Firebase setup is required for Google sign-in.');
+}else cloudStatus('Not logged in. Firebase setup is required for Google log in.');
 async function uploadCheckpointOnSignIn(){
- // Deliberately do NOT upload the active game on sign-in: it could overwrite advanced cloud progress.
- try{const count=(await getDocs(userPath())).size;cloudStatus(`✅ Signed in.`);}
- catch(err){cloudStatus('✅ Signed in. Cloud database unavailable: '+err.message);}
+ // Deliberately do NOT upload the active game on log in: it could overwrite advanced cloud progress.
+ try{const count=(await getDocs(userPath())).size;cloudStatus(`✅ Logged in.`);}
+ catch(err){cloudStatus('✅ Logged in. Cloud database unavailable: '+err.message);}
 }
 updateCard();
 </script>
