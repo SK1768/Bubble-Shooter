@@ -1331,6 +1331,19 @@ input,select,textarea{accent-color:#58efdf}input:not([type=range]):not([type=che
 #secretOverlay .secret-loading-tip,#secretOverlay .secret-text{background:color-mix(in srgb,var(--theme-loading),black 36%)!important;border-color:color-mix(in srgb,var(--theme-loading),white 40%)!important}
 /* Confetti overlay is exempt from the game's generic canvas decorations. */
 #confettiOverlayCanvas { position:fixed!important; pointer-events:none!important; z-index:100!important; border:0!important; border-radius:0!important; background:transparent!important; box-shadow:none!important; margin:0!important; padding:0!important; max-width:none!important; max-height:none!important; }
+
+/* Google account and cloud save panel */
+#bubbleAccountCard{margin:14px auto 18px;padding:15px;max-width:480px;box-sizing:border-box;border:1px solid #62dbe588;border-radius:17px;background:linear-gradient(120deg,#203958ee,#0c1932ee);box-shadow:0 0 18px #00f5d41c;text-align:center}
+#bubbleAccountCard .account-heading{font-size:17px;font-weight:bold;color:#8dffee;margin-bottom:8px}
+#bubbleAccountCard .account-buttons{display:flex;justify-content:center;flex-wrap:wrap;gap:5px}
+#bubbleAccountCard button{min-width:0!important;max-width:none!important;width:auto!important;padding:8px 12px;font-size:12px!important;margin:3px}
+#bubbleAccountStatus{font-size:12px;color:#bdd3e6;margin:7px 0;overflow-wrap:anywhere}
+#bubbleAccountName{font-size:14px;color:#fff;overflow-wrap:anywhere}
+#bubbleAccountAvatar{width:38px;height:38px;border-radius:50%;vertical-align:middle;margin-right:8px;border:1px solid #85fcdd}
+#bubbleAccountDialog{position:fixed;inset:0;z-index:10060;display:none;justify-content:center;align-items:center;background:#010714df;backdrop-filter:blur(7px);padding:15px;box-sizing:border-box}
+#bubbleAccountDialog .account-dialog-inner{width:min(520px,96vw);max-height:90vh;overflow:auto;border:1px solid #6cf9da;border-radius:21px;padding:20px;background:linear-gradient(145deg,#19324e,#081328);text-align:center;box-shadow:0 0 36px #38f4d744;box-sizing:border-box}
+#bubbleAccountDialog button{margin:5px}
+#bubbleAccountDialog .account-note{font-size:12px;color:#b3cadb;line-height:1.5;overflow-wrap:anywhere}
 </style>
 <style id="themeStudioStyles">
 :root{--theme-wall:#192b49;--theme-menu:#53f5e0;--theme-game:#70ebf0;--theme-pop:#53f5e0;--theme-back:#101e38;--theme-alert:#ff565e;--theme-warn:#ffd454}
@@ -1432,6 +1445,13 @@ body.theme-background-image{background-image:linear-gradient(#04091655,#04091655
 <div class="menu" id="mainMenu" style="display: none;">
         <h1>SK's Bubble Shooter</h1>
         <p id="authorName">Made by SK1768 :)</p>
+<div id="bubbleAccountCard">
+  <div class="account-heading">☁️ PLAYER ACCOUNT</div>
+  <div id="bubbleAccountGuest"><div>Not logged in.</div><div class="account-buttons"><button type="button" onclick="bubbleGoogleLogin()">🔑 Log in</button><button type="button" onclick="bubbleGoogleLogin()">✨ Create account</button></div></div>
+  <div id="bubbleAccountUser" style="display:none"><div><img id="bubbleAccountAvatar" alt="" style="display:none"><span id="bubbleAccountName">Logged in as:</span></div><div class="account-buttons"><button type="button" onclick="bubbleOpenAccountSettings()">⚙️ Account settings</button></div></div>
+  <div id="bubbleAccountStatus" role="status">Local saves work without an account.</div>
+</div>
+
         <button onclick="startPuzzleMode()" style="font-size: 1.5em; background: #00ffcc; color: #000;" onmouseenter="setMenuDesc('Puzzle Mode: Clear all bubbles using limited ammo.')" onmouseleave="clearMenuDesc()">🧩 PUZZLE MODE</button>
         <br>
         <button id="dailyPuzzleBtn"onclick="startDailyPuzzleMode()"onmouseenter="setMenuDesc('Daily Puzzle Mode: Provides you with daily puzzles to complete with no limited ammos.')"onmouseleave="clearMenuDesc()"style="font-size:1.2em; background:#00ff88; color:#000;">🧩 DAILY PUZZLE MODE</button>
@@ -2491,6 +2511,7 @@ function saveAchievements() {
         "bubbleAchievements",
         JSON.stringify(unlockedAchievements)
     );
+    if (typeof window.bubbleCloudProgressChanged === "function") window.bubbleCloudProgressChanged();
 }
 function unlockAchievement(id) {
     if (unlockedAchievements[id]) return;
@@ -3342,6 +3363,7 @@ function saveStats() {
     }
 
     localStorage.setItem("bubbleShooterStats", JSON.stringify(stats));
+    if (typeof window.bubbleCloudProgressChanged === "function") window.bubbleCloudProgressChanged();
 }
 
 function getAchievementStatValue(statName) {
@@ -6181,6 +6203,7 @@ if (idx !== -1) {
 
             level++;
             startMode('puzzle', false, true);
+            if (typeof window.bubbleCloudCheckpoint === 'function') window.bubbleCloudCheckpoint();
             return;
         }, 2500, false);
         }
@@ -9882,6 +9905,7 @@ async function putSaveSlot(slotId, saveData, forcedFileName = null) {
         tx.oncomplete = () => {
             db.close();
             resolve(row);
+            if (typeof window.bubbleCloudSlotSaved === 'function') window.bubbleCloudSlotSaved(row);
         };
         tx.onerror = () => {
             db.close();
@@ -11006,5 +11030,248 @@ const menu=document.getElementById('mainMenu');if(menu){const btn=document.creat
 document.getElementById('themeStudio').addEventListener('click',e=>{if(e.target.id==='themeStudio')closeThemeStudio()});
 })();
 </script>
+
+<!-- Google account / Firestore cloud saves. Set the config values from your OWN Firebase project. -->
+<div id="bubbleAccountDialog" role="dialog" aria-modal="true" aria-label="Account settings">
+ <div class="account-dialog-inner">
+  <h2>☁️ Account settings</h2>
+  <div id="bubbleAccountDetails"></div>
+  <p id="bubbleCloudSummary" class="account-note">Checking cloud saves...</p>
+  <p id="bubbleAchievementSummary" class="account-note">🏆 Achievements will sync with your Google account.</p>
+  <div><button onclick="bubbleSyncAchievements()">🏆 Sync achievements &amp; stats</button></div>
+  <div><button onclick="bubbleSyncUp()">☁️ Upload newer local saves</button><button onclick="bubbleSyncDown()">⬇️ Download cloud saves</button></div>
+  <div><button onclick="bubbleLoadCloudCheckpoint()">▶️ Continue cloud level</button><button onclick="bubbleLogout()">🚪 Log out</button></div>
+  <p class="account-note">Achievement syncing merges unlocked trophies and keeps the higher statistic values from each device. Reset achievements while signed in will not delete cloud trophies; they can return on the next sync.</p>
+  <p class="account-note">Cloud saves are linked to your Google account. Download keeps newer local slots unless you explicitly approve replacing them. Keep your original save exports as backups.</p>
+  <button class="back-btn" onclick="document.getElementById('bubbleAccountDialog').style.display='none'">Close</button>
+ </div>
+</div>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, setPersistence, browserLocalPersistence, signOut } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
+import { getFirestore, doc, getDoc, setDoc, getDocs, collection } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+
+// Firebase Console > Project settings > Your apps > Web app configuration.
+// These public web identifiers are NOT passwords. Firestore rules enforce privacy.
+const firebaseConfig = {
+  apiKey: "AIzaSyDcLwfJetANoUgkMxXTczQ8sfYmt7x-nF0",
+  authDomain: "sk-s-bubble-shooter.firebaseapp.com",
+  projectId: "sk-s-bubble-shooter",
+  storageBucket: "sk-s-bubble-shooter.firebasestorage.app",
+  messagingSenderId: "746083393718",
+  appId: "1:746083393718:web:df919654aa08d8a6588617",
+  measurementId: "G-PDNC5MHWM6"
+};
+const configured = !Object.values(firebaseConfig).some(v => String(v).startsWith('REPLACE_'));
+const $ = id => document.getElementById(id);
+let auth, db, activeUser = null, busy = false;
+const cloudStatus = message => { if ($('bubbleAccountStatus')) $('bubbleAccountStatus').textContent = message; };
+function updateCard(){
+ $('bubbleAccountGuest').style.display = activeUser ? 'none' : 'block';
+ $('bubbleAccountUser').style.display = activeUser ? 'block' : 'none';
+ if(activeUser){
+   $('bubbleAccountName').textContent = 'Logged in as: ' + (activeUser.displayName || activeUser.email || 'Google player');
+   const avatar=$('bubbleAccountAvatar');
+   if(activeUser.photoURL && /^https:\/\//.test(activeUser.photoURL)){avatar.src=activeUser.photoURL;avatar.style.display='inline-block';}else{avatar.style.display='none';avatar.removeAttribute('src');}
+ }
+}
+function requireAccount(){if(!configured){alert('Google accounts are not configured yet. Add your Firebase project configuration to this HTML file.');return false;}if(!activeUser){alert('Log in with Google first.');return false;}return true;}
+async function safeAction(task){if(busy)return;busy=true;try{await task();}catch(err){console.warn('Cloud save:',err);cloudStatus('Cloud error: '+(err.message || err.code || String(err)));alert('Cloud save error: '+(err.message || String(err)));}finally{busy=false;}}
+const userPath = () => collection(db, 'bubbleUsers', activeUser.uid, 'saveSlots');
+// Achievements and statistics are stored separately from game save slots.
+// Syncing is additive: switching devices must never erase earned trophies.
+let progressSyncTimer = null;
+let progressReadyUid = null;
+let progressSyncBusy = false;
+let progressSyncAgain = false;
+function mergeProgressStats(local, remote) {
+ const result = {...(remote || {}), ...(local || {})};
+ for (const key of new Set([...Object.keys(local || {}), ...Object.keys(remote || {})])) {
+  const a = local?.[key], b = remote?.[key];
+  if (typeof a === 'number' && Number.isFinite(a) && typeof b === 'number' && Number.isFinite(b)) result[key] = Math.max(a,b);
+  else if (a === undefined) result[key] = b;
+  else if (b === undefined) result[key] = a;
+  else if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b)) result[key] = mergeProgressStats(a,b);
+ }
+ return result;
+}
+function mergedTrophies(local, remote){
+ const output={...(remote || {})};
+ for(const [id,entry] of Object.entries(local || {})) {
+  if (entry === true || entry?.unlocked) {
+   if (!output[id] || !(output[id] === true || output[id]?.unlocked)) output[id]=entry;
+  }
+ }
+ return output;
+}
+function showAchievementCloudStatus(message){
+ const element=$('bubbleAchievementSummary');if(element)element.textContent=message;
+}
+async function synchronizeAchievements(uid, showAlert=false){
+ if (!activeUser || activeUser.uid !== uid || !db) return;
+ if (progressSyncBusy){progressSyncAgain=true;return;}
+ progressSyncBusy=true;
+ try {
+  const ref=doc(db,'bubbleUsers',uid,'progress','achievements');
+  const current=await getDoc(ref);
+  if (!activeUser || activeUser.uid !== uid) return;
+  const cloud=current.exists()?current.data():{};
+  const merged=mergedTrophies(unlockedAchievements,cloud.unlockedAchievements);
+  const mergedStats=mergeProgressStats(stats,cloud.stats);
+  // Refresh local cache and achievement display without triggering popups.
+  unlockedAchievements=merged;
+  localStorage.setItem('bubbleAchievements',JSON.stringify(merged));
+  stats=mergedStats;
+  localStorage.setItem('bubbleShooterStats',JSON.stringify(mergedStats));
+  if (typeof renderAchievements==='function') renderAchievements();
+  if (!activeUser || activeUser.uid !== uid) return;
+  await setDoc(ref,{unlockedAchievements:merged,stats:mergedStats,updatedAt:Date.now()});
+  progressReadyUid=uid;
+  const count=Object.values(merged).filter(v=>v===true || v?.unlocked).length;
+  showAchievementCloudStatus(`🏆 ${count} achievements synced to Google Cloud (including statistics).`);
+  if(showAlert)alert(`${count} unlocked achievement(s) and your statistics have been synced.`);
+ } catch(err){
+  console.warn('Achievement cloud sync:',err);
+  showAchievementCloudStatus('⚠️ Achievement cloud sync failed. Achievements remain saved locally.');
+  if(showAlert)alert('Achievement sync failed: '+(err.message||String(err)));
+ } finally {
+  progressSyncBusy=false;
+  if(progressSyncAgain && activeUser?.uid === uid){progressSyncAgain=false;scheduleProgressSync();}
+ }
+}
+function scheduleProgressSync(){
+ if(!activeUser || progressReadyUid!==activeUser.uid)return;
+ if(progressSyncTimer)clearTimeout(progressSyncTimer);
+ const uid=activeUser.uid;
+ progressSyncTimer=setTimeout(()=>{progressSyncTimer=null;void synchronizeAchievements(uid);},2500);
+}
+window.bubbleCloudProgressChanged=scheduleProgressSync;
+window.bubbleSyncAchievements=()=>{
+ if(!requireAccount())return;
+ if(progressSyncTimer){clearTimeout(progressSyncTimer);progressSyncTimer=null;}
+ void synchronizeAchievements(activeUser.uid,true);
+};
+async function uploadRow(row){
+ if(!activeUser)return;
+ const ref=doc(db,'bubbleUsers',activeUser.uid,'saveSlots',row.slotId);
+ // Each slot is one document. Never overwrite a newer cloud slot from a stale tab.
+ const snapshot=await getDoc(ref);
+ if(snapshot.exists() && Number(snapshot.data().savedAt||0)>Number(row.savedAt||0)) return false;
+ await setDoc(ref,{...row,updatedAt:Date.now()});
+ return true;
+}
+async function cloudUploadChangedSlot(row){
+ if(!activeUser)return;
+ try{await uploadRow(row);cloudStatus('☁️ Cloud sync checked');}
+ catch(err){console.warn('Cloud upload failed:',err);cloudStatus('⚠️ Offline or cloud sync failed. Local save is safe.');}
+}
+async function uploadCheckpoint(){
+ if(!activeUser || typeof buildSaveData!=='function' || typeof gameRunning==='undefined' || !gameRunning || typeof isCampaignMode!=='undefined' && isCampaignMode || typeof isDailyPuzzle!=='undefined' && isDailyPuzzle || typeof isPlaytesting!=='undefined' && isPlaytesting || typeof isSecretLevel!=='undefined' && isSecretLevel)return;
+ try{
+  const saveData=buildSaveData(true);
+  const slotId=(typeof containerMode!=='undefined'&&containerMode)?'container_checkpoint':'puzzle_checkpoint';
+  const ref=doc(db,'bubbleUsers',activeUser.uid,'checkpoints',slotId);
+  const old=await getDoc(ref);
+  const oldLevel=Number(old.data()?.saveData?.level)||0;
+  const newLevel=Number(saveData.level)||0;
+  // Do not regress the cloud level if another device has progressed further.
+  if(old.exists() && oldLevel>newLevel)return;
+  await setDoc(ref,{saveData,savedAt:Date.now(),level:newLevel});
+  cloudStatus('☁️ Level '+newLevel+' saved to your Google account');
+ }catch(err){console.warn('Cloud checkpoint failed:',err);cloudStatus('⚠️ Could not upload checkpoint. Your local saves remain.');}
+}
+window.bubbleCloudCheckpoint = ()=>{void uploadCheckpoint();};
+window.bubbleCloudSlotSaved = row=>{void cloudUploadChangedSlot(row);};
+window.bubbleGoogleLogin=()=>safeAction(async()=>{
+ if(!configured){alert('Set up a Firebase project and add its web app config to this HTML file first.');return;}
+ cloudStatus('Opening Google sign-in...');
+ await setPersistence(auth,browserLocalPersistence);
+ const provider=new GoogleAuthProvider();
+ try {await signInWithPopup(auth,provider);}
+ catch(err){if(['auth/popup-blocked','auth/operation-not-supported-in-this-environment'].includes(err.code)){await signInWithRedirect(auth,provider);}else throw err;}
+});
+window.bubbleLogout=()=>safeAction(async()=>{if(auth)await signOut(auth);$('bubbleAccountDialog').style.display='none';cloudStatus('Logged out. Your local saves are still here.');});
+window.bubbleOpenAccountSettings=async()=>{
+ if(!requireAccount())return;
+ $('bubbleAccountDetails').textContent=(activeUser.displayName||'Player')+' — '+(activeUser.email||'Google account');
+ $('bubbleAccountDialog').style.display='flex';
+ $('bubbleCloudSummary').textContent='Signed in. Local saves and cloud saves are separate until synchronised.';
+ showAchievementCloudStatus('🏆 Checking Google Cloud achievements...');
+ try{
+ const [slots,checkpoint]=await Promise.all([getDocs(userPath()),getDoc(doc(db,'bubbleUsers',activeUser.uid,'checkpoints','puzzle_checkpoint'))]);
+ $('bubbleCloudSummary').textContent=`☁️ ${slots.size} cloud save slot(s) · Puzzle level ${checkpoint.exists()?(checkpoint.data().level||'?'):'not yet saved'}`;
+ }catch(err){$('bubbleCloudSummary').textContent='Could not check cloud status: '+err.message;}
+};
+window.bubbleSyncUp=()=>safeAction(async()=>{
+ if(!requireAccount())return;
+ const rows=await getAllSaveSlots();let uploaded=0;
+ for(const row of Object.values(rows)){if(await uploadRow(row))uploaded++;}
+ if(typeof gameRunning!=='undefined'&&gameRunning)await uploadCheckpoint();
+ cloudStatus(`☁️ Uploaded ${uploaded} local save slot(s).`);
+ alert(`Cloud sync complete: ${uploaded} slot(s) uploaded. Newer cloud slots were kept.`);
+});
+window.bubbleSyncDown=()=>safeAction(async()=>{
+ if(!requireAccount())return;
+ const cloud=await getDocs(userPath());const local=await getAllSaveSlots();let downloaded=0,skipped=0;
+ for(const snapshot of cloud.docs){
+  const row=snapshot.data();
+  if(!row.saveData || !SAVE_SLOT_IDS.includes(row.slotId))continue;
+  const existing=local[row.slotId];
+  if(existing){
+   if(Number(existing.savedAt||0)>=Number(row.savedAt||0)){skipped++;continue;}
+   if(!confirm(`Cloud save ${row.fileName||row.slotId} is newer than your local save. Replace your local copy?`)){skipped++;continue;}
+  }
+  // Write directly into IndexedDB to avoid turning a cloud download into an upload.
+  const dbLocal=await openSaveDB();
+  await new Promise((resolve,reject)=>{
+    const tx=dbLocal.transaction(BUBBLE_SAVE_STORE,'readwrite');
+    tx.objectStore(BUBBLE_SAVE_STORE).put({...row,slotId:row.slotId});
+    tx.oncomplete=()=>{dbLocal.close();resolve();};tx.onerror=()=>{dbLocal.close();reject(tx.error);};
+  });
+  downloaded++;
+ }
+ cloudStatus(`☁️ Downloaded ${downloaded} save(s), kept ${skipped}.`);
+ alert(`Downloaded ${downloaded} cloud saves. ${skipped} local saves kept. Open SAVE SLOTS to load one.`);
+});
+window.bubbleLoadCloudCheckpoint=()=>safeAction(async()=>{
+ if(!requireAccount())return;
+ const puzzle=await getDoc(doc(db,'bubbleUsers',activeUser.uid,'checkpoints','puzzle_checkpoint'));
+ const container=await getDoc(doc(db,'bubbleUsers',activeUser.uid,'checkpoints','container_checkpoint'));
+ const options=[puzzle,container].filter(s=>s.exists());
+ if(!options.length){alert('No cloud level checkpoint yet. Complete a level while signed in first.');return;}
+ let chosen=options[0];
+ if(options.length===2 && !confirm(`Load puzzle checkpoint (level ${puzzle.data().level})? Choose Cancel for container checkpoint (level ${container.data().level}).`))chosen=container;
+ if(!confirm(`Load cloud level ${chosen.data().level}? This replaces your CURRENT running game, but leaves your saved slots untouched.`))return;
+ $('bubbleAccountDialog').style.display='none';
+ loadSaveData(chosen.data().saveData,'Google cloud checkpoint');
+});
+if(configured){
+ try{
+  const app=initializeApp(firebaseConfig);
+  auth=getAuth(app);db=getFirestore(app);
+  onAuthStateChanged(auth,user=>{
+   const prior=activeUser?.uid;
+   if(progressSyncTimer){clearTimeout(progressSyncTimer);progressSyncTimer=null;}
+   progressReadyUid=null;
+   activeUser=user;
+   updateCard();
+   cloudStatus(user?'✅ Google account connected. Cloud saves enabled.':'Not logged in. Your local saves are available.');
+   // Never auto-import a different user's cloud data over local saves.
+   if(user && user.uid!==prior){
+    void uploadCheckpointOnSignIn();
+    void synchronizeAchievements(user.uid);
+   } else if(!user) showAchievementCloudStatus('🏆 Achievements saved locally. Log in to sync.');
+  });
+  getRedirectResult(auth).catch(err=>{console.warn(err);cloudStatus('Google sign-in: '+err.message);});
+ }catch(err){console.warn(err);cloudStatus('Firebase setup error: '+err.message);}
+}else cloudStatus('Not logged in. Firebase setup is required for Google sign-in.');
+async function uploadCheckpointOnSignIn(){
+ // Deliberately do NOT upload the active game on sign-in: it could overwrite advanced cloud progress.
+ try{const count=(await getDocs(userPath())).size;cloudStatus(`✅ Signed in. ${count} cloud save slot(s) available in Account settings.`);}
+ catch(err){cloudStatus('✅ Signed in. Cloud database unavailable: '+err.message);}
+}
+updateCard();
+</script>
+
 </body>
 </html>
