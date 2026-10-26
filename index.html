@@ -1345,6 +1345,45 @@ input,select,textarea{accent-color:#58efdf}input:not([type=range]):not([type=che
 #bubbleAccountDialog .account-dialog-inner{width:min(520px,96vw);max-height:90vh;overflow:auto;border:1px solid #6cf9da;border-radius:21px;padding:20px;background:linear-gradient(145deg,#19324e,#081328);text-align:center;box-shadow:0 0 36px #38f4d744;box-sizing:border-box}
 #bubbleAccountDialog button{margin:5px}
 #bubbleAccountDialog .account-note{font-size:12px;color:#b3cadb;line-height:1.5;overflow-wrap:anywhere}
+/* Player account card follows Colour Studio palette. */
+#bubbleAccountCard{background:linear-gradient(130deg,color-mix(in srgb,var(--theme-wall),#000 8%),color-mix(in srgb,var(--theme-wall),#000 58%))!important;border-color:color-mix(in srgb,var(--theme-menu),transparent 35%)!important;box-shadow:0 0 18px color-mix(in srgb,var(--theme-menu),transparent 80%)!important}
+#bubbleAccountCard .account-heading{color:var(--theme-menu)!important}
+#bubbleAccountCard button{border-color:color-mix(in srgb,var(--theme-menu),transparent 55%)!important}
+#bubbleAccountAvatar{border-color:var(--theme-menu)!important}
+#bubbleAccountDialog .account-dialog-inner{background:linear-gradient(145deg,var(--theme-wall),color-mix(in srgb,var(--theme-wall),#000 65%))!important;border-color:var(--theme-pop)!important}
+
+
+/* Prevent the floating account card from covering the centered main menu. */
+@media (max-width: 1420px) {
+  #mainMenu:not([style*="display: none"]) {
+    margin-top: 165px;
+    max-height: calc(100dvh - 185px);
+  }
+}
+@media (max-width: 650px) {
+  #mainMenu:not([style*="display: none"]) {
+    margin-top: 155px;
+    max-height: calc(100dvh - 175px);
+  }
+}
+
+/* Player account pinned to the top-right viewport corner, not inside the menu. */
+#bubbleAccountCard {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  margin: 0;
+  width: min(320px, calc(100vw - 24px));
+  max-width: none;
+  padding: 12px;
+  z-index: 220;
+}
+@media (max-width: 650px) {
+  #bubbleAccountCard { width: min(260px, calc(100vw - 24px)); padding: 9px; }
+  #bubbleAccountCard .account-heading { font-size: 13px; }
+  #bubbleAccountStatus { font-size: 10px; }
+}
+
 </style>
 <style id="themeStudioStyles">
 :root{--theme-wall:#192b49;--theme-menu:#53f5e0;--theme-game:#70ebf0;--theme-pop:#53f5e0;--theme-back:#101e38;--theme-alert:#ff565e;--theme-warn:#ffd454}
@@ -1443,15 +1482,15 @@ body.theme-background-image{background-image:linear-gradient(#04091655,#04091655
     <div class="achievement-desc"></div>
     <div class="achievement-queue-text"></div>
 </div>
-<div class="menu" id="mainMenu" style="display: none;">
-        <h1>SK's Bubble Shooter</h1>
-        <p id="authorName">Made by SK1768 :)</p>
 <div id="bubbleAccountCard">
   <div class="account-heading">☁️ PLAYER ACCOUNT</div>
-  <div id="bubbleAccountGuest"><div>Not logged in.</div><div class="account-buttons"><button type="button" onclick="bubbleGoogleLogin()">🔑 Log in</button><button type="button" onclick="bubbleGoogleLogin()">✨ Create account</button></div></div>
+  <div id="bubbleAccountGuest"><div>Not logged in.</div><div class="account-buttons"><button type="button" onclick="bubbleGoogleLogin()">🔑 Log in</button></div></div>
   <div id="bubbleAccountUser" style="display:none"><div><img id="bubbleAccountAvatar" alt="" style="display:none"><span id="bubbleAccountName">Logged in as:</span></div><div class="account-buttons"><button type="button" onclick="bubbleOpenAccountSettings()">⚙️ Account settings</button></div></div>
   <div id="bubbleAccountStatus" role="status">Local saves work without an account.</div>
 </div>
+<div class="menu" id="mainMenu" style="display: none;">
+        <h1>SK's Bubble Shooter</h1>
+        <p id="authorName">Made by SK1768 :)</p>
 
         <button onclick="startPuzzleMode()" style="font-size: 1.5em; background: #00ffcc; color: #000;" onmouseenter="setMenuDesc('Puzzle Mode: Clear all bubbles using limited ammo.')" onmouseleave="clearMenuDesc()">🧩 PUZZLE MODE</button>
         <br>
@@ -10966,13 +11005,13 @@ addSecretLevelButton();
  update();
 })();
 </script>
-<div id="themeStudio" role="dialog" aria-modal="true" aria-label="Colour customisation"><div class="theme-dialog"><h2>🎨 COLOUR STUDIO</h2><p>Customise your menu, gameplay, popups, background and messages. Changes preview instantly and are saved on this device.</p><div class="theme-grid" id="themeGrid"></div><div class="theme-image-options" id="themeImageOptions"></div><div class="theme-actions"><button type="button" onclick="resetThemeStudio()">↺ RESET DEFAULTS</button><button type="button" onclick="closeThemeStudio()">✓ DONE</button></div></div></div>
+<div id="themeStudio" role="dialog" aria-modal="true" aria-label="Colour customisation"><div class="theme-dialog"><h2>🎨 COLOUR STUDIO</h2><p>Customise your menu, gameplay, popups, background and messages. Changes preview instantly, save locally, and sync colours with your Google account when signed in.</p><div class="theme-grid" id="themeGrid"></div><div class="theme-image-options" id="themeImageOptions"></div><div class="theme-actions"><button type="button" onclick="resetThemeStudio()">↺ RESET DEFAULTS</button><button type="button" onclick="closeThemeStudio()">✓ DONE</button></div></div></div>
 <script>
 (function(){
 const choices=[['menu','Main menu','#53f5e0'],['game','Gameplay & container','#70ebf0'],['pop','Popups & panels','#53f5e0'],['back','Background','#101e38'],['wall','Panel / wall surfaces','#192b49'],['alert','Error messages','#ff565e'],['warn','Warning messages','#ffd454'],['loading','Loading screen','#142641']];
 const root=document.documentElement,grid=document.getElementById('themeGrid');
 function apply(key,value){if(!/^#[0-9a-f]{6}$/i.test(value))return;root.style.setProperty('--theme-'+key,value);}
-function save(){try{localStorage.setItem('skBubbleTheme',JSON.stringify(Object.fromEntries(choices.map(([k])=>[k,document.getElementById('theme-'+k).value]))));}catch(e){}}
+function save(){try{localStorage.setItem('skBubbleTheme',JSON.stringify(Object.fromEntries(choices.map(([k])=>[k,document.getElementById('theme-'+k).value]))));localStorage.setItem('skBubbleThemeUpdatedAt',String(Date.now()));window.dispatchEvent(new Event('bubbleThemeChanged'));}catch(e){}}
 let stored={};try{stored=JSON.parse(localStorage.getItem('skBubbleTheme')||'{}')||{}}catch(e){}
 for(const [key,label,defaultValue] of choices){const el=document.createElement('label');el.className='theme-option';const span=document.createElement('span');span.textContent=label;const input=document.createElement('input');input.type='color';input.id='theme-'+key;input.value=/^#[0-9a-f]{6}$/i.test(stored[key])?stored[key]:defaultValue;apply(key,input.value);input.addEventListener('input',()=>{apply(key,input.value);save()});el.append(span,input);grid.append(el)}
 
@@ -11024,6 +11063,15 @@ openThemeImageDB().then(async db=>{
   for(const [key] of imageSlots){try{const blob=await imageTransaction(key,'get');if(blob)displayThemeImage(key,blob)}catch(e){console.warn('Theme image could not be loaded:',e)}}
 }).catch(e=>{for(const [key] of imageSlots){const status=document.getElementById('theme-image-status-'+key);if(status)status.textContent='Image caching unavailable in this browser'}console.warn('Theme image storage unavailable:',e)});
 
+window.bubbleApplyCloudTheme=(colours,updatedAt)=>{
+  if(!colours || typeof colours!=='object')return;
+  for(const [key,,fallback] of choices){
+    const value=colours[key];if(!/^#[0-9a-f]{6}$/i.test(value||''))continue;
+    const input=document.getElementById('theme-'+key);if(input)input.value=value;
+    apply(key,value);
+  }
+  try{localStorage.setItem('skBubbleTheme',JSON.stringify(Object.fromEntries(choices.map(([key])=>[key,document.getElementById('theme-'+key).value]))));localStorage.setItem('skBubbleThemeUpdatedAt',String(updatedAt||Date.now()));}catch(e){}
+};
 window.openThemeStudio=()=>document.getElementById('themeStudio').classList.add('open');
 window.closeThemeStudio=()=>document.getElementById('themeStudio').classList.remove('open');
 window.resetThemeStudio=()=>{if(!confirm("Are you sure you want to reset the colours back to its default settings?"))return;for(const [k,,v] of choices){document.getElementById('theme-'+k).value=v;apply(k,v)}save();if(themeImageDB){for(const [key] of imageSlots){imageTransaction(key,'delete').then(()=>displayThemeImage(key,null)).catch(e=>console.warn('Could not clear image',e))}}};
@@ -11040,6 +11088,8 @@ document.getElementById('themeStudio').addEventListener('click',e=>{if(e.target.
   <p id="bubbleCloudSummary" class="account-note">Checking cloud saves...</p>
   <p id="bubbleAchievementSummary" class="account-note">🏆 Achievements will sync with your Google account.</p>
   <div><button onclick="bubbleSyncAchievements()">🏆 Sync achievements &amp; stats</button></div>
+  <p id="bubbleThemeSummary" class="account-note">🎨 Colour settings are stored locally until cloud sync is ready.</p>
+  <div><button onclick="bubbleSyncTheme()">🎨 Sync Colour Studio settings</button></div>
   <div><button onclick="bubbleSyncUp()">☁️ Upload newer local saves</button><button onclick="bubbleSyncDown()">⬇️ Download cloud saves</button></div>
   <div><button onclick="bubbleLoadCloudCheckpoint()">▶️ Continue cloud level</button><button onclick="bubbleLogout()">🚪 Log out</button></div>
   <p class="account-note">Achievement syncing merges unlocked trophies and keeps the higher statistic values from each device. Reset achievements while signed in will not delete cloud trophies; they can return on the next sync.</p>
@@ -11152,6 +11202,50 @@ window.bubbleSyncAchievements=()=>{
  if(progressSyncTimer){clearTimeout(progressSyncTimer);progressSyncTimer=null;}
  void synchronizeAchievements(activeUser.uid,true);
 };
+// Colour Studio settings are small and kept in Firestore per signed-in user.
+// Local custom background images stay in IndexedDB and are not uploaded to Firestore.
+let themeSyncTimer=null, themeReadyUid=null, themeSyncBusy=false;
+const themeKeys=['menu','game','pop','back','wall','alert','warn','loading'];
+function localTheme(){
+ let source={};try{source=JSON.parse(localStorage.getItem('skBubbleTheme')||'{}')||{}}catch(e){}
+ const colors={};for(const key of themeKeys){if(/^#[0-9a-f]{6}$/i.test(source[key]||''))colors[key]=source[key];}
+ return colors;
+}
+function themeStatus(message){const el=$('bubbleThemeSummary');if(el)el.textContent=message;}
+async function syncTheme(force=false){
+ const uid=activeUser?.uid;
+ if(!uid || !db || themeSyncBusy)return;
+ themeSyncBusy=true;
+ try{
+  const ref=doc(db,'bubbleUsers',uid,'preferences','colourStudio');
+  const snapshot=await getDoc(ref);
+  if(activeUser?.uid!==uid)return;
+  const remote=snapshot.exists()?snapshot.data():null;
+  const local=localTheme();
+  const localTime=Number(localStorage.getItem('skBubbleThemeUpdatedAt')||0);
+  const remoteTime=Number(remote?.updatedAt||0);
+  const hasLocal=Object.keys(local).length>0;
+  if(remote && (!hasLocal || remoteTime>localTime)){
+    if(typeof window.bubbleApplyCloudTheme!=='function')throw Error('Colour Studio is not ready.');
+    window.bubbleApplyCloudTheme(remote.colors,remoteTime);
+    themeStatus('🎨 Colour settings downloaded from Google Cloud.');
+  }else if(!remote || (hasLocal && (localTime>remoteTime || force))){
+    const newTime=Math.max(Date.now(),remoteTime+1);
+    await setDoc(ref,{colors:local,updatedAt:newTime});
+    if(activeUser?.uid!==uid)return;
+    localStorage.setItem('skBubbleThemeUpdatedAt',String(newTime));
+    themeStatus('🎨 Colour settings uploaded to Google Cloud.');
+  }else themeStatus('🎨 Colour settings are already synced.');
+  themeReadyUid=uid;
+ }catch(err){console.warn('Colour sync failed:',err);themeStatus('⚠️ Colour settings stayed local: '+(err.message||String(err)));}
+ finally{themeSyncBusy=false;}
+}
+window.bubbleSyncTheme=()=>{if(!requireAccount())return;void syncTheme(true);};
+window.addEventListener('bubbleThemeChanged',()=>{
+ if(!activeUser || themeReadyUid!==activeUser.uid)return;
+ if(themeSyncTimer)clearTimeout(themeSyncTimer);
+ themeSyncTimer=setTimeout(()=>{themeSyncTimer=null;void syncTheme();},1200);
+});
 async function uploadRow(row){
  if(!activeUser)return;
  const ref=doc(db,'bubbleUsers',activeUser.uid,'saveSlots',row.slotId);
@@ -11254,6 +11348,8 @@ if(configured){
    const prior=activeUser?.uid;
    if(progressSyncTimer){clearTimeout(progressSyncTimer);progressSyncTimer=null;}
    progressReadyUid=null;
+   themeReadyUid=null;
+   if(themeSyncTimer){clearTimeout(themeSyncTimer);themeSyncTimer=null;}
    activeUser=user;
    updateCard();
    cloudStatus(user?'✅ Google account connected. Cloud saves enabled.':'Not logged in. Your local saves are available.');
@@ -11261,7 +11357,8 @@ if(configured){
    if(user && user.uid!==prior){
     void uploadCheckpointOnSignIn();
     void synchronizeAchievements(user.uid);
-   } else if(!user) showAchievementCloudStatus('🏆 Achievements saved locally. Log in to sync.');
+    void syncTheme();
+   } else if(!user){showAchievementCloudStatus('🏆 Achievements saved locally. Log in to sync.');themeStatus('🎨 Colour settings saved locally.');}
   });
   getRedirectResult(auth).catch(err=>{console.warn(err);cloudStatus('Google sign-in: '+err.message);});
  }catch(err){console.warn(err);cloudStatus('Firebase setup error: '+err.message);}
@@ -11273,6 +11370,5 @@ async function uploadCheckpointOnSignIn(){
 }
 updateCard();
 </script>
-
 </body>
 </html>
