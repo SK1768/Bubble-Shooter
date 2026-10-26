@@ -11494,7 +11494,7 @@ window.bubbleOpenAccountSettings=async()=>{
  if(!requireAccount())return;
  const reset=await refreshCloudResetStatus(activeUser.uid);
  if(reset){$('bubbleAccountDialog').style.display='flex';$('bubbleAccountDetails').textContent=(activeUser.displayName||'Player')+'\n('+(activeUser.email||'Google account') + ")";$('bubbleCloudSummary').textContent='Cloud sync paused after deletion. Local data is safe.';return;}
- $('bubbleAccountDetails').textContent=(activeUser.displayName||'Player')+' — '+(activeUser.email||'Google account');
+ $('bubbleAccountDetails').textContent=(activeUser.displayName||'Player')+'\n('+(activeUser.email||'Google account')+")";
  $('bubbleAccountDialog').style.display='flex';
  $('bubbleCloudSummary').textContent='Signed in. Local saves and cloud saves are separate until synchronised.';
  // Do not replace a completed (or failed) achievement sync status with a permanent 'Checking...' label.
