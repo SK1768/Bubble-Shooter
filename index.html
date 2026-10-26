@@ -11120,7 +11120,12 @@ document.getElementById('themeStudio').addEventListener('click',e=>{if(e.target.
   <div><button id="bubbleResumeCloudButton" onclick="bubbleResumeCloudSync()" style="display:none">☁️ Resume cloud syncing</button></div>
   <div><button onclick="bubbleSyncUp()">☁️ Upload newer local saves</button><button onclick="bubbleSyncDown()">⬇️ Download cloud saves</button></div>
   <div><button onclick="bubbleLoadCloudCheckpoint()">▶️ Continue cloud level</button><button onclick="bubbleLogout()">🚪 Log out</button></div>
-  <div><button id="bubbleDeleteCloudButton" class="danger" onclick="bubbleDeleteAllCloudData()">🗑️ Delete all cloud data</button></div>
+  <div><button
+    id="bubbleDeleteCloudButton"
+    class="danger"
+    onclick="bubbleDeleteAllCloudData()">
+    🗑️ Delete all cloud + local data
+</button></div>
   <p id="bubbleDeleteCloudStatus" class="account-note" role="status" aria-live="polite"></p>
   <button class="back-btn" onclick="document.getElementById('bubbleAccountDialog').style.display='none'">Close</button>
  </div>
