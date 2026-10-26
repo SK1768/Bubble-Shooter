@@ -5552,7 +5552,7 @@ document.getElementById('debugInput').addEventListener('keydown', async (e) => {
         else if (cmd === '!addbubblestocontainer') {
             const amount = Number(arg);
             if (!Number.isSafeInteger(amount) || amount < 1 || amount > 1000) {
-                alert('Usage: !addbubblestocontainer (AmountNumber)\nEnter a whole number from 1 to 1000.');
+                alert('Usage: !addbubblestocontainer (AmountNumber)\nEnter a whole number from 1 to 1,000.');
             } else if (!containerMode || !gameRunning || gameOver || gameWin || containerFinishing) {
                 alert('This command can only be used during an active Container Mode level.');
             } else {
@@ -11285,8 +11285,9 @@ async function synchronizeAchievements(uid, showAlert=false){
   if(pendingCloudCategoryResets.has('stats')){stats={...pendingCloudCategoryResets.get('stats')};localStorage.setItem('bubbleShooterStats',JSON.stringify(stats));}
   progressReadyUid=uid;
   const count=Object.values(merged).filter(v=>v===true || v?.unlocked).length;
-  showAchievementCloudStatus(`🏆 ${count} achievements synced to Google Cloud (including statistics).`);
-  if(showAlert)alert(`${count} unlocked achievement(s) and your statistics have been synced.`);
+  const sp = count === 1 ? "s" : "";
+  showAchievementCloudStatus(`🏆 ${count} achievement${sp} synced to Google Cloud (including statistics).`);
+  if(showAlert)alert(`${count} unlocked achievement${sp} and your statistics have been synced.`);
  } catch(err){
   console.warn('Achievement cloud sync:',err);
   showAchievementCloudStatus('⚠️ Achievement cloud sync failed. Achievements remain saved locally.');
@@ -11500,8 +11501,20 @@ window.bubbleOpenAccountSettings=async()=>{
   void synchronizeAchievements(activeUser.uid);
  }
  try{
- const [slots,checkpoint]=await Promise.all([getDocs(userPath()),getDoc(doc(db,'bubbleUsers',activeUser.uid,'checkpoints','puzzle_checkpoint'))]);
- $('bubbleCloudSummary').textContent=`☁️ ${slots.size} cloud save slot(s) · Puzzle level ${checkpoint.exists()?(checkpoint.data().level||'?'):'not yet saved'}`;
+ const uid = activeUser.uid;
+ const [slots, puzzleCheckpoint, containerCheckpoint] = await Promise.all([
+  getDocs(userPath()),
+  getDoc(doc(db, 'bubbleUsers', uid, 'checkpoints', 'puzzle_checkpoint')),
+  getDoc(doc(db, 'bubbleUsers', uid, 'checkpoints', 'container_checkpoint'))
+ ]);
+ if (activeUser?.uid !== uid || !$('bubbleAccountDialog') || $('bubbleAccountDialog').style.display !== 'flex') return;
+ const showLevel = checkpoint => {
+  const value = checkpoint.exists() ? Number(checkpoint.data().level) : NaN;
+  
+  return Number.isInteger(value) && value >= 1 ? String(value) : 'not yet saved';
+ };
+ const sp = slots.size === 1 ? "s" : "";
+ $('bubbleCloudSummary').textContent = `☁️ ${slots.size} cloud save slot${sp} · Puzzle level: ${showLevel(puzzleCheckpoint)}, Container level: ${showLevel(containerCheckpoint)}`;
  }catch(err){$('bubbleCloudSummary').textContent='Could not check cloud status: '+err.message;}
 };
 window.bubbleSyncUp=()=>safeAction(async()=>{
@@ -11510,8 +11523,9 @@ window.bubbleSyncUp=()=>safeAction(async()=>{
  if(!await cloudWriteAllowed(activeUser.uid,true)){alert('Cloud uploads are paused because this account’s cloud data was deleted. Choose Resume cloud syncing in Account Settings first.');return;}
  for(const row of Object.values(rows)){if(await uploadRow(row))uploaded++;}
  if(typeof gameRunning!=='undefined'&&gameRunning)await uploadCheckpoint();
- cloudStatus(`☁️ Uploaded ${uploaded} local save slot(s).`);
- alert(`Cloud sync complete: ${uploaded} slot(s) uploaded. Newer cloud slots were kept.`);
+  const sp = uploaded === 1 ? "s" : "";
+ cloudStatus(`☁️ Uploaded ${uploaded} local save slot${sp}.`);
+ alert(`Cloud sync complete: ${uploaded} slot${sp} uploaded. Newer cloud slots were kept.`);
 });
 window.bubbleSyncDown=()=>safeAction(async()=>{
  if(!requireAccount())return;
@@ -11533,8 +11547,9 @@ window.bubbleSyncDown=()=>safeAction(async()=>{
   });
   downloaded++;
  }
- cloudStatus(`☁️ Downloaded ${downloaded} save(s), kept ${skipped}.`);
- alert(`Downloaded ${downloaded} cloud saves. ${skipped} local saves kept. Open SAVE SLOTS to load one.`);
+ const sp = downloaded === 1 ? "s" : "";
+ cloudStatus(`☁️ Downloaded ${downloaded} save${sp}, kept ${skipped}.`);
+ alert(`Downloaded ${downloaded} cloud save${sp}. ${skipped} local saves kept. Open SAVE SLOTS to load one.`);
 });
 window.bubbleLoadCloudCheckpoint=()=>safeAction(async()=>{
  if(!requireAccount())return;
@@ -11579,7 +11594,7 @@ if(configured){
 }else cloudStatus('Not logged in. Firebase setup is required for Google sign-in.');
 async function uploadCheckpointOnSignIn(){
  // Deliberately do NOT upload the active game on sign-in: it could overwrite advanced cloud progress.
- try{const count=(await getDocs(userPath())).size;cloudStatus(`✅ Signed in. ${count} cloud save slot(s) available in Account settings.`);}
+ try{const count=(await getDocs(userPath())).size;cloudStatus(`✅ Signed in.`);}
  catch(err){cloudStatus('✅ Signed in. Cloud database unavailable: '+err.message);}
 }
 updateCard();
