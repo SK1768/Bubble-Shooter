@@ -11459,6 +11459,17 @@ function deleteBubbleBrowserDatabase(name) {
     });
 }
 
+window.bubbleLogout = () => safeAction(async () => {
+    if (!requireAccount()) return;
+
+    if (!confirm('Are you sure you want to log out?')) return;
+
+    await signOut(auth);
+
+    $('bubbleAccountDialog').style.display = 'none';
+    cloudStatus('✅ Logged out. Your local saves are still here.');
+});
+	
 window.bubbleDeleteAllCloudData = async () => {
     if (!requireAccount() || busy || cloudDeleteInProgress) return;
 
@@ -11523,7 +11534,7 @@ window.bubbleDeleteAllCloudData = async () => {
         const paths = [
             ['checkpoints', 'puzzle_checkpoint'],
             ['checkpoints', 'container_checkpoint'],
-			['progress', 'achievements']
+			['progress', 'achievements'],
             ['preferences', 'colourStudio']
         ];
 
