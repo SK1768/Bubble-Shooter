@@ -11111,6 +11111,8 @@ document.getElementById('themeStudio').addEventListener('click',e=>{if(e.target.
   <div><button onclick="bubbleSyncTheme()">🎨 Sync Colour Studio settings</button></div>
   <div><button onclick="bubbleSyncUp()">☁️ Upload newer local saves</button><button onclick="bubbleSyncDown()">⬇️ Download cloud saves</button></div>
   <div><button onclick="bubbleLoadCloudCheckpoint()">▶️ Continue cloud level</button><button onclick="bubbleLogout()">🚪 Log out</button></div>
+  <div><button id="bubbleDeleteCloudButton" class="danger" onclick="bubbleDeleteAllCloudData()">🗑️ Delete all cloud data</button></div>
+  <p id="bubbleDeleteCloudStatus" class="account-note" role="status" aria-live="polite"></p>
   <p class="account-note">Achievement syncing merges unlocked trophies and keeps the higher statistic values from each device. Reset achievements while signed in will not delete cloud trophies; they can return on the next sync.</p>
   <p class="account-note">Cloud saves are linked to your Google account. Download keeps newer local slots unless you explicitly approve replacing them. Keep your original save exports as backups.</p>
   <button class="back-btn" onclick="document.getElementById('bubbleAccountDialog').style.display='none'">Close</button>
@@ -11119,7 +11121,7 @@ document.getElementById('themeStudio').addEventListener('click',e=>{if(e.target.
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, setPersistence, browserLocalPersistence, signOut } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
-import { getFirestore, doc, getDoc, setDoc, getDocs, collection } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+import { getFirestore, doc, getDoc, setDoc, getDocs, deleteDoc, collection } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
 // Firebase Console > Project settings > Your apps > Web app configuration.
 // These public web identifiers are NOT passwords. Firestore rules enforce privacy.
@@ -11135,6 +11137,7 @@ const firebaseConfig = {
 const configured = !Object.values(firebaseConfig).some(v => String(v).startsWith('REPLACE_'));
 const $ = id => document.getElementById(id);
 let auth, db, activeUser = null, busy = false;
+let cloudDeleteInProgress = false;
 const cloudStatus = message => { if ($('bubbleAccountStatus')) $('bubbleAccountStatus').textContent = message; };
 function updateCard(){
  $('bubbleAccountGuest').style.display = activeUser ? 'none' : 'block';
@@ -11178,14 +11181,14 @@ function showAchievementCloudStatus(message){
  const element=$('bubbleAchievementSummary');if(element)element.textContent=message;
 }
 async function synchronizeAchievements(uid, showAlert=false){
- if (!activeUser || activeUser.uid !== uid || !db) return;
+ if (cloudDeleteInProgress || !activeUser || activeUser.uid !== uid || !db) return;
  if (progressSyncBusy){progressSyncAgain=true;return;}
  progressSyncBusy=true;
  showAchievementCloudStatus('🏆 Checking Google Cloud achievements...');
  try {
   const ref=doc(db,'bubbleUsers',uid,'progress','achievements');
   const current=await getDoc(ref);
-  if (!activeUser || activeUser.uid !== uid) return;
+  if (cloudDeleteInProgress || !activeUser || activeUser.uid !== uid) return;
   const cloud=current.exists()?current.data():{};
   const merged=mergedTrophies(unlockedAchievements,cloud.unlockedAchievements);
   const mergedStats=mergeProgressStats(stats,cloud.stats);
@@ -11195,7 +11198,8 @@ async function synchronizeAchievements(uid, showAlert=false){
   stats=mergedStats;
   localStorage.setItem('bubbleShooterStats',JSON.stringify(mergedStats));
   if (typeof renderAchievements==='function') renderAchievements();
-  if (!activeUser || activeUser.uid !== uid) return;
+  if (cloudDeleteInProgress || !activeUser || activeUser.uid !== uid) return;
+  if(cloudDeleteInProgress)return;
   await setDoc(ref,{unlockedAchievements:merged,stats:mergedStats,updatedAt:Date.now()});
   progressReadyUid=uid;
   const count=Object.values(merged).filter(v=>v===true || v?.unlocked).length;
@@ -11211,7 +11215,7 @@ async function synchronizeAchievements(uid, showAlert=false){
  }
 }
 function scheduleProgressSync(){
- if(!activeUser || progressReadyUid!==activeUser.uid)return;
+ if(cloudDeleteInProgress || !activeUser || progressReadyUid!==activeUser.uid)return;
  if(progressSyncTimer)clearTimeout(progressSyncTimer);
  const uid=activeUser.uid;
  progressSyncTimer=setTimeout(()=>{progressSyncTimer=null;void synchronizeAchievements(uid);},2500);
@@ -11234,12 +11238,12 @@ function localTheme(){
 function themeStatus(message){const el=$('bubbleThemeSummary');if(el)el.textContent=message;}
 async function syncTheme(force=false){
  const uid=activeUser?.uid;
- if(!uid || !db || themeSyncBusy)return;
+ if(cloudDeleteInProgress || !uid || !db || themeSyncBusy)return;
  themeSyncBusy=true;
  try{
   const ref=doc(db,'bubbleUsers',uid,'preferences','colourStudio');
   const snapshot=await getDoc(ref);
-  if(activeUser?.uid!==uid)return;
+  if(cloudDeleteInProgress || activeUser?.uid!==uid)return;
   const remote=snapshot.exists()?snapshot.data():null;
   const local=localTheme();
   const localTime=Number(localStorage.getItem('skBubbleThemeUpdatedAt')||0);
@@ -11251,8 +11255,9 @@ async function syncTheme(force=false){
     themeStatus('🎨 Colour settings downloaded from Google Cloud.');
   }else if(!remote || (hasLocal && (localTime>remoteTime || force))){
     const newTime=Math.max(Date.now(),remoteTime+1);
+    if(cloudDeleteInProgress)return;
     await setDoc(ref,{colors:local,updatedAt:newTime});
-    if(activeUser?.uid!==uid)return;
+    if(cloudDeleteInProgress || activeUser?.uid!==uid)return;
     localStorage.setItem('skBubbleThemeUpdatedAt',String(newTime));
     themeStatus('🎨 Colour settings uploaded to Google Cloud.');
   }else themeStatus('🎨 Colour settings are already synced.');
@@ -11267,21 +11272,22 @@ window.addEventListener('bubbleThemeChanged',()=>{
  themeSyncTimer=setTimeout(()=>{themeSyncTimer=null;void syncTheme();},1200);
 });
 async function uploadRow(row){
- if(!activeUser)return;
+ if(cloudDeleteInProgress || !activeUser)return;
  const ref=doc(db,'bubbleUsers',activeUser.uid,'saveSlots',row.slotId);
  // Each slot is one document. Never overwrite a newer cloud slot from a stale tab.
  const snapshot=await getDoc(ref);
  if(snapshot.exists() && Number(snapshot.data().savedAt||0)>Number(row.savedAt||0)) return false;
+ if(cloudDeleteInProgress)return false;
  await setDoc(ref,{...row,updatedAt:Date.now()});
  return true;
 }
 async function cloudUploadChangedSlot(row){
- if(!activeUser)return;
+ if(cloudDeleteInProgress || !activeUser)return;
  try{await uploadRow(row);cloudStatus('☁️ Cloud sync checked');}
  catch(err){console.warn('Cloud upload failed:',err);cloudStatus('⚠️ Offline or cloud sync failed. Local save is safe.');}
 }
 async function uploadCheckpoint(){
- if(!activeUser || typeof buildSaveData!=='function' || typeof gameRunning==='undefined' || !gameRunning || typeof isCampaignMode!=='undefined' && isCampaignMode || typeof isDailyPuzzle!=='undefined' && isDailyPuzzle || typeof isPlaytesting!=='undefined' && isPlaytesting || typeof isSecretLevel!=='undefined' && isSecretLevel)return;
+ if(cloudDeleteInProgress || !activeUser || typeof buildSaveData!=='function' || typeof gameRunning==='undefined' || !gameRunning || typeof isCampaignMode!=='undefined' && isCampaignMode || typeof isDailyPuzzle!=='undefined' && isDailyPuzzle || typeof isPlaytesting!=='undefined' && isPlaytesting || typeof isSecretLevel!=='undefined' && isSecretLevel)return;
  try{
   const saveData=buildSaveData(true);
   const slotId=(typeof containerMode!=='undefined'&&containerMode)?'container_checkpoint':'puzzle_checkpoint';
@@ -11291,7 +11297,8 @@ async function uploadCheckpoint(){
   const newLevel=Number(saveData.level)||0;
   // Do not regress the cloud level if another device has progressed further.
   if(old.exists() && oldLevel>newLevel)return;
-  await setDoc(ref,{saveData,savedAt:Date.now(),level:newLevel});
+  if(cloudDeleteInProgress)return;
+ await setDoc(ref,{saveData,savedAt:Date.now(),level:newLevel});
   cloudStatus('☁️ Level '+newLevel+' saved to your Google account');
  }catch(err){console.warn('Cloud checkpoint failed:',err);cloudStatus('⚠️ Could not upload checkpoint. Your local saves remain.');}
 }
@@ -11305,6 +11312,55 @@ window.bubbleGoogleLogin=()=>safeAction(async()=>{
  try {await signInWithPopup(auth,provider);}
  catch(err){if(['auth/popup-blocked','auth/operation-not-supported-in-this-environment'].includes(err.code)){await signInWithRedirect(auth,provider);}else throw err;}
 });
+// Delete data belonging to the signed-in user only; never delete browser saves or the Google account.
+// Three independent confirmation dialogs provide chances to cancel.
+window.bubbleDeleteAllCloudData = async () => {
+ if(!requireAccount() || busy || cloudDeleteInProgress)return;
+ if(!confirm('Are you sure you want to delete all the cloud data from your account?'))return;
+ if(!confirm('This will permanently delete your cloud save slots, level checkpoints, achievements, statistics and Colour Studio settings. Your local saves will remain. Do you really want to continue?'))return;
+ if(!confirm('FINAL WARNING: This is not a joke! All of your cloud data on your account WILL be erased and can never be recovered! Are you really sure you want to do this?'))return;
+ busy=true;
+ cloudDeleteInProgress=true;
+ const uid=activeUser.uid;
+ const status=$('bubbleDeleteCloudStatus');
+ const btn=$('bubbleDeleteCloudButton');
+ if(btn)btn.disabled=true;
+ if(progressSyncTimer){clearTimeout(progressSyncTimer);progressSyncTimer=null;}
+ if(themeSyncTimer){clearTimeout(themeSyncTimer);themeSyncTimer=null;}
+ if(status)status.textContent='🗑️ Deleting your cloud data...';
+ try{
+  // Firestore does not recursively delete subcollections when a parent is removed.
+  // Delete each saved slot, then the app's known singleton documents.
+  const slots=await getDocs(collection(db,'bubbleUsers',uid,'saveSlots'));
+  if(activeUser?.uid!==uid)throw Error('The signed-in account changed.');
+  let deleted=0;
+  for(const snap of slots.docs){await deleteDoc(snap.ref);deleted++;}
+  const paths=[
+   ['checkpoints','puzzle_checkpoint'],
+   ['checkpoints','container_checkpoint'],
+   ['progress','achievements'],
+   ['preferences','colourStudio']
+  ];
+  for(const [group,key] of paths){
+   await deleteDoc(doc(db,'bubbleUsers',uid,group,key));
+   deleted++;
+  }
+  if(status)status.textContent='✅ Cloud data deleted. Signing out to prevent automatic re-upload...';
+  cloudStatus('✅ Bubble Shooter cloud data deleted.');
+  // Sign out so the remaining local progress is not immediately copied back online.
+  await signOut(auth);
+  $('bubbleAccountDialog').style.display='none';
+  alert('Your Bubble Shooter cloud data has been deleted. Local saves are untouched. You have been logged out.');
+ }catch(err){
+  console.warn('Cloud data deletion failed:',err);
+  if(status)status.textContent='⚠️ Cloud deletion incomplete: '+(err.message||String(err));
+  alert('Cloud deletion could not finish. Some cloud data may still remain. Check your Firestore rules or connection, then retry. '+(err.message||String(err)));
+  // Remain blocked until sign-out rather than allowing automatic uploads to restore deleted data.
+ }finally{
+  busy=false;
+  if(btn)btn.disabled=false;
+ }
+};
 window.bubbleLogout=()=>safeAction(async()=>{if(auth)await signOut(auth);$('bubbleAccountDialog').style.display='none';cloudStatus('Logged out. Your local saves are still here.');});
 window.bubbleOpenAccountSettings=async()=>{
  if(!requireAccount())return;
@@ -11382,6 +11438,7 @@ if(configured){
    cloudStatus(user?'✅ Google account connected. Cloud saves enabled.':'Not logged in. Your local saves are available.');
    // Never auto-import a different user's cloud data over local saves.
    if(user && user.uid!==prior){
+    cloudDeleteInProgress=false;
     void uploadCheckpointOnSignIn();
     void synchronizeAchievements(user.uid);
     void syncTheme();
