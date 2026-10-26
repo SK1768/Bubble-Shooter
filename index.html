@@ -11047,11 +11047,33 @@ for(const [key,label,defaultValue] of choices){const el=document.createElement('
 const imageSlots=[['back','Background'],['loading','Loading screen']];
 const imageURLs={};
 let themeImageDB=null;
+let themeImageCleanupRequested=false;
+window.bubbleCloseThemeImageDB=()=>{
+  themeImageCleanupRequested=true;
+  if(themeImageDB){
+    themeImageDB.close();
+    themeImageDB=null;
+  }
+};
 function openThemeImageDB(){return new Promise((resolve,reject)=>{
   if(!('indexedDB' in window)){reject(new Error('IndexedDB is unavailable'));return;}
+  if(themeImageCleanupRequested){reject(new Error('Image storage is being cleared'));return;}
   const req=indexedDB.open('SKBubbleThemeImages',1);
   req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('images'))req.result.createObjectStore('images')};
-  req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('Cannot open image cache'));
+  req.onsuccess=()=>{
+    const connection=req.result;
+    connection.onversionchange=()=>{
+      connection.close();
+      if(themeImageDB===connection)themeImageDB=null;
+    };
+    if(themeImageCleanupRequested){
+      connection.close();
+      reject(new Error('Image storage is being cleared'));
+      return;
+    }
+    resolve(connection);
+  };
+  req.onerror=()=>reject(req.error||new Error('Cannot open image cache'));
 })}
 function imageTransaction(key,method,blob){return new Promise((resolve,reject)=>{
   const tx=themeImageDB.transaction('images','readwrite');
@@ -11086,8 +11108,12 @@ for(const [key,label] of imageSlots){
   row.append(title,upload,remove,file,status);document.getElementById('themeImageOptions').append(row);
 }
 openThemeImageDB().then(async db=>{
+  if(themeImageCleanupRequested){db.close();return;}
   themeImageDB=db;
-  for(const [key] of imageSlots){try{const blob=await imageTransaction(key,'get');if(blob)displayThemeImage(key,blob)}catch(e){console.warn('Theme image could not be loaded:',e)}}
+  for(const [key] of imageSlots){
+    if(themeImageCleanupRequested)break;
+    try{const blob=await imageTransaction(key,'get');if(blob && !themeImageCleanupRequested)displayThemeImage(key,blob)}catch(e){if(!themeImageCleanupRequested)console.warn('Theme image could not be loaded:',e)}
+  }
 }).catch(e=>{for(const [key] of imageSlots){const status=document.getElementById('theme-image-status-'+key);if(status)status.textContent='Image caching unavailable in this browser'}console.warn('Theme image storage unavailable:',e)});
 
 window.bubbleApplyCloudTheme=(colours,updatedAt)=>{
@@ -11443,19 +11469,25 @@ function deleteBubbleBrowserDatabase(name) {
             reject(new Error('IndexedDB is unavailable.'));
             return;
         }
-
         const request = indexedDB.deleteDatabase(name);
-
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(
-            request.error || new Error('Could not delete ' + name)
-        );
-        request.onblocked = () => reject(
-            new Error(
-                'The database ' + name +
-                ' is open on another tab. Close a tab that is running this game and try again.'
-            )
-        );
+        let blockedTimeout = null;
+        let settled = false;
+        const finish = (error) => {
+            if (settled) return;
+            settled = true;
+            if (blockedTimeout !== null) clearTimeout(blockedTimeout);
+            if (error) reject(error);
+            else resolve();
+        };
+        request.onsuccess = () => finish();
+        request.onerror = () => finish(request.error || new Error('Could not delete ' + name));
+        request.onblocked = () => {
+            if (blockedTimeout === null) {
+                blockedTimeout = setTimeout(() => finish(new Error(
+                    'The database ' + name + ' is still open. Close any other Bubble Shooter tabs and retry.'
+                )), 5000);
+            }
+        };
     });
 }
 
@@ -11534,7 +11566,6 @@ window.bubbleDeleteAllCloudData = async () => {
         const paths = [
             ['checkpoints', 'puzzle_checkpoint'],
             ['checkpoints', 'container_checkpoint'],
-			['progress', 'achievements'],
             ['preferences', 'colourStudio']
         ];
 
@@ -11579,10 +11610,9 @@ window.bubbleDeleteAllCloudData = async () => {
         localStorage.clear();
         sessionStorage.clear();
 
-        // Close Colour Studio's database connection first.
-        if (typeof themeImageDB !== 'undefined' && themeImageDB) {
-            themeImageDB.close();
-            themeImageDB = null;
+        // The Colour Studio connection lives in a separate script scope.
+        if (typeof window.bubbleCloseThemeImageDB === 'function') {
+            window.bubbleCloseThemeImageDB();
         }
 
         // Delete saved game slots and custom Colour Studio images.
