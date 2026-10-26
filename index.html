@@ -11113,6 +11113,7 @@ document.getElementById('themeStudio').addEventListener('click',e=>{if(e.target.
   <div><button onclick="bubbleSyncAchievements()">🏆 Sync achievements &amp; stats</button></div>
   <p id="bubbleThemeSummary" class="account-note">🎨 Colour settings are stored locally until cloud sync is ready.</p>
   <div><button onclick="bubbleSyncTheme()">🎨 Sync Colour Studio settings</button></div>
+  <div><button id="bubbleResumeCloudButton" onclick="bubbleResumeCloudSync()" style="display:none">☁️ Resume cloud syncing</button></div>
   <div><button onclick="bubbleSyncUp()">☁️ Upload newer local saves</button><button onclick="bubbleSyncDown()">⬇️ Download cloud saves</button></div>
   <div><button onclick="bubbleLoadCloudCheckpoint()">▶️ Continue cloud level</button><button onclick="bubbleLogout()">🚪 Log out</button></div>
   <div><button id="bubbleDeleteCloudButton" class="danger" onclick="bubbleDeleteAllCloudData()">🗑️ Delete all cloud data</button></div>
@@ -11142,6 +11143,57 @@ const configured = !Object.values(firebaseConfig).some(v => String(v).startsWith
 const $ = id => document.getElementById(id);
 let auth, db, activeUser = null, busy = false;
 let cloudDeleteInProgress = false;
+// This per-account tombstone is stored in the existing achievements document.
+// It prevents OTHER DEVICES from silently restoring deleted cloud data.
+async function cloudWriteAllowed(uid, showMessage=false) {
+ if (cloudDeleteInProgress || !uid || !activeUser || activeUser.uid !== uid || !db) return false;
+ try {
+  const snap = await getDoc(doc(db,'bubbleUsers',uid,'progress','achievements'));
+  if (cloudDeleteInProgress || activeUser?.uid !== uid) return false;
+  if (snap.data()?.cloudReset === true) {
+   if(showMessage) cloudStatus('☁️ Cloud data was deleted. Local progress is safe. Resume cloud syncing in Account Settings to upload again.');
+   return false;
+  }
+  return true;
+ } catch(err) {
+  console.warn('Unable to verify cloud reset state, upload blocked:',err);
+  if(showMessage) cloudStatus('⚠️ Cannot check cloud reset state. No data uploaded.');
+  return false; // Fail closed: a network error must NEVER resurrect deleted data.
+ }
+}
+async function refreshCloudResetStatus(uid) {
+ const el=$('bubbleResumeCloudButton');
+ if(el)el.style.display='none';
+ try{
+  const snap=await getDoc(doc(db,'bubbleUsers',uid,'progress','achievements'));
+  if(activeUser?.uid !== uid)return true;
+  const reset=snap.data()?.cloudReset===true;
+  if(el)el.style.display=reset?'inline-block':'none';
+  if(reset){
+   cloudStatus('☁️ Cloud data deleted. Automatic uploads are paused for this account.');
+   showAchievementCloudStatus('🏆 Cloud achievements cleared. Local achievements remain on this device.');
+   themeStatus('🎨 Cloud colours cleared. Local colours remain on this device.');
+  }
+  return reset;
+ }catch(err){
+  console.warn('Could not check cloud deletion state:',err);
+  cloudStatus('⚠️ Cloud reset status unavailable. Automatic uploads are paused for safety.');
+  return true;
+ }
+}
+window.bubbleResumeCloudSync=()=>safeAction(async()=>{
+ if(!requireAccount())return;
+ if(!confirm('Resume cloud syncing? Your local save data, achievements, statistics and colours can be uploaded to your Google account again.'))return;
+ const uid=activeUser.uid;
+ // Removing the reset marker is an EXPLICIT action; never do this just by logging in.
+ await deleteDoc(doc(db,'bubbleUsers',uid,'progress','achievements'));
+ if(activeUser?.uid!==uid)return;
+ $('bubbleResumeCloudButton').style.display='none';
+ progressReadyUid=null;themeReadyUid=null;
+ await synchronizeAchievements(uid);
+ await syncTheme();
+ cloudStatus('☁️ Cloud syncing resumed. Upload save slots manually or continue playing to create new checkpoints.');
+});
 const cloudStatus = message => { if ($('bubbleAccountStatus')) $('bubbleAccountStatus').textContent = message; };
 function updateCard(){
  $('bubbleAccountGuest').style.display = activeUser ? 'none' : 'block';
@@ -11193,6 +11245,10 @@ async function synchronizeAchievements(uid, showAlert=false){
   const ref=doc(db,'bubbleUsers',uid,'progress','achievements');
   const current=await getDoc(ref);
   if (cloudDeleteInProgress || !activeUser || activeUser.uid !== uid) return;
+  if(current.data()?.cloudReset===true){
+   showAchievementCloudStatus('🏆 Cloud achievements were deleted. Sync paused until you choose Resume cloud syncing.');
+   return;
+  }
   const cloud=current.exists()?current.data():{};
   const merged=mergedTrophies(unlockedAchievements,cloud.unlockedAchievements);
   const mergedStats=mergeProgressStats(stats,cloud.stats);
@@ -11203,7 +11259,7 @@ async function synchronizeAchievements(uid, showAlert=false){
   localStorage.setItem('bubbleShooterStats',JSON.stringify(mergedStats));
   if (typeof renderAchievements==='function') renderAchievements();
   if (cloudDeleteInProgress || !activeUser || activeUser.uid !== uid) return;
-  if(cloudDeleteInProgress)return;
+  if(!await cloudWriteAllowed(uid))return;
   await setDoc(ref,{unlockedAchievements:merged,stats:mergedStats,updatedAt:Date.now()});
   progressReadyUid=uid;
   const count=Object.values(merged).filter(v=>v===true || v?.unlocked).length;
@@ -11248,6 +11304,7 @@ async function syncTheme(force=false){
   const ref=doc(db,'bubbleUsers',uid,'preferences','colourStudio');
   const snapshot=await getDoc(ref);
   if(cloudDeleteInProgress || activeUser?.uid!==uid)return;
+  if(!await cloudWriteAllowed(uid)){themeStatus('🎨 Cloud syncing paused or unavailable. Local colours are safe.');return;}
   const remote=snapshot.exists()?snapshot.data():null;
   const local=localTheme();
   const localTime=Number(localStorage.getItem('skBubbleThemeUpdatedAt')||0);
@@ -11259,7 +11316,7 @@ async function syncTheme(force=false){
     themeStatus('🎨 Colour settings downloaded from Google Cloud.');
   }else if(!remote || (hasLocal && (localTime>remoteTime || force))){
     const newTime=Math.max(Date.now(),remoteTime+1);
-    if(cloudDeleteInProgress)return;
+    if(!await cloudWriteAllowed(uid))return;
     await setDoc(ref,{colors:local,updatedAt:newTime});
     if(cloudDeleteInProgress || activeUser?.uid!==uid)return;
     localStorage.setItem('skBubbleThemeUpdatedAt',String(newTime));
@@ -11276,12 +11333,14 @@ window.addEventListener('bubbleThemeChanged',()=>{
  themeSyncTimer=setTimeout(()=>{themeSyncTimer=null;void syncTheme();},1200);
 });
 async function uploadRow(row){
- if(cloudDeleteInProgress || !activeUser)return;
- const ref=doc(db,'bubbleUsers',activeUser.uid,'saveSlots',row.slotId);
+ if(cloudDeleteInProgress || !activeUser)return false;
+ const uid=activeUser.uid;
+ if(!await cloudWriteAllowed(uid,true))return false;
+ const ref=doc(db,'bubbleUsers',uid,'saveSlots',row.slotId);
  // Each slot is one document. Never overwrite a newer cloud slot from a stale tab.
  const snapshot=await getDoc(ref);
  if(snapshot.exists() && Number(snapshot.data().savedAt||0)>Number(row.savedAt||0)) return false;
- if(cloudDeleteInProgress)return false;
+ if(!await cloudWriteAllowed(uid,true))return false;
  await setDoc(ref,{...row,updatedAt:Date.now()});
  return true;
 }
@@ -11293,6 +11352,8 @@ async function cloudUploadChangedSlot(row){
 async function uploadCheckpoint(){
  if(cloudDeleteInProgress || !activeUser || typeof buildSaveData!=='function' || typeof gameRunning==='undefined' || !gameRunning || typeof isCampaignMode!=='undefined' && isCampaignMode || typeof isDailyPuzzle!=='undefined' && isDailyPuzzle || typeof isPlaytesting!=='undefined' && isPlaytesting || typeof isSecretLevel!=='undefined' && isSecretLevel)return;
  try{
+  const uid=activeUser.uid;
+  if(!await cloudWriteAllowed(uid))return;
   const saveData=buildSaveData(true);
   const slotId=(typeof containerMode!=='undefined'&&containerMode)?'container_checkpoint':'puzzle_checkpoint';
   const ref=doc(db,'bubbleUsers',activeUser.uid,'checkpoints',slotId);
@@ -11301,7 +11362,7 @@ async function uploadCheckpoint(){
   const newLevel=Number(saveData.level)||0;
   // Do not regress the cloud level if another device has progressed further.
   if(old.exists() && oldLevel>newLevel)return;
-  if(cloudDeleteInProgress)return;
+  if(!await cloudWriteAllowed(uid))return;
  await setDoc(ref,{saveData,savedAt:Date.now(),level:newLevel});
   cloudStatus('☁️ Level '+newLevel+' saved to your Google account');
  }catch(err){console.warn('Cloud checkpoint failed:',err);cloudStatus('⚠️ Could not upload checkpoint. Your local saves remain.');}
@@ -11358,8 +11419,13 @@ window.bubbleDeleteAllCloudData = async () => {
  if(themeSyncTimer){clearTimeout(themeSyncTimer);themeSyncTimer=null;}
  if(status)status.textContent='🗑️ Deleting your cloud data...';
  try{
+  // Persist a per-user reset marker FIRST. It survives logout, browser storage
+  // clearing and logging in on other devices, which still hold local progress.
+  // It contains NO achievements or statistics, only the deletion timestamp.
+  await setDoc(doc(db,'bubbleUsers',uid,'progress','achievements'),
+               {cloudReset:true,cloudResetAt:Date.now()});
   // Firestore does not recursively delete subcollections when a parent is removed.
-  // Delete each saved slot, then the app's known singleton documents.
+  // Delete each saved slot, then the other singleton documents.
   const slots=await getDocs(collection(db,'bubbleUsers',uid,'saveSlots'));
   if(activeUser?.uid!==uid)throw Error('The signed-in account changed.');
   let deleted=0;
@@ -11367,7 +11433,6 @@ window.bubbleDeleteAllCloudData = async () => {
   const paths=[
    ['checkpoints','puzzle_checkpoint'],
    ['checkpoints','container_checkpoint'],
-   ['progress','achievements'],
    ['preferences','colourStudio']
   ];
   for(const [group,key] of paths){
@@ -11393,6 +11458,8 @@ window.bubbleDeleteAllCloudData = async () => {
 window.bubbleLogout=()=>safeAction(async()=>{if(auth)await signOut(auth);$('bubbleAccountDialog').style.display='none';cloudStatus('Logged out. Your local saves are still here.');});
 window.bubbleOpenAccountSettings=async()=>{
  if(!requireAccount())return;
+ const reset=await refreshCloudResetStatus(activeUser.uid);
+ if(reset){$('bubbleAccountDialog').style.display='flex';$('bubbleAccountDetails').textContent=(activeUser.displayName||'Player')+' — '+(activeUser.email||'Google account');$('bubbleCloudSummary').textContent='Cloud sync paused after deletion. Local data is safe.';return;}
  $('bubbleAccountDetails').textContent=(activeUser.displayName||'Player')+' — '+(activeUser.email||'Google account');
  $('bubbleAccountDialog').style.display='flex';
  $('bubbleCloudSummary').textContent='Signed in. Local saves and cloud saves are separate until synchronised.';
@@ -11412,6 +11479,7 @@ window.bubbleOpenAccountSettings=async()=>{
 window.bubbleSyncUp=()=>safeAction(async()=>{
  if(!requireAccount())return;
  const rows=await getAllSaveSlots();let uploaded=0;
+ if(!await cloudWriteAllowed(activeUser.uid,true)){alert('Cloud uploads are paused because this account’s cloud data was deleted. Choose Resume cloud syncing in Account Settings first.');return;}
  for(const row of Object.values(rows)){if(await uploadRow(row))uploaded++;}
  if(typeof gameRunning!=='undefined'&&gameRunning)await uploadCheckpoint();
  cloudStatus(`☁️ Uploaded ${uploaded} local save slot(s).`);
@@ -11468,10 +11536,14 @@ if(configured){
    // Never auto-import a different user's cloud data over local saves.
    if(user && user.uid!==prior){
     cloudDeleteInProgress=false;
-    void uploadCheckpointOnSignIn();
-    void synchronizeAchievements(user.uid);
-    void syncTheme();
-   } else if(!user){showAchievementCloudStatus('🏆 Achievements saved locally. Log in to sync.');themeStatus('🎨 Colour settings saved locally.');}
+    void (async()=>{
+      const reset=await refreshCloudResetStatus(user.uid);
+      if(activeUser?.uid!==user.uid || reset)return;
+      await uploadCheckpointOnSignIn();
+      void synchronizeAchievements(user.uid);
+      void syncTheme();
+    })();
+   } else if(!user){if($('bubbleResumeCloudButton'))$('bubbleResumeCloudButton').style.display='none';showAchievementCloudStatus('🏆 Achievements saved locally. Log in to sync.');themeStatus('🎨 Colour settings saved locally.');}
   });
   getRedirectResult(auth).catch(err=>{console.warn(err);cloudStatus('Google sign-in: '+err.message);});
  }catch(err){console.warn(err);cloudStatus('Firebase setup error: '+err.message);}
