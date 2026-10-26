@@ -11373,7 +11373,7 @@ async function uploadRow(row){
 }
 async function cloudUploadChangedSlot(row){
  if(cloudDeleteInProgress || !activeUser)return;
- try{await uploadRow(row);cloudStatus('☁️ Cloud sync checked');}
+ try{await uploadRow(row);cloudStatus('☁️ Cloud sync updated');}
  catch(err){console.warn('Cloud upload failed:',err);cloudStatus('⚠️ Offline or cloud sync failed. Local save is safe.');}
 }
 async function uploadCheckpoint(){
