@@ -1384,6 +1384,24 @@ input,select,textarea{accent-color:#58efdf}input:not([type=range]):not([type=che
   #bubbleAccountStatus { font-size: 10px; }
 }
 
+
+/* The policy link stays unobtrusive until hovered or keyboard-focused. */
+#bubbleAccountCard .account-privacy-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--theme-menu, #8dffee);
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+#bubbleAccountCard .account-privacy-link:hover,
+#bubbleAccountCard .account-privacy-link:focus-visible {
+  text-decoration: underline;
+}
+
+/* Only show the floating Google account card while the main menu is visible. */
+#bubbleAccountCard { display: none; }
+#bubbleAccountCard.account-menu-visible { display: block; }
 </style>
 <style id="themeStudioStyles">
 :root{--theme-wall:#192b49;--theme-menu:#53f5e0;--theme-game:#70ebf0;--theme-pop:#53f5e0;--theme-back:#101e38;--theme-alert:#ff565e;--theme-warn:#ffd454}
@@ -1484,9 +1502,10 @@ body.theme-background-image{background-image:linear-gradient(#04091655,#04091655
 </div>
 <div id="bubbleAccountCard">
   <div class="account-heading">☁️ PLAYER ACCOUNT</div>
-  <div id="bubbleAccountGuest"><div>Not logged in.</div><div class="account-buttons"><button type="button" onclick="bubbleGoogleLogin()">🔑 Log in</button></div></div>
+  <div id="bubbleAccountGuest"><div>Not logged in.</div><div class="account-buttons"><button type="button" onclick="bubbleGoogleLogin()">🔑 Log in with Google</button></div></div>
   <div id="bubbleAccountUser" style="display:none"><div><img id="bubbleAccountAvatar" alt="" style="display:none"><span id="bubbleAccountName">Logged in as:</span></div><div class="account-buttons"><button type="button" onclick="bubbleOpenAccountSettings()">⚙️ Account settings</button></div></div>
   <div id="bubbleAccountStatus" role="status">Local saves work without an account.</div>
+  <a class="account-privacy-link" href="./privacy.html">Privacy Policy</a>
 </div>
 <div class="menu" id="mainMenu" style="display: none;">
         <h1>SK's Bubble Shooter</h1>
@@ -11369,6 +11388,27 @@ async function uploadCheckpointOnSignIn(){
  catch(err){cloudStatus('✅ Signed in. Cloud database unavailable: '+err.message);}
 }
 updateCard();
+</script>
+
+
+<script>
+/* Mirror the real menu visibility without changing any of the game's menu flow. */
+(function () {
+  const menu = document.getElementById('mainMenu');
+  const card = document.getElementById('bubbleAccountCard');
+  if (!menu || !card) return;
+
+  function syncAccountCardVisibility() {
+    const showingMenu = window.getComputedStyle(menu).display !== 'none';
+    card.classList.toggle('account-menu-visible', showingMenu);
+  }
+
+  new MutationObserver(syncAccountCardVisibility).observe(menu, {
+    attributes: true,
+    attributeFilter: ['style', 'class', 'hidden']
+  });
+  syncAccountCardVisibility();
+})();
 </script>
 </body>
 </html>
