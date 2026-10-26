@@ -11181,6 +11181,7 @@ async function synchronizeAchievements(uid, showAlert=false){
  if (!activeUser || activeUser.uid !== uid || !db) return;
  if (progressSyncBusy){progressSyncAgain=true;return;}
  progressSyncBusy=true;
+ showAchievementCloudStatus('🏆 Checking Google Cloud achievements...');
  try {
   const ref=doc(db,'bubbleUsers',uid,'progress','achievements');
   const current=await getDoc(ref);
@@ -11310,7 +11311,14 @@ window.bubbleOpenAccountSettings=async()=>{
  $('bubbleAccountDetails').textContent=(activeUser.displayName||'Player')+' — '+(activeUser.email||'Google account');
  $('bubbleAccountDialog').style.display='flex';
  $('bubbleCloudSummary').textContent='Signed in. Local saves and cloud saves are separate until synchronised.';
- showAchievementCloudStatus('🏆 Checking Google Cloud achievements...');
+ // Do not replace a completed (or failed) achievement sync status with a permanent 'Checking...' label.
+ // The login handler already starts achievement synchronization; retry if it has not completed.
+ if(progressSyncBusy){
+  showAchievementCloudStatus('🏆 Checking Google Cloud achievements...');
+ }else if(progressReadyUid!==activeUser.uid){
+  showAchievementCloudStatus('🏆 Checking Google Cloud achievements...');
+  void synchronizeAchievements(activeUser.uid);
+ }
  try{
  const [slots,checkpoint]=await Promise.all([getDocs(userPath()),getDoc(doc(db,'bubbleUsers',activeUser.uid,'checkpoints','puzzle_checkpoint'))]);
  $('bubbleCloudSummary').textContent=`☁️ ${slots.size} cloud save slot(s) · Puzzle level ${checkpoint.exists()?(checkpoint.data().level||'?'):'not yet saved'}`;
