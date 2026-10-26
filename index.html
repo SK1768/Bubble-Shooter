@@ -11120,7 +11120,7 @@ document.getElementById('themeStudio').addEventListener('click',e=>{if(e.target.
 </div>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, setPersistence, browserLocalPersistence, signOut } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
+import { getAuth, GoogleAuthProvider, signInWithCredential, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, setPersistence, browserLocalPersistence, signOut } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, getDocs, deleteDoc, collection } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
 // Firebase Console > Project settings > Your apps > Web app configuration.
@@ -11304,14 +11304,39 @@ async function uploadCheckpoint(){
 }
 window.bubbleCloudCheckpoint = ()=>{void uploadCheckpoint();};
 window.bubbleCloudSlotSaved = row=>{void cloudUploadChangedSlot(row);};
-window.bubbleGoogleLogin=()=>safeAction(async()=>{
+// Android WebView must use native Google sign-in: no Firebase redirect or popup.
+window.bubbleNativeGoogleCredential = async idToken => {
+  if (!idToken || !configured || !auth) return;
+  try {
+    cloudStatus('Completing Android Google sign-in...');
+    await setPersistence(auth, browserLocalPersistence);
+    await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
+    cloudStatus('✅ Signed in with Google. Loading cloud data...');
+  } catch(err) {
+    console.warn('Native Google sign-in failed:',err);
+    cloudStatus('⚠️ Android Google sign-in failed: ' + (err.message || err.code));
+    alert('Google sign-in failed: ' + (err.message || String(err)));
+  }
+};
+window.bubbleNativeGoogleError = message => {
+  cloudStatus('⚠️ ' + message);
+};
+window.bubbleGoogleLogin=()=>{
+ if(typeof window.Android?.startGoogleSignIn==='function'){
+   if(!configured){alert('Configure Firebase first.');return;}
+   cloudStatus('Opening Android Google sign-in...');
+   window.Android.startGoogleSignIn();
+   return;
+ }
+ return safeAction(async()=>{
  if(!configured){alert('Set up a Firebase project and add its web app config to this HTML file first.');return;}
  cloudStatus('Opening Google sign-in...');
  await setPersistence(auth,browserLocalPersistence);
  const provider=new GoogleAuthProvider();
  try {await signInWithPopup(auth,provider);}
  catch(err){if(['auth/popup-blocked','auth/operation-not-supported-in-this-environment'].includes(err.code)){await signInWithRedirect(auth,provider);}else throw err;}
-});
+ });
+};
 // Delete data belonging to the signed-in user only; never delete browser saves or the Google account.
 // Three independent confirmation dialogs provide chances to cancel.
 window.bubbleDeleteAllCloudData = async () => {
