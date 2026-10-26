@@ -11483,13 +11483,11 @@ window.bubbleDeleteAllCloudData = async () => {
  }
 };
 window.bubbleLogout=()=>safeAction(async()=> {
-if (auth) {
-	if (confirm("Are you sure you want to log out?") {
+if (auth && confirm("Are you sure you want to log out?") {
 	await signOut(auth);
 	$('bubbleAccountDialog').style.display='none';
 	cloudStatus('Logged out. Your local saves are still here.');
 	}
-  }
 });
 	
 window.bubbleOpenAccountSettings=async()=>{
