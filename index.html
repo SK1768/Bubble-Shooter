@@ -2790,6 +2790,7 @@ fadeTransition(() => {
     unlockedAchievements = {};
     saveAchievements();
     renderAchievements();
+    if (typeof window.bubbleCloudCategoryReset === 'function') window.bubbleCloudCategoryReset('achievements');
 }, 2500, false);
 }
 	const toggleMusicPlayerBtn = document.getElementById("toggleMusicPlayerBtn");
@@ -3502,7 +3503,10 @@ function resetStats() {
     showSecretText('Resetting stats...', 2500)
     fadeTransition(() => {
     stats = { ...DEFAULT_STATS };
-    saveStats();
+    // Save the actual default values: saveStats() may restore a high score
+    // from the currently running game's score.
+    localStorage.setItem('bubbleShooterStats', JSON.stringify(stats));
+    if (typeof window.bubbleCloudCategoryReset === 'function') window.bubbleCloudCategoryReset('stats');
     updateStatsBoard();
 
     logInfo("Player stats reset.");
@@ -11097,7 +11101,7 @@ window.bubbleApplyCloudTheme=(colours,updatedAt)=>{
 };
 window.openThemeStudio=()=>document.getElementById('themeStudio').classList.add('open');
 window.closeThemeStudio=()=>document.getElementById('themeStudio').classList.remove('open');
-window.resetThemeStudio=()=>{if(!confirm("Are you sure you want to reset the colours back to its default settings?"))return;for(const [k,,v] of choices){document.getElementById('theme-'+k).value=v;apply(k,v)}save();if(themeImageDB){for(const [key] of imageSlots){imageTransaction(key,'delete').then(()=>displayThemeImage(key,null)).catch(e=>console.warn('Could not clear image',e))}}};
+window.resetThemeStudio=()=>{if(!confirm("Are you sure you want to reset the colours back to its default settings?"))return;for(const [k,,v] of choices){document.getElementById('theme-'+k).value=v;apply(k,v)}save();window.dispatchEvent(new Event('bubbleThemeReset'));if(themeImageDB){for(const [key] of imageSlots){imageTransaction(key,'delete').then(()=>displayThemeImage(key,null)).catch(e=>console.warn('Could not clear image',e))}}};
 const menu=document.getElementById('mainMenu');if(menu){const btn=document.createElement('button');btn.id='themeStudioBtn';btn.textContent='🎨 COLOUR STUDIO';btn.onclick=window.openThemeStudio;btn.onmouseenter=()=>{if(typeof setMenuDesc==='function')setMenuDesc('Customise the colours of the menu, gameplay, backgrounds, popups and error screens.')};btn.onmouseleave=()=>{if(typeof clearMenuDesc==='function')clearMenuDesc()};const target=menu.querySelector('#autosaveToggle');if(target)target.before(btn,document.createElement('br'));else menu.append(btn)}
 document.getElementById('themeStudio').addEventListener('click',e=>{if(e.target.id==='themeStudio')closeThemeStudio()});
 })();
@@ -11186,7 +11190,7 @@ window.bubbleResumeCloudSync=()=>safeAction(async()=>{
  if(!confirm('Resume cloud syncing? Your local save data, achievements, statistics and colours can be uploaded to your Google account again.'))return;
  const uid=activeUser.uid;
  // Removing the reset marker is an EXPLICIT action; never do this just by logging in.
- await deleteDoc(doc(db,'bubbleUsers',uid,'progress','achievements'));
+ await setDoc(doc(db,'bubbleUsers',uid,'progress','achievements'),{cloudReset:false,cloudResetAt:null},{merge:true});
  if(activeUser?.uid!==uid)return;
  $('bubbleResumeCloudButton').style.display='none';
  progressReadyUid=null;themeReadyUid=null;
@@ -11213,6 +11217,15 @@ let progressSyncTimer = null;
 let progressReadyUid = null;
 let progressSyncBusy = false;
 let progressSyncAgain = false;
+// A reset is authoritative for its own field. Never merge an old cloud value
+// back into a category the player just explicitly reset.
+const pendingCloudCategoryResets = new Map();
+window.bubbleCloudCategoryReset = category => {
+ if(category !== 'stats' && category !== 'achievements') return;
+ pendingCloudCategoryResets.set(category, category === 'stats' ? JSON.parse(JSON.stringify(stats)) : JSON.parse(JSON.stringify(unlockedAchievements)));
+ if(!activeUser || cloudDeleteInProgress) return; // local reset only; respect cloud tombstone
+ void synchronizeAchievements(activeUser.uid);
+};
 function mergeProgressStats(local, remote) {
  const result = {...(remote || {}), ...(local || {})};
  for (const key of new Set([...Object.keys(local || {}), ...Object.keys(remote || {})])) {
@@ -11250,8 +11263,10 @@ async function synchronizeAchievements(uid, showAlert=false){
    return;
   }
   const cloud=current.exists()?current.data():{};
-  const merged=mergedTrophies(unlockedAchievements,cloud.unlockedAchievements);
-  const mergedStats=mergeProgressStats(stats,cloud.stats);
+  const resetAchievementsNow=pendingCloudCategoryResets.has('achievements');
+  const resetStatsNow=pendingCloudCategoryResets.has('stats');
+  const merged=resetAchievementsNow ? {...pendingCloudCategoryResets.get('achievements')} : mergedTrophies(unlockedAchievements,cloud.unlockedAchievements);
+  const mergedStats=resetStatsNow ? {...pendingCloudCategoryResets.get('stats')} : mergeProgressStats(stats,cloud.stats);
   // Refresh local cache and achievement display without triggering popups.
   unlockedAchievements=merged;
   localStorage.setItem('bubbleAchievements',JSON.stringify(merged));
@@ -11260,7 +11275,14 @@ async function synchronizeAchievements(uid, showAlert=false){
   if (typeof renderAchievements==='function') renderAchievements();
   if (cloudDeleteInProgress || !activeUser || activeUser.uid !== uid) return;
   if(!await cloudWriteAllowed(uid))return;
-  await setDoc(ref,{unlockedAchievements:merged,stats:mergedStats,updatedAt:Date.now()});
+  // Keep the same progress/achievements document: it also carries cloudReset.
+  // Merge keeps any extra metadata; reset categories are overwritten, not maximised.
+  await setDoc(ref,{unlockedAchievements:merged,stats:mergedStats,updatedAt:Date.now()},{merge:true});
+  if(resetAchievementsNow && pendingCloudCategoryResets.get('achievements') && JSON.stringify(pendingCloudCategoryResets.get('achievements'))===JSON.stringify(merged))pendingCloudCategoryResets.delete('achievements');
+  if(resetStatsNow && pendingCloudCategoryResets.get('stats') && JSON.stringify(pendingCloudCategoryResets.get('stats'))===JSON.stringify(mergedStats))pendingCloudCategoryResets.delete('stats');
+  // A reset may arrive while a previous upload is in flight. Preserve its local snapshot.
+  if(pendingCloudCategoryResets.has('achievements')){unlockedAchievements={...pendingCloudCategoryResets.get('achievements')};localStorage.setItem('bubbleAchievements',JSON.stringify(unlockedAchievements));if(typeof renderAchievements==='function')renderAchievements();}
+  if(pendingCloudCategoryResets.has('stats')){stats={...pendingCloudCategoryResets.get('stats')};localStorage.setItem('bubbleShooterStats',JSON.stringify(stats));}
   progressReadyUid=uid;
   const count=Object.values(merged).filter(v=>v===true || v?.unlocked).length;
   showAchievementCloudStatus(`🏆 ${count} achievements synced to Google Cloud (including statistics).`);
@@ -11310,7 +11332,7 @@ async function syncTheme(force=false){
   const localTime=Number(localStorage.getItem('skBubbleThemeUpdatedAt')||0);
   const remoteTime=Number(remote?.updatedAt||0);
   const hasLocal=Object.keys(local).length>0;
-  if(remote && (!hasLocal || remoteTime>localTime)){
+  if(remote && !force && (!hasLocal || remoteTime>localTime)){
     if(typeof window.bubbleApplyCloudTheme!=='function')throw Error('Colour Studio is not ready.');
     window.bubbleApplyCloudTheme(remote.colors,remoteTime);
     themeStatus('🎨 Colour settings downloaded from Google Cloud.');
@@ -11331,6 +11353,12 @@ window.addEventListener('bubbleThemeChanged',()=>{
  if(!activeUser || themeReadyUid!==activeUser.uid)return;
  if(themeSyncTimer)clearTimeout(themeSyncTimer);
  themeSyncTimer=setTimeout(()=>{themeSyncTimer=null;void syncTheme();},1200);
+});
+window.addEventListener('bubbleThemeReset',()=>{
+ if(!activeUser || cloudDeleteInProgress)return;
+ if(themeSyncTimer)clearTimeout(themeSyncTimer);
+ // Reset defaults are intentional: upload them, don't download older colours.
+ themeSyncTimer=setTimeout(()=>{themeSyncTimer=null;void syncTheme(true);},1500);
 });
 async function uploadRow(row){
  if(cloudDeleteInProgress || !activeUser)return false;
@@ -11433,7 +11461,6 @@ window.bubbleDeleteAllCloudData = async () => {
   const paths=[
    ['checkpoints','puzzle_checkpoint'],
    ['checkpoints','container_checkpoint'],
-   ['progress','achievements'],
    ['preferences','colourStudio']
   ];
   for(const [group,key] of paths){
@@ -11531,6 +11558,7 @@ if(configured){
    progressReadyUid=null;
    themeReadyUid=null;
    if(themeSyncTimer){clearTimeout(themeSyncTimer);themeSyncTimer=null;}
+   if(prior !== user?.uid)pendingCloudCategoryResets.clear();
    activeUser=user;
    updateCard();
    cloudStatus(user?'✅ Google account connected. Cloud saves enabled.':'Not logged in. Your local saves are available.');
