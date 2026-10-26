@@ -11285,7 +11285,7 @@ async function synchronizeAchievements(uid, showAlert=false){
   if(pendingCloudCategoryResets.has('stats')){stats={...pendingCloudCategoryResets.get('stats')};localStorage.setItem('bubbleShooterStats',JSON.stringify(stats));}
   progressReadyUid=uid;
   const count=Object.values(merged).filter(v=>v===true || v?.unlocked).length;
-  const sp = count === 1 ? "s" : "";
+  const sp = count === 1 ? "" : "s";
   showAchievementCloudStatus(`🏆 ${count} achievement${sp} synced to Google Cloud (including statistics).`);
   if(showAlert)alert(`${count} unlocked achievement${sp} and your statistics have been synced.`);
  } catch(err){
@@ -11513,7 +11513,7 @@ window.bubbleOpenAccountSettings=async()=>{
   
   return Number.isInteger(value) && value >= 1 ? String(value) : 'not yet saved';
  };
- const sp = slots.size === 1 ? "s" : "";
+ const sp = slots.size === 1 ? "" : "s";
  $('bubbleCloudSummary').textContent = `☁️ ${slots.size} cloud save slot${sp} · Puzzle level: ${showLevel(puzzleCheckpoint)}, Container level: ${showLevel(containerCheckpoint)}`;
  }catch(err){$('bubbleCloudSummary').textContent='Could not check cloud status: '+err.message;}
 };
@@ -11523,7 +11523,7 @@ window.bubbleSyncUp=()=>safeAction(async()=>{
  if(!await cloudWriteAllowed(activeUser.uid,true)){alert('Cloud uploads are paused because this account’s cloud data was deleted. Choose Resume cloud syncing in Account Settings first.');return;}
  for(const row of Object.values(rows)){if(await uploadRow(row))uploaded++;}
  if(typeof gameRunning!=='undefined'&&gameRunning)await uploadCheckpoint();
-  const sp = uploaded === 1 ? "s" : "";
+  const sp = uploaded === 1 ? "" : "s";
  cloudStatus(`☁️ Uploaded ${uploaded} local save slot${sp}.`);
  alert(`Cloud sync complete: ${uploaded} slot${sp} uploaded. Newer cloud slots were kept.`);
 });
@@ -11547,7 +11547,7 @@ window.bubbleSyncDown=()=>safeAction(async()=>{
   });
   downloaded++;
  }
- const sp = downloaded === 1 ? "s" : "";
+ const sp = downloaded === 1 ? "" : "s";
  cloudStatus(`☁️ Downloaded ${downloaded} save${sp}, kept ${skipped}.`);
  alert(`Downloaded ${downloaded} cloud save${sp}. ${skipped} local saves kept. Open SAVE SLOTS to load one.`);
 });
