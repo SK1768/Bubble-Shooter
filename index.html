@@ -3533,7 +3533,8 @@ let isCampaignMode = false;
     let loadedProgressOverride = null;
     const CAMPAIGN_TIME_LIMIT = 300; // 5 minutes in seconds
     const COLORLESS = null;
-    let showGrid = false;
+    let showGrid = localStorage.getItem('bubbleShowGrid') === 'true';
+    let showGhost = localStorage.getItem('bubbleShowGhost') !== 'false';
 let levelPattern = 0;
     let panicMode = false;
 let panicFlash = false;
@@ -5788,6 +5789,7 @@ else if (cmd === '!showgrid') {
     }
 
     showGrid = (arg === 'true');
+    saveVisualPreference();
 
     alert(
         `Grid overlay ${showGrid ? "ENABLED" : "DISABLED"}`
@@ -6032,9 +6034,41 @@ function toggleColorblind() {
     colorblindMode = !colorblindMode;
     localStorage.setItem('bubbleColorblind', colorblindMode);
     updateColorblindButton();
+    saveVisualPreference();
 }
 
 updateColorblindButton();
+// Shared bridge for the Firebase module. These flags are lexical globals, not window properties.
+function saveVisualPreference() {
+    localStorage.setItem('bubbleShowGrid', String(showGrid));
+    localStorage.setItem('bubbleShowGhost', String(showGhost));
+    localStorage.setItem('bubbleColorblind', String(colorblindMode));
+    localStorage.setItem('bubbleVisualUpdatedAt', String(Date.now()));
+    window.dispatchEvent(new Event('bubbleVisualPreferencesChanged'));
+}
+window.bubbleVisualPreferences = {
+    get() { return {grid:showGrid, ghost:showGhost, colourblind:colorblindMode}; },
+    set(values, remoteTime) {
+        if (!values || typeof values !== 'object') return;
+        if (typeof values.grid === 'boolean') showGrid = values.grid;
+        if (typeof values.ghost === 'boolean') showGhost = values.ghost;
+        if (typeof values.colourblind === 'boolean') colorblindMode = values.colourblind;
+        localStorage.setItem('bubbleShowGrid',String(showGrid));
+        localStorage.setItem('bubbleShowGhost',String(showGhost));
+        localStorage.setItem('bubbleColorblind',String(colorblindMode));
+        if (Number.isFinite(Number(remoteTime))) localStorage.setItem('bubbleVisualUpdatedAt',String(remoteTime));
+        updateColorblindButton();
+        window.dispatchEvent(new Event('bubbleVisualPreferencesApplied'));
+    },
+    toggle(key) {
+        if (key === 'grid') showGrid = !showGrid;
+        else if (key === 'ghost') showGhost = !showGhost;
+        else if (key === 'colourblind') colorblindMode = !colorblindMode;
+        else return;
+        updateColorblindButton();
+        saveVisualPreference();
+    }
+};
 canvas.addEventListener("pointerdown", e => {
     if (!dragBubblesEnabled || isPaused || gameOver || gameWin) return;
 
@@ -6310,7 +6344,7 @@ canvas.addEventListener('mouseup', e => {
     if (e.button !== 0) return;
 
     // ✅ If dragging, handle drop FIRST and exit (so no shooting happens)
-    if (dragBubblesEnabled && draggedBubble && snapPreview) {
+    if (showGhost && dragBubblesEnabled && draggedBubble && snapPreview) {
         const ignore = (dragSource === 'grid') ? draggedBubble : null;
         const occupied = isCellOccupied(snapPreview.row, snapPreview.col, ignore);
 
@@ -9381,6 +9415,7 @@ function hasParentAbove(r, c) {
     );
 }
 function drawAimVisualizer() {
+        if (!showGhost) return;
 
         if (!aimEnabled || isPaused || gameOver || gameWin || isCustomMode || projectiles.length > 0 || winPending || conversionQueue.length > 0 || chainPopActive) return;
 
@@ -11156,6 +11191,9 @@ document.getElementById('themeStudio').addEventListener('click',e=>{if(e.target.
 .cloud-settings-status strong{color:#68f8c3}
 .cloud-settings-status strong.off{color:#ff9a9a}
 @media(max-width:650px){#bubbleAccountCard{width:min(270px,calc(100vw - 24px))}#bubbleAccountDialog .account-dialog-inner button{flex-basis:125px}.cloud-settings-status span{font-size:11px}}
+.visual-pref-controls{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+.visual-pref-controls button{flex:1 1 150px!important;white-space:nowrap}
+.visual-pref-controls button[aria-pressed="true"]{border-color:#61f7c6!important;background:linear-gradient(145deg,#176759,#153849)!important}
 </style>
 <!-- Google account / Firestore cloud saves. Set the config values from your OWN Firebase project. -->
 <div id="bubbleAccountDialog" role="dialog" aria-modal="true" aria-label="Account settings">
@@ -11163,6 +11201,13 @@ document.getElementById('themeStudio').addEventListener('click',e=>{if(e.target.
   <h2>☁️ ACCOUNT &amp; SETTINGS</h2>
   <div id="bubbleAccountDetails"></div>
   <div class="cloud-settings-status" id="bubbleSettingsStatusLine" aria-live="polite"><span>☁️ Cloud: <strong id="settingCloudState">Offline</strong></span><span>💾 Autosave: <strong id="settingAutosaveState">—</strong></span><span>▦ Grid: <strong id="settingGridState">—</strong></span><span>👁️ Ghost: <strong id="settingGhostState">—</strong></span><span>🎨 Colourblind: <strong id="settingColourblindState">—</strong></span></div>
+  <div class="visual-pref-controls" aria-label="Visual settings">
+    <button type="button" id="settingGridToggle" onclick="bubbleToggleVisualSetting('grid')">▦ Grid: Off</button>
+    <button type="button" id="settingGhostToggle" onclick="bubbleToggleVisualSetting('ghost')">👻 Ghost: On</button>
+    <button type="button" id="settingColourblindToggle" onclick="bubbleToggleVisualSetting('colourblind')">🎨 Colourblind: Off</button>
+  </div>
+  <p id="bubbleVisualSummary" class="account-note">🎮 Visual preferences are saved on this device.</p>
+  <div><button onclick="bubbleSyncVisualPreferences(true)">☁️ Sync visual preferences</button></div>
   <p id="bubbleImageSummary" class="account-note">🖼️ Background and loading screen images are stored locally until synced.</p>
   <div><button onclick="bubbleSyncImages()">🖼️ Sync background &amp; loading images</button></div>
   <p id="bubbleCloudSummary" class="account-note">Checking cloud saves...</p>
@@ -11252,6 +11297,7 @@ window.bubbleResumeCloudSync=()=>safeAction(async()=>{
  progressReadyUid=null;themeReadyUid=null;
  await synchronizeAchievements(uid);
  await syncTheme();
+ await syncVisualPreferences(true);
  cloudStatus('☁️ Cloud syncing resumed. Upload save slots manually or continue playing to create new checkpoints.');
 });
 const cloudStatus = message => { if ($('bubbleAccountStatus')) $('bubbleAccountStatus').textContent = message; };
@@ -11408,6 +11454,59 @@ window.bubbleSyncTheme=()=>{if(!requireAccount())return;void syncTheme(true);};
 
 // Each image is resized/compressed before Firestore upload (Firestore document limit ~1 MiB).
 // A separate timestamped document per image prevents accidental overwrites on sign-in.
+// Visual preferences use their own restricted Firestore document.
+let visualSyncTimer=null, visualSyncBusy=false;
+const visualStatus=message=>{const el=$('bubbleVisualSummary');if(el)el.textContent=message;};
+function refreshVisualControls(){
+ const values=window.bubbleVisualPreferences?.get();if(!values)return;
+ for(const [key,id,label,icon] of [['grid','settingGridToggle','Grid','▦'],['ghost','settingGhostToggle','Ghost','👻'],['colourblind','settingColourblindToggle','Colourblind','🎨']]){
+  const button=$(id);if(!button)continue;
+  button.textContent=icon+' '+label+': '+(values[key]?'On':'Off');
+  button.setAttribute('aria-pressed',String(values[key]));
+ }
+}
+window.bubbleToggleVisualSetting=key=>{
+ window.bubbleVisualPreferences?.toggle(key);
+ refreshVisualControls();updateSettingsStatusLine();
+};
+async function syncVisualPreferences(force=false){
+ const uid=activeUser?.uid;
+ if(!uid||!db||cloudDeleteInProgress||visualSyncBusy||!window.bubbleVisualPreferences)return;
+ visualSyncBusy=true;
+ try{
+  if(!await cloudWriteAllowed(uid)) {visualStatus('⚠️ Cloud sync is paused. Your visual settings remain on this device.');return;}
+  const ref=doc(db,'bubbleUsers',uid,'preferences','visualSettings');
+  const snapshot=await getDoc(ref);
+  if(activeUser?.uid!==uid||cloudDeleteInProgress)return;
+  const remote=snapshot.exists()?snapshot.data():null;
+  const localTime=Number(localStorage.getItem('bubbleVisualUpdatedAt')||0);
+  const remoteTime=Number(remote?.updatedAt||0);
+  if(remote&&!force&&(remoteTime>localTime || !localTime)){
+   window.bubbleVisualPreferences.set(remote.settings,remoteTime);
+   visualStatus('✅ Grid, Ghost and Colourblind settings downloaded from Google Cloud.');
+  }else if(!remote || force || localTime>remoteTime){
+   if(!await cloudWriteAllowed(uid))return;
+   const timestamp=Math.max(Date.now(),remoteTime+1);
+   await setDoc(ref,{settings:window.bubbleVisualPreferences.get(),updatedAt:timestamp});
+   localStorage.setItem('bubbleVisualUpdatedAt',String(timestamp));
+   visualStatus('✅ Grid, Ghost and Colourblind settings uploaded to Google Cloud.');
+  }else visualStatus('✅ Visual settings are already synced.');
+  refreshVisualControls();updateSettingsStatusLine();
+ }catch(err){
+  const code=String(err?.code||'unknown');
+  const suggestion=code==='permission-denied'?'Add visualSettings to the permitted preferences document IDs in Firestore Rules.':code==='unauthenticated'?'Sign into Google again.':'Check your internet connection and try again.';
+  console.warn('[Visual settings cloud sync] '+code+' | bubbleUsers/'+uid+'/preferences/visualSettings',err);
+  visualStatus('⚠️ Visual settings cloud sync failed ('+code+'). '+suggestion+' Your local settings are safe.');
+ }finally{visualSyncBusy=false;}
+}
+window.bubbleSyncVisualPreferences=force=>{if(!requireAccount())return;void syncVisualPreferences(Boolean(force));};
+window.addEventListener('bubbleVisualPreferencesChanged',()=>{
+ refreshVisualControls();updateSettingsStatusLine();
+ if(visualSyncTimer)clearTimeout(visualSyncTimer);
+ if(activeUser&&!cloudDeleteInProgress)visualSyncTimer=setTimeout(()=>{visualSyncTimer=null;void syncVisualPreferences();},1200);
+});
+window.addEventListener('bubbleVisualPreferencesApplied',()=>{refreshVisualControls();updateSettingsStatusLine();});
+refreshVisualControls();
 const imageSyncTimers={};
 const imageStatus=msg=>{const el=$('bubbleImageSummary');if(el)el.textContent=msg;};
 const imageStampKey=key=>'skBubbleImageUpdatedAt_'+key;
@@ -11486,10 +11585,10 @@ function updateSettingsStatusLine(){
  const set=(id,val)=>{const el=$(id);if(!el)return;el.textContent=val;el.classList.toggle('off',val==='Off'||val==='Offline');};
  set('settingCloudState',activeUser?'Online':'Offline');
  const auto=$('autosaveToggle');set('settingAutosaveState',auto?(auto.checked!==undefined?(auto.checked?'On':'Off'):(/on|enabled/i.test(auto.textContent)?'On':'Off')):'—');
- const getFlag=(...names)=>{for(const n of names){try{if(typeof window[n]==='boolean')return window[n]?'On':'Off';}catch(e){}}return '—';};
- set('settingGridState',getFlag('showGrid','gridEnabled'));
- set('settingGhostState',getFlag('showGhost','ghostPreviewEnabled'));
- set('settingColourblindState',getFlag('colorblindMode','colourblindMode'));
+ const visual=window.bubbleVisualPreferences?.get();
+ set('settingGridState',visual?(visual.grid?'On':'Off'):'—');
+ set('settingGhostState',visual?(visual.ghost?'On':'Off'):'—');
+ set('settingColourblindState',visual?(visual.colourblind?'On':'Off'):'—');
 }
 setInterval(()=>{if($('bubbleAccountDialog')?.style.display==='flex')updateSettingsStatusLine();},750);
 
@@ -11682,7 +11781,8 @@ window.bubbleDeleteAllCloudData = async () => {
             ['preferences', 'image_loading'],
             ['checkpoints', 'puzzle_checkpoint'],
             ['checkpoints', 'container_checkpoint'],
-            ['preferences', 'colourStudio']
+            ['preferences', 'colourStudio'],
+            ['preferences', 'visualSettings']
         ];
 
         for (const [group, key] of paths) {
@@ -11871,6 +11971,7 @@ if(configured){
       await uploadCheckpointOnSignIn();
       void synchronizeAchievements(user.uid);
       void syncTheme();
+      void syncVisualPreferences();
       void (async()=>{await syncThemeImage('back');await syncThemeImage('loading');})();
     })();
    } else if(!user){if($('bubbleResumeCloudButton'))$('bubbleResumeCloudButton').style.display='none';showAchievementCloudStatus('🏆 Achievements saved locally. Log in to sync.');themeStatus('🎨 Colour settings saved locally.');}
