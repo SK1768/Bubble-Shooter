@@ -8316,7 +8316,7 @@ if (dragBubblesEnabled && draggedBubble && snapPreview) {
     ctx.save();
 
     ctx.lineWidth = 3;
-    ctx.setLineDash([6, 6]);
+    ctx.setLineDash([]);
 
 ctx.strokeStyle =
     snapIsValidMatch
@@ -9416,7 +9416,7 @@ function hasParentAbove(r, c) {
 }
 function drawAimVisualizer() {
     // Ghost is independent of the separate aiming-line toggle.
-    if (!showGhost || isPaused || gameOver || gameWin || isCustomMode ||
+    if ((!aimEnabled && !showGhost) || isPaused || gameOver || gameWin || isCustomMode ||
         projectiles.length > 0 || winPending || conversionQueue.length > 0 ||
         chainPopActive || ammo <= 0) return;
 
@@ -9458,14 +9458,15 @@ function drawAimVisualizer() {
         ctx.strokeStyle = currentBall || '#ffffff';
         ctx.globalAlpha = 0.45;
         ctx.lineWidth = 2;
-        ctx.setLineDash([5, 7]);
+        ctx.setLineDash([]); // Solid aiming line, including wall bounces
         ctx.beginPath();
         ctx.moveTo(path[0].x, path[0].y);
         for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
         ctx.stroke();
         ctx.setLineDash([]);
     }
-    // Draw a real translucent landing bubble, not just the aiming trajectory.
+    // Ghost only controls the landing bubble; the aim line is independent.
+    if (showGhost) {
     ctx.globalAlpha = 0.42;
     drawAmmoBubble(ctx, simX, simY, RADIUS - 2, currentBall);
     if (colorblindMode) {
@@ -9479,6 +9480,7 @@ function drawAimVisualizer() {
         const symbol = COLOR_EMOJIS[currentBall] || '❔';
         ctx.strokeText(symbol, simX, simY);
         ctx.fillText(symbol, simX, simY);
+    }
     }
     ctx.restore();
 }
