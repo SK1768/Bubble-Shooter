@@ -8940,6 +8940,10 @@ function endDailyPuzzle(completed) {
     data.lastPlayedTime = Date.now();
     saveDailyData(data);
     updateDailyLastPlayedText();
+    // The Android app schedules a one-time notification for the next local midnight.
+    if (window.Android && typeof window.Android.dailyPuzzleCompleted === "function") {
+        window.Android.dailyPuzzleCompleted();
+    }
 
     if (completed) {
         stats.dailyPuzzleCompleted = (stats.dailyPuzzleCompleted || 0) + 1;
@@ -11101,10 +11105,10 @@ for(const [key,label] of imageSlots){
     const blob=file.files&&file.files[0];if(!blob)return;
     if(!['image/png','image/jpeg'].includes(blob.type)){alert('Please select a PNG or JPG image.');file.value='';return;}
     if(!themeImageDB){alert('Browser image storage is unavailable.');file.value='';return;}
-    try{await imageTransaction(key,'put',blob);displayThemeImage(key,blob)}catch(err){alert('Could not save the image in browser storage: '+err.message)}
+    try{await imageTransaction(key,'put',blob);displayThemeImage(key,blob);window.dispatchEvent(new CustomEvent('bubbleThemeImageChanged',{detail:{key}}))}catch(err){alert('Could not save the image in browser storage: '+err.message)}
     file.value='';
   });
-  remove.onclick=async()=>{if(!themeImageDB){alert('Browser image storage is unavailable.');return}try{await imageTransaction(key,'delete');displayThemeImage(key,null)}catch(err){alert('Could not remove image: '+err.message)}};
+  remove.onclick=async()=>{if(!themeImageDB){alert('Browser image storage is unavailable.');return}try{await imageTransaction(key,'delete');displayThemeImage(key,null);window.dispatchEvent(new CustomEvent('bubbleThemeImageChanged',{detail:{key}}))}catch(err){alert('Could not remove image: '+err.message)}};
   row.append(title,upload,remove,file,status);document.getElementById('themeImageOptions').append(row);
 }
 openThemeImageDB().then(async db=>{
@@ -11116,6 +11120,8 @@ openThemeImageDB().then(async db=>{
   }
 }).catch(e=>{for(const [key] of imageSlots){const status=document.getElementById('theme-image-status-'+key);if(status)status.textContent='Image caching unavailable in this browser'}console.warn('Theme image storage unavailable:',e)});
 
+window.bubbleReadThemeImage=async key=>{const db=themeImageDB||await openThemeImageDB();const tx=db.transaction('images','readonly');return new Promise((resolve,reject)=>{const req=tx.objectStore('images').get(key);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);});};
+window.bubbleWriteThemeImage=async(key,blob)=>{const db=themeImageDB||await openThemeImageDB();const tx=db.transaction('images','readwrite');await new Promise((resolve,reject)=>{const req=blob?tx.objectStore('images').put(blob,key):tx.objectStore('images').delete(key);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});displayThemeImage(key,blob);};
 window.bubbleApplyCloudTheme=(colours,updatedAt)=>{
   if(!colours || typeof colours!=='object')return;
   for(const [key,,fallback] of choices){
@@ -11127,17 +11133,38 @@ window.bubbleApplyCloudTheme=(colours,updatedAt)=>{
 };
 window.openThemeStudio=()=>document.getElementById('themeStudio').classList.add('open');
 window.closeThemeStudio=()=>document.getElementById('themeStudio').classList.remove('open');
-window.resetThemeStudio=()=>{if(!confirm("Are you sure you want to reset the colours back to its default settings?"))return;for(const [k,,v] of choices){document.getElementById('theme-'+k).value=v;apply(k,v)}save();window.dispatchEvent(new Event('bubbleThemeReset'));if(themeImageDB){for(const [key] of imageSlots){imageTransaction(key,'delete').then(()=>displayThemeImage(key,null)).catch(e=>console.warn('Could not clear image',e))}}};
+window.resetThemeStudio=()=>{if(!confirm("Are you sure you want to reset the colours back to its default settings?"))return;for(const [k,,v] of choices){document.getElementById('theme-'+k).value=v;apply(k,v)}save();window.dispatchEvent(new Event('bubbleThemeReset'));if(themeImageDB){for(const [key] of imageSlots){imageTransaction(key,'delete').then(()=>{displayThemeImage(key,null);window.dispatchEvent(new CustomEvent('bubbleThemeImageChanged',{detail:{key}}))}).catch(e=>console.warn('Could not clear image',e))}}};
 const menu=document.getElementById('mainMenu');if(menu){const btn=document.createElement('button');btn.id='themeStudioBtn';btn.textContent='🎨 COLOUR STUDIO';btn.onclick=window.openThemeStudio;btn.onmouseenter=()=>{if(typeof setMenuDesc==='function')setMenuDesc('Customise the colours of the menu, gameplay, backgrounds, popups and error screens.')};btn.onmouseleave=()=>{if(typeof clearMenuDesc==='function')clearMenuDesc()};const target=menu.querySelector('#autosaveToggle');if(target)target.before(btn,document.createElement('br'));else menu.append(btn)}
 document.getElementById('themeStudio').addEventListener('click',e=>{if(e.target.id==='themeStudio')closeThemeStudio()});
 })();
 </script>
 
+<style id="accountRedesignStyles">
+#bubbleAccountCard{width:min(350px,calc(100vw - 24px));border-radius:20px;padding:15px;box-shadow:0 15px 45px #0009,0 0 25px #00f5d41f!important;backdrop-filter:blur(14px)}
+#bubbleAccountCard .account-heading{letter-spacing:1.6px;text-align:left;border-bottom:1px solid #ffffff24;padding-bottom:10px}
+#bubbleAccountCard #bubbleAccountUser>div:first-child{display:flex;align-items:center;justify-content:center;gap:9px;padding:8px}
+#bubbleAccountCard #bubbleAccountStatus{padding:9px 11px;background:#0005;border:1px solid #ffffff1c;border-radius:11px;line-height:1.4}
+#bubbleAccountCard .account-buttons button{border-radius:11px;box-shadow:0 3px 12px #0005}
+#bubbleAccountDialog .account-dialog-inner{width:min(680px,96vw);border-radius:24px;padding:clamp(14px,3vw,25px);text-align:left;box-shadow:0 25px 75px #000b,0 0 32px #22e2ff2a!important}
+#bubbleAccountDialog .account-dialog-inner h2{margin:0 0 12px;font-size:clamp(20px,4vw,27px);border-bottom:1px solid #ffffff2b;padding-bottom:12px}
+#bubbleAccountDialog .account-dialog-inner>div:not(#bubbleAccountDetails):not(.cloud-settings-status){display:flex;flex-wrap:wrap;gap:7px;margin:8px 0}
+#bubbleAccountDialog .account-dialog-inner button{flex:1 1 185px;margin:0;border-radius:11px;padding:11px 13px}
+#bubbleAccountDialog .account-note{background:#07152899;border:1px solid #ffffff19;border-radius:10px;padding:9px 11px;margin:7px 0}
+.cloud-settings-status{display:flex;flex-wrap:wrap;align-items:center;gap:0;border:1px solid #3cebdc66;background:#04182cba;border-radius:13px;margin:12px 0;padding:8px}
+.cloud-settings-status span{padding:5px 10px;font-size:12px;border-right:1px solid #ffffff36;white-space:nowrap}
+.cloud-settings-status span:last-child{border-right:0}
+.cloud-settings-status strong{color:#68f8c3}
+.cloud-settings-status strong.off{color:#ff9a9a}
+@media(max-width:650px){#bubbleAccountCard{width:min(270px,calc(100vw - 24px))}#bubbleAccountDialog .account-dialog-inner button{flex-basis:125px}.cloud-settings-status span{font-size:11px}}
+</style>
 <!-- Google account / Firestore cloud saves. Set the config values from your OWN Firebase project. -->
 <div id="bubbleAccountDialog" role="dialog" aria-modal="true" aria-label="Account settings">
  <div class="account-dialog-inner">
-  <h2>☁️ Account settings</h2>
+  <h2>☁️ ACCOUNT &amp; SETTINGS</h2>
   <div id="bubbleAccountDetails"></div>
+  <div class="cloud-settings-status" id="bubbleSettingsStatusLine" aria-live="polite"><span>☁️ Cloud: <strong id="settingCloudState">Offline</strong></span><span>💾 Autosave: <strong id="settingAutosaveState">—</strong></span><span>▦ Grid: <strong id="settingGridState">—</strong></span><span>👁️ Ghost: <strong id="settingGhostState">—</strong></span><span>🎨 Colourblind: <strong id="settingColourblindState">—</strong></span></div>
+  <p id="bubbleImageSummary" class="account-note">🖼️ Background and loading screen images are stored locally until synced.</p>
+  <div><button onclick="bubbleSyncImages()">🖼️ Sync background &amp; loading images</button></div>
   <p id="bubbleCloudSummary" class="account-note">Checking cloud saves...</p>
   <p id="bubbleAchievementSummary" class="account-note">🏆 Achievements will sync with your Google account.</p>
   <div><button onclick="bubbleSyncAchievements()">🏆 Sync achievements &amp; stats</button></div>
@@ -11338,8 +11365,7 @@ window.bubbleSyncAchievements=()=>{
  if(progressSyncTimer){clearTimeout(progressSyncTimer);progressSyncTimer=null;}
  void synchronizeAchievements(activeUser.uid,true);
 };
-// Colour Studio settings are small and kept in Firestore per logged in user.
-// Local custom background images stay in IndexedDB and are not uploaded to Firestore.
+// Colour Studio colours sync to Firestore; custom images sync to separate preference documents.
 let themeSyncTimer=null, themeReadyUid=null, themeSyncBusy=false;
 const themeKeys=['menu','game','pop','back','wall','alert','warn','loading'];
 function localTheme(){
@@ -11379,6 +11405,72 @@ async function syncTheme(force=false){
  finally{themeSyncBusy=false;}
 }
 window.bubbleSyncTheme=()=>{if(!requireAccount())return;void syncTheme(true);};
+
+// Each image is resized/compressed before Firestore upload (Firestore document limit ~1 MiB).
+// A separate timestamped document per image prevents accidental overwrites on sign-in.
+const imageSyncTimers={};
+const imageStatus=msg=>{const el=$('bubbleImageSummary');if(el)el.textContent=msg;};
+const imageStampKey=key=>'skBubbleImageUpdatedAt_'+key;
+function imageBlobToDataURL(blob){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob);});}
+async function compactImage(blob){
+ const bitmap=await createImageBitmap(blob);
+ try{
+  const scale=Math.min(1,1280/Math.max(bitmap.width,bitmap.height));
+  const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+  const ctx=canvas.getContext('2d');ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+  for(const quality of [.82,.68,.5,.35]){
+   const data=canvas.toDataURL('image/jpeg',quality);
+   if(data.length<650000)return data;
+  }
+  throw Error('Image is too large for cloud storage. Choose a smaller image.');
+ }finally{bitmap.close();}
+}
+async function syncThemeImage(key,force=false){
+ const uid=activeUser?.uid;if(!uid||cloudDeleteInProgress||!db)return;
+ const label=key==='back'?'Background':'Loading screen';
+ try{
+  if(!await cloudWriteAllowed(uid))return;
+  const ref=doc(db,'bubbleUsers',uid,'preferences','image_'+key);
+  const remoteSnap=await getDoc(ref);if(activeUser?.uid!==uid||cloudDeleteInProgress)return;
+  const remote=remoteSnap.exists()?remoteSnap.data():null;
+  const local=await window.bubbleReadThemeImage(key);
+  const localTime=Number(localStorage.getItem(imageStampKey(key))||0);
+  const remoteTime=Number(remote?.updatedAt||0);
+  if(remote&&!force&&(remoteTime>localTime || (!localTime&&!local))){
+   let blob=null;
+   if(remote.dataURL){const response=await fetch(remote.dataURL);blob=await response.blob();}
+   if(activeUser?.uid!==uid)return;
+   await window.bubbleWriteThemeImage(key,blob);
+   localStorage.setItem(imageStampKey(key),String(remoteTime));
+   imageStatus('🖼️ '+label+' image downloaded from cloud.');
+  }else if(force || !remote || localTime>remoteTime){
+   if(!await cloudWriteAllowed(uid))return;
+   const dataURL=local?await compactImage(local):null;
+   const updatedAt=Math.max(Date.now(),remoteTime+1);
+   await setDoc(ref,{dataURL,updatedAt});
+   localStorage.setItem(imageStampKey(key),String(updatedAt));
+   imageStatus('🖼️ '+label+' image synced to cloud.');
+  }else imageStatus('🖼️ '+label+' image already synced.');
+ }catch(err){console.warn('Image cloud sync:',err);imageStatus('⚠️ '+label+' image sync failed: '+(err.message||err));}
+}
+window.bubbleSyncImages=()=>{if(!requireAccount())return;void (async()=>{await syncThemeImage('back');await syncThemeImage('loading');})();};
+window.addEventListener('bubbleThemeImageChanged',e=>{
+ const key=e.detail?.key;if(!['back','loading'].includes(key))return;
+ localStorage.setItem(imageStampKey(key),String(Date.now()));
+ if(imageSyncTimers[key])clearTimeout(imageSyncTimers[key]);
+ if(activeUser)imageSyncTimers[key]=setTimeout(()=>void syncThemeImage(key),1300);
+});
+function updateSettingsStatusLine(){
+ const set=(id,val)=>{const el=$(id);if(!el)return;el.textContent=val;el.classList.toggle('off',val==='Off'||val==='Offline');};
+ set('settingCloudState',activeUser?'Online':'Offline');
+ const auto=$('autosaveToggle');set('settingAutosaveState',auto?(auto.checked!==undefined?(auto.checked?'On':'Off'):(/on|enabled/i.test(auto.textContent)?'On':'Off')):'—');
+ const getFlag=(...names)=>{for(const n of names){try{if(typeof window[n]==='boolean')return window[n]?'On':'Off';}catch(e){}}return '—';};
+ set('settingGridState',getFlag('showGrid','gridEnabled'));
+ set('settingGhostState',getFlag('showGhost','ghostPreviewEnabled'));
+ set('settingColourblindState',getFlag('colorblindMode','colourblindMode'));
+}
+setInterval(()=>{if($('bubbleAccountDialog')?.style.display==='flex')updateSettingsStatusLine();},750);
+
 window.addEventListener('bubbleThemeChanged',()=>{
  if(!activeUser || themeReadyUid!==activeUser.uid)return;
  if(themeSyncTimer)clearTimeout(themeSyncTimer);
@@ -11564,6 +11656,8 @@ window.bubbleDeleteAllCloudData = async () => {
         }
 
         const paths = [
+            ['preferences', 'image_back'],
+            ['preferences', 'image_loading'],
             ['checkpoints', 'puzzle_checkpoint'],
             ['checkpoints', 'container_checkpoint'],
             ['preferences', 'colourStudio']
@@ -11606,6 +11700,8 @@ window.bubbleDeleteAllCloudData = async () => {
             status.textContent = '🧹 Clearing localStorage and IndexedDB...';
         }
 
+        localStorage.removeItem('skBubbleImageUpdatedAt_back');
+        localStorage.removeItem('skBubbleImageUpdatedAt_loading');
         // Clear locally saved progress, statistics and settings.
         localStorage.clear();
         sessionStorage.clear();
@@ -11753,6 +11849,7 @@ if(configured){
       await uploadCheckpointOnSignIn();
       void synchronizeAchievements(user.uid);
       void syncTheme();
+      void (async()=>{await syncThemeImage('back');await syncThemeImage('loading');})();
     })();
    } else if(!user){if($('bubbleResumeCloudButton'))$('bubbleResumeCloudButton').style.display='none';showAchievementCloudStatus('🏆 Achievements saved locally. Log in to sync.');themeStatus('🎨 Colour settings saved locally.');}
   });
