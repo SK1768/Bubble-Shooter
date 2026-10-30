@@ -11430,7 +11430,8 @@ async function syncThemeImage(key,force=false){
  const label=key==='back'?'Background':'Loading screen';
  try{
   if(!await cloudWriteAllowed(uid))return;
-  const ref=doc(db,'bubbleUsers',uid,'preferences','image_'+key);
+  const documentId=key==='back'?'image_background':'image_loading';
+  const ref=doc(db,'bubbleUsers',uid,'preferences',documentId);
   const remoteSnap=await getDoc(ref);if(activeUser?.uid!==uid||cloudDeleteInProgress)return;
   const remote=remoteSnap.exists()?remoteSnap.data():null;
   const local=await window.bubbleReadThemeImage(key);
@@ -11451,7 +11452,28 @@ async function syncThemeImage(key,force=false){
    localStorage.setItem(imageStampKey(key),String(updatedAt));
    imageStatus('🖼️ '+label+' image synced to cloud.');
   }else imageStatus('🖼️ '+label+' image already synced.');
- }catch(err){console.warn('Image cloud sync:',err);imageStatus('⚠️ '+label+' image sync failed: '+(err.message||err));}
+ }catch(err){
+  const code=String(err?.code||'unknown');
+  const path='bubbleUsers/'+uid+'/preferences/'+(key==='back'?'image_background':'image_loading');
+  let reason='The cloud request could not be completed.';
+  let action='Check your connection and try syncing again.';
+  if(code==='permission-denied'){
+   reason='Firebase denied access to this image document.';
+   action='Check your published Firestore rules and make sure you are signed into the correct Google account.';
+  }else if(code==='unauthenticated'){
+   reason='Your Google sign-in session is not authenticated.';
+   action='Sign in again and retry cloud sync.';
+  }else if(code==='unavailable'||code==='deadline-exceeded'){
+   reason='Firebase is temporarily unreachable.';
+   action='Check your internet connection and retry later.';
+  }else if(/too large|exceed|size|quota/i.test(String(err?.message||''))){
+   reason='The image may exceed Firebase storage limits.';
+   action='Try a smaller image or a compressed JPG.';
+  }
+  const message='⚠️ '+label+' cloud sync failed ('+code+'). '+reason+' Your local image has not been deleted. '+action;
+  console.warn('[Image cloud sync] '+label+' | '+path+' | '+code+' | '+reason+' | '+action,err);
+  imageStatus(message);
+ }
 }
 window.bubbleSyncImages=()=>{if(!requireAccount())return;void (async()=>{await syncThemeImage('back');await syncThemeImage('loading');})();};
 window.addEventListener('bubbleThemeImageChanged',e=>{
@@ -11656,7 +11678,7 @@ window.bubbleDeleteAllCloudData = async () => {
         }
 
         const paths = [
-            ['preferences', 'image_back'],
+            ['preferences', 'image_background'],
             ['preferences', 'image_loading'],
             ['checkpoints', 'puzzle_checkpoint'],
             ['checkpoints', 'container_checkpoint'],
