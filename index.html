@@ -9415,66 +9415,73 @@ function hasParentAbove(r, c) {
     );
 }
 function drawAimVisualizer() {
-        if (!showGhost) return;
+    // Ghost is independent of the separate aiming-line toggle.
+    if (!showGhost || isPaused || gameOver || gameWin || isCustomMode ||
+        projectiles.length > 0 || winPending || conversionQueue.length > 0 ||
+        chainPopActive || ammo <= 0) return;
 
-        if (!aimEnabled || isPaused || gameOver || gameWin || isCustomMode || projectiles.length > 0 || winPending || conversionQueue.length > 0 || chainPopActive) return;
+    const startX = canvas.width / 2;
+    const startY = canvas.height - 80;
+    let simX = startX, simY = startY;
+    let dx = Math.cos(angle) * 5;
+    let dy = Math.sin(angle) * 5;
+    if (!Number.isFinite(dx) || !Number.isFinite(dy) || dy >= -0.001) return;
 
-        if (
-            mouseX < 0 ||
-            mouseX > canvas.width ||
-            mouseY < 0 ||
-            mouseY > DEADLINE
-        ) return;
-
-        const startX = canvas.width / 2;
-        const startY = canvas.height - 80;
-
-        let simX = startX;
-        let simY = startY;
-        let dx = Math.cos(angle) * 12;
-        let dy = Math.sin(angle) * 12;
-
-        ctx.save();
-        ctx.strokeStyle = currentBall;
-        ctx.globalAlpha = 0.6;
-        ctx.setLineDash([9999, 9999]);
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(simX, simY);
-
-        for (let i = 0; i < 500; i++) {
-
-            simX += dx;
-            simY += dy;
-
-            // wall bounce
-            if (simX < RADIUS || simX > canvas.width - RADIUS) {
-                dx *= -1;
-            }
-
-            // hit ceiling
-            if (simY < RADIUS) {
-                ctx.lineTo(simX, simY);
-                break;
-            }
-
-            // 🔥 BUBBLE COLLISION CHECK (same as projectile)
-            for (let b of bubbles) {
-                if (Math.hypot(simX - b.x, simY - b.y) < RADIUS * RADIUS_OFFSET) {
-                    ctx.lineTo(simX, simY);
-                    ctx.stroke();
-                    ctx.restore();
-                    return; // stop drawing here
+    const path = [{x: simX, y: simY}];
+    let hit = false;
+    for (let i = 0; i < 1800; i++) {
+        let nextX = simX + dx;
+        let nextY = simY + dy;
+        if (nextX <= RADIUS || nextX >= canvas.width - RADIUS) {
+            dx = -dx;
+            nextX = Math.max(RADIUS, Math.min(canvas.width - RADIUS, nextX));
+            path.push({x: nextX, y: nextY});
+        }
+        simX = nextX;
+        simY = nextY;
+        if (simY <= RADIUS) { simY = RADIUS; hit = true; }
+        if (!hit) {
+            for (const b of bubbles) {
+                if (Math.hypot(simX - b.x, simY - b.y) <= RADIUS * RADIUS_OFFSET) {
+                    hit = true;
+                    break;
                 }
             }
-
-            ctx.lineTo(simX, simY);
         }
+        if (hit) break;
+    }
+    if (!hit) return;
+    path.push({x: simX, y: simY});
 
+    ctx.save();
+    if (aimEnabled) {
+        ctx.strokeStyle = currentBall || '#ffffff';
+        ctx.globalAlpha = 0.45;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 7]);
+        ctx.beginPath();
+        ctx.moveTo(path[0].x, path[0].y);
+        for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
         ctx.stroke();
         ctx.setLineDash([]);
-        ctx.restore();
     }
+    // Draw a real translucent landing bubble, not just the aiming trajectory.
+    ctx.globalAlpha = 0.42;
+    drawAmmoBubble(ctx, simX, simY, RADIUS - 2, currentBall);
+    if (colorblindMode) {
+        ctx.globalAlpha = 0.85;
+        ctx.font = '16px Storopia';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        const symbol = COLOR_EMOJIS[currentBall] || '❔';
+        ctx.strokeText(symbol, simX, simY);
+        ctx.fillText(symbol, simX, simY);
+    }
+    ctx.restore();
+}
 
 function shouldPlaceBubble(r, c) {
 
