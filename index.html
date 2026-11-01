@@ -3890,41 +3890,32 @@ function formatFullDateTime(d) {
     return `${dayName}, ${day}${suffix} ${monthName} ${year} ` +
            `${h}:${m}:${s} ${ampm} ${sign}${oh}${om}`;
 }
+function getDailyNextAvailableTime() {
+    const data = loadDailyData();
+    const last = Number(data.lastPlayedTime);
+    if (!Number.isFinite(last) || last <= 0) return 0;
+    // One full 24-hour cooldown, measured from when the puzzle was last finished.
+    return last + 24 * 60 * 60 * 1000;
+}
+function isDailyPuzzleOnCooldown() {
+    return Date.now() < getDailyNextAvailableTime();
+}
 function updateDailyLastPlayedText() {
     const el = document.getElementById("dailyLastPlayedText");
     if (!el) return;
-
     const data = loadDailyData();
-    const today = getTodayKey();
-
-    // ❌ No data → hide
-    if (!data.lastPlayedTime) {
+    if (!isDailyPuzzleOnCooldown()) {
         el.style.display = "none";
         return;
     }
-
-    // ✅ If ready again → HIDE
-    if (data.lastPlayedDate !== today) {
-        el.style.display = "none";
-        return;
-    }
-
-    // ✅ If still on cooldown → SHOW
     el.style.display = "block";
-
-    const d = new Date(data.lastPlayedTime);
-    el.innerText = "Last played: " + formatFullDateTime(d);
+    el.innerText = "Last played: " + formatFullDateTime(new Date(Number(data.lastPlayedTime)));
 }
 function updateDailyPuzzleButton() {
     const btn = document.getElementById("dailyPuzzleBtn");
     if (!btn) return;
-
-    const data = loadDailyData();
-    const today = getTodayKey();
-
-    if (data.lastPlayedDate === today) {
-        btn.innerText =
-            `🧩 DAILY PUZZLE MODE (NEXT PUZZLE IN: ${getDailyRemainingTime()})`;
+    if (isDailyPuzzleOnCooldown()) {
+        btn.innerText = `🧩 DAILY PUZZLE MODE (NEXT PUZZLE IN: ${getDailyRemainingTime()})`;
         btn.style.background = "#555";
     } else {
         btn.innerText = "🧩 DAILY PUZZLE MODE (READY)";
@@ -3936,26 +3927,19 @@ function getTodayKey() {
     return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
 }
 function loadDailyData() {
-    return JSON.parse(localStorage.getItem("dailyPuzzleData") || "{}");
+    try { return JSON.parse(localStorage.getItem("dailyPuzzleData") || "{}"); }
+    catch (_) { return {}; }
 }
-
 function saveDailyData(data) {
     localStorage.setItem("dailyPuzzleData", JSON.stringify(data));
 }
 function getDailyRemainingTime() {
-    const now = Date.now();
-
-    const data = loadDailyData();
-    const lastPlayed = data.lastPlayedTime || 0;
-
-    const nextTime = lastPlayed + (DAILY_RESET_HOURS * 60 * 60 * 1000);
-    const diff = Math.max(0, nextTime - now);
-
-    const s = Math.floor(diff / 1000) % 60;
-    const m = Math.floor(diff / 60000) % 60;
-    const h = Math.floor(diff / 3600000);
-
-    return `${h}H ${m}M ${s}S`;
+    const diff = Math.max(0, getDailyNextAvailableTime() - Date.now());
+    const totalSeconds = Math.ceil(diff / 1000);
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const sec = totalSeconds % 60;
+    return `${h}H ${m}M ${sec}S`;
 }
 window.addEventListener("DOMContentLoaded", updateDailyLastPlayedText);
 function toggleHurryMode() {
@@ -8949,10 +8933,8 @@ function startPuzzleMode() {
     }
     function startDailyPuzzleMode() {
     const data = loadDailyData();
-    const today = getTodayKey();
-
-    if (data.lastPlayedDate === today) {
-        alert("You already played today's Daily Puzzle!");
+    if (isDailyPuzzleOnCooldown()) {
+        alert(`The next Daily Puzzle will be ready in ${getDailyRemainingTime()}.`);
         return;
     }
     isDailyPuzzle = true;
@@ -8974,7 +8956,7 @@ function endDailyPuzzle(completed) {
     data.lastPlayedTime = Date.now();
     saveDailyData(data);
     updateDailyLastPlayedText();
-    // The Android app schedules a one-time notification for the next local midnight.
+    // Android bridge remains; native Android scheduling must also use a 24-hour delay, not midnight.
     if (window.Android && typeof window.Android.dailyPuzzleCompleted === "function") {
         window.Android.dailyPuzzleCompleted();
     }
