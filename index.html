@@ -1459,6 +1459,47 @@ body.theme-background-image{background-image:linear-gradient(#04091655,#04091655
 .theme-image-row .theme-image-status{font-size:11px;color:#a9c8d9;flex:1 0 100%;overflow-wrap:anywhere}
 .theme-image-row input[type=file]{display:none}
 </style>
+<style id="sk3dMenuHudVisibilityFix">
+/* Hidden in the menu even if previous scene styles force display:block. */
+body:not(.sk3d-ui-active) canvas.sk3d-hud,
+body:not(.sk3d-ui-active) canvas.sk3d-board-hud,
+body:not(.sk3d-ui-active) canvas.sk3d-detached-container-hud,
+body:not(.sk3d-ui-active) #sk3dCameraControls,
+body:not(.sk3d-ui-active) #containerPanel .sk3d-layer {
+ display:none!important;
+}
+body.sk3d-menu-active #gameUI,
+body.sk3d-menu-active #mobileControls,
+body.sk3d-menu-active #containerFuelWrapper,
+body.sk3d-menu-active .bars-container,
+body.sk3d-menu-active #containerFlightLayer {
+ display:none!important;
+}
+</style>
+<style id="sk3dMenuRestoreFix">
+body.sk3d-menu-active #mainMenu{
+ display:block!important;
+ visibility:visible!important;
+ opacity:1!important;
+ position:relative!important;
+ z-index:10020!important;
+ pointer-events:auto!important;
+}
+body.sk3d-menu-active #sk3dScreenBackdrop{z-index:1!important;pointer-events:none!important;}
+body.sk3d-menu-active canvas.sk3d-world-canvas,
+body.sk3d-menu-active canvas.sk3d-board-canvas,
+body.sk3d-menu-active canvas.sk3d-detached-container,
+body.sk3d-menu-active canvas.sk3d-hud,
+body.sk3d-menu-active canvas.sk3d-board-hud,
+body.sk3d-menu-active canvas.sk3d-detached-container-hud{display:none!important;}
+</style>
+<style id="sk3dAccountVisibilityGuard">
+/* Never show the menu-only account card while a 3D game is active. */
+body.sk3d-ui-active #bubbleAccountCard,
+body.sk3d-ui-active #bubbleAccountCard.account-menu-visible {
+  display:none!important;
+}
+</style>
 </head>
 <div id="unsupportedBrowserMessage">
     <h1>SK's Bubble Shooter</h1>
@@ -1535,6 +1576,7 @@ body.theme-background-image{background-image:linear-gradient(#04091655,#04091655
         <button onclick="openSaveSlotPopup('load')" style="background:#00aaff; color:#000; font-weight:bold;" onmouseenter="setMenuDesc('Save Slots: Opens your in-game IndexedDB save files, including import and export.')" onmouseleave="clearMenuDesc()">💾 SAVE SLOTS</button>
         <br>
         <br>
+        <button id="sk3dToggle" onclick="toggleSK3D()" onmouseenter="setMenuDesc('3D Mode: Renders the whole playfield, launcher, aim and container in 3D, with depth physics for falling and container bubbles. Requires WebGL and an internet connection for Three.js.')" onmouseleave="clearMenuDesc()">🧊 3D MODE: OFF</button>
         <button id="autosaveToggle" onclick="toggleAutosave()" onmouseenter="setMenuDesc('Autosave: Creates a save file every time you complete a level in Puzzle Mode.')" onmouseleave="clearMenuDesc()">💾 Autosave: OFF</button>
         <button id="soundToggle" onclick="toggleSound()" onmouseenter="setMenuDesc('Sound: Toggles the in game\'s sound. Note: SFX Tester will not play any sound effects when the sound is off.')" onmouseleave="clearMenuDesc()">🔊 Sound: ON</button>
         <button id="consoleErrorsToggle"
@@ -2052,6 +2094,16 @@ body.theme-background-image{background-image:linear-gradient(#04091655,#04091655
     };
 
     console.warn = function (...args) {
+        // The legacy global Three.js build intentionally used by 3D Mode emits
+        // this known, non-fatal compatibility notice when first loaded.
+        // Ignore only this exact library deprecation notice; do not suppress
+        // unrelated warnings or runtime errors from the game.
+        const threeLegacyNotice = args.some(a =>
+            typeof a === 'string' &&
+            a.includes('Scripts "build/three.js" and "build/three.min.js" are deprecated with r150+') &&
+            a.includes('Please use ES Modules or alternatives:')
+        );
+        if (threeLegacyNotice) return;
         originalConsoleWarn(...args);
 
         if (gameMessageVisible) return;
@@ -2295,6 +2347,10 @@ const SECRET_LEVEL_DATA = {
   "nextBubble": "#A2845E"
 }
 const ACHIEVEMENTS = {
+    CANNON_SPIN_20: {
+        title: "Sir Spins-a-Lot 🌀",
+        description: "Spin your cannon through 20 full rotations. Are you aiming or making a milkshake?"
+    },
     FIRST_WIN: {
         title: "Beginner’s Luck",
         description: "Complete your first level."
@@ -2471,6 +2527,7 @@ FORGIVEN: {
 };
 
 const ACHIEVEMENT_ICONS = {
+    CANNON_SPIN_20: "🌀",
     CONTAINER_BIG_POP: "💥",
     CONTAINER_CHAIN_5: "🍿",
     CONTAINER_MERGE_1: "🫧",
@@ -4678,6 +4735,10 @@ function combineContainerBubbles(a,b){
     const massA=ar*ar,massB=br*br;
     a.x=(a.x*massA+b.x*massB)/(massA+massB);
     a.y=(a.y*massA+b.y*massB)/(massA+massB);
+    if(sk3DEnabled) {
+        a.z=((a.z||0)*massA+(b.z||0)*massB)/(massA+massB);
+        a.vz=((a.vz||0)*massA+(b.vz||0)*massB)/(massA+massB);
+    }
     a.radius=Math.sqrt(ar*ar+br*br);
     a.units=au+bu;
     a.vx=((a.vx||0)*massA+(b.vx||0)*massB)/(massA+massB);
@@ -4740,6 +4801,9 @@ function containerCanvasPoint(element, x, y) {
     return {x:r.left+left+x/element.width*w, y:r.top+top+y/element.height*h};
 }
 function spawnContainerFlightPoof(x,y,color,symbolText = null) {
+    if(sk3DEnabled&&sk3DScenes?.sharedWorld){
+      sk3DSpawnFlightBurst(color,symbolText,x,y);return;
+    }
     const layer=document.getElementById('containerFlightLayer');
     const poof=document.createElement('div');
     poof.className='container-flight-poof';
@@ -4823,7 +4887,7 @@ function addContainerBubble(b, sourceY = DEADLINE) {
     if (!containerMode || gameOver || gameWin || containerFinishing) return;
     const c = document.getElementById('containerCanvas');
     const x = Math.max(CONTAINER_R,Math.min(c.width-CONTAINER_R, b.x / canvas.width * c.width));
-    container_bubbles.push({x,y:-CONTAINER_R,color:b.color,radius:CONTAINER_R,units:1,vy:0,vx:0,isFalling:true,hasLanded:false});
+    container_bubbles.push({x,y:-CONTAINER_R,z:sk3DEnabled?(Math.random()-.5)*90:0,vz:0,color:b.color,radius:CONTAINER_R,units:1,vy:0,vx:0,isFalling:true,hasLanded:false});
     stats.containerBubblesCaught=(Number(stats.containerBubblesCaught)||0)+1;
     checkProgressAchievements(); saveStats();
     spawnContainerEffect(x,0,b.color,'pop',containerRadius(b));
@@ -4892,6 +4956,15 @@ function updateContainer(dt) {
         b.vy=Number(b.vy)||0;
         if(typeof b.hasLanded!=="boolean") b.hasLanded=false;
         if(typeof b.isFalling!=="boolean") b.isFalling=!b.hasLanded;
+        if(sk3DEnabled){
+            if(!Number.isFinite(b.z))b.z=(Math.random()-.5)*50;
+            b.vz=Number(b.vz)||0;
+            b.z+=b.vz*step;
+            b.vz*=0.985;
+            const depth=190,br3=containerRadius(b);
+            if(b.z < -depth/2+br3){b.z=-depth/2+br3;b.vz=Math.abs(b.vz)*0.4;}
+            if(b.z > depth/2-br3){b.z=depth/2-br3;b.vz=-Math.abs(b.vz)*0.4;}
+        }
         b.vy=Math.min(9,b.vy+0.24*step);
         b.x+=b.vx*step;
         b.y+=b.vy*step;
@@ -4951,7 +5024,8 @@ function updateContainer(dt) {
             let dx=b.x-a.x,dy=b.y-a.y;
             const ar=containerRadius(a),br=containerRadius(b),minimum=ar+br;
             if(Math.abs(dx)>=minimum||Math.abs(dy)>=minimum)continue;
-            let dist=Math.hypot(dx,dy);
+            let dz=sk3DEnabled?(Number(b.z||0)-Number(a.z||0)):0;
+            let dist=Math.hypot(dx,dy,dz);
             if(dist>=minimum)continue;
             if(a.color!=null && a.color===b.color && !containerFinishing){
                 if(combineContainerBubbles(a,b)){
@@ -4964,14 +5038,16 @@ function updateContainer(dt) {
             if(a.color==null && b.color!=null) conversions.add([a,b.color]);
             if(b.color==null && a.color!=null) conversions.add([b,a.color]);
             if(dist<0.001){dx=(i%2?1:-1)*0.01;dy=0.01;dist=Math.hypot(dx,dy);}
-            const nx=dx/dist,ny=dy/dist,overlap=(minimum-dist)/2;
+            const nx=dx/dist,ny=dy/dist,nz=dz/dist,overlap=(minimum-dist)/2;
+            if(sk3DEnabled){ a.z=(a.z||0)-nz*overlap;b.z=(b.z||0)+nz*overlap; }
             a.x-=nx*overlap;a.y-=ny*overlap;
             b.x+=nx*overlap;b.y+=ny*overlap;
-            const relative=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny;
+            const relative=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny+(sk3DEnabled?((b.vz||0)-(a.vz||0))*nz:0);
             if(relative<0){
                 const impulse=-relative*0.32;
                 a.vx-=impulse*nx;a.vy-=impulse*ny;
                 b.vx+=impulse*nx;b.vy+=impulse*ny;
+                if(sk3DEnabled){a.vz=(a.vz||0)-impulse*nz;b.vz=(b.vz||0)+impulse*nz;}
             }
         }
         if(removed.size) container_bubbles=container_bubbles.filter((_,i)=>!removed.has(i));
@@ -5965,13 +6041,17 @@ function isHoveringNextBubble() {
 
 window.addEventListener('mousemove', e => {
     const rect = canvas.getBoundingClientRect();
-    mouseX = e.clientX - rect.left;
-    mouseY = e.clientY - rect.top;
+    if (typeof sk3DEnabled !== 'undefined' && sk3DEnabled && gameRunning && sk3DScenes?.sharedWorld) return;
+    mouseX = (e.clientX - rect.left) * canvas.width / Math.max(1, rect.width);
+    mouseY = (e.clientY - rect.top) * canvas.height / Math.max(1, rect.height);
 
     angle = Math.atan2(
         mouseY - (canvas.height - 80),
         mouseX - (canvas.width / 2)
     );
+    if (mouseX >= 0 && mouseX <= canvas.width && mouseY >= 0 && mouseY <= canvas.height)
+        skCountCannonSpins();
+    else skResetCannonSpinSample();
 
     if (dragBubblesEnabled && draggedBubble) {
         // snap preview
@@ -6027,29 +6107,43 @@ function saveVisualPreference() {
     localStorage.setItem('bubbleShowGrid', String(showGrid));
     localStorage.setItem('bubbleShowGhost', String(showGhost));
     localStorage.setItem('bubbleColorblind', String(colorblindMode));
+    localStorage.setItem('sk3d-show-hud', String(sk3DShowHUD));
     localStorage.setItem('bubbleVisualUpdatedAt', String(Date.now()));
     window.dispatchEvent(new Event('bubbleVisualPreferencesChanged'));
 }
+let sk3DShowHUD = localStorage.getItem('sk3d-show-hud') !== 'false';
 window.bubbleVisualPreferences = {
-    get() { return {grid:showGrid, ghost:showGhost, colourblind:colorblindMode}; },
+    get() { return {grid:showGrid, ghost:showGhost, colourblind:colorblindMode, hud:sk3DShowHUD, arcade3D:typeof sk3DLightSettings==='undefined'?null:{...sk3DLightSettings}}; },
     set(values, remoteTime) {
         if (!values || typeof values !== 'object') return;
         if (typeof values.grid === 'boolean') showGrid = values.grid;
         if (typeof values.ghost === 'boolean') showGhost = values.ghost;
         if (typeof values.colourblind === 'boolean') colorblindMode = values.colourblind;
+        if (typeof values.hud === 'boolean') sk3DShowHUD = values.hud;
+        if(values.arcade3D && typeof values.arcade3D==='object' && typeof sk3DLightSettings!=='undefined'){
+          for(const key of ['color','intensity','azimuth','elevation']){const v=values.arcade3D[key];if((key==='color'&&/^#[0-9a-f]{6}$/i.test(v||''))||(key!=='color'&&Number.isFinite(Number(v))))sk3DLightSettings[key]=v;}
+          localStorage.setItem('sk3d-light-settings',JSON.stringify({arcade:sk3DLightSettings}));
+          if(typeof sk3DApplyLighting==='function')sk3DApplyLighting();
+          if(typeof sk3DSettingsRender==='function')sk3DSettingsRender();
+        }
         localStorage.setItem('bubbleShowGrid',String(showGrid));
         localStorage.setItem('bubbleShowGhost',String(showGhost));
         localStorage.setItem('bubbleColorblind',String(colorblindMode));
+        localStorage.setItem('sk3d-show-hud',String(sk3DShowHUD));
         if (Number.isFinite(Number(remoteTime))) localStorage.setItem('bubbleVisualUpdatedAt',String(remoteTime));
         updateColorblindButton();
+        if (typeof syncSK3DUIState === 'function') syncSK3DUIState();
         window.dispatchEvent(new Event('bubbleVisualPreferencesApplied'));
     },
     toggle(key) {
         if (key === 'grid') showGrid = !showGrid;
         else if (key === 'ghost') showGhost = !showGhost;
         else if (key === 'colourblind') colorblindMode = !colorblindMode;
+        else if (key === 'hud') sk3DShowHUD = !sk3DShowHUD;
         else return;
         updateColorblindButton();
+        localStorage.setItem('sk3d-show-hud',String(sk3DShowHUD));
+        if (typeof syncSK3DUIState === 'function') syncSK3DUIState();
         saveVisualPreference();
     }
 };
@@ -6089,10 +6183,10 @@ canvas.addEventListener("pointerdown", e => {
     }
 });
 canvas.addEventListener("mousemove", (e) => {
+    if(sk3DEnabled && gameRunning && sk3DScenes?.sharedWorld)return;
     const rect = canvas.getBoundingClientRect();
-
-    mouseX = e.clientX - rect.left;
-    mouseY = e.clientY - rect.top;
+    mouseX = (e.clientX - rect.left) * canvas.width / Math.max(1,rect.width);
+    mouseY = (e.clientY - rect.top) * canvas.height / Math.max(1,rect.height);
 });
 canvas.addEventListener("mouseenter", () => {
     isInGameCanvas = true;
@@ -6102,6 +6196,7 @@ canvas.addEventListener("mouseleave", () => {
     isInGameCanvas = false;
 });
 canvas.addEventListener("pointermove", e => {
+    if(sk3DEnabled && gameRunning && sk3DScenes?.sharedWorld)return;
     const { x, y } = getCanvasPos(e);
 
     mouseX = x;
@@ -6437,10 +6532,16 @@ canvas.addEventListener('mouseup', e => {
     isAiming = false;
 });
 canvas.addEventListener('mouseleave', () => {
+    skResetCannonSpinSample();
     isAiming = false;
 });
 
 function setPause(state) {
+    if(state && !isPaused) skCannonPauseStart=performance.now();
+    if(!state && isPaused && skCannonPauseStart){
+        skCannonLastShotTime+=performance.now()-skCannonPauseStart;
+        skCannonPauseStart=0;
+    }
     isPaused = state;
     document.body.classList.toggle('container-flight-paused', isPaused);
     document.querySelectorAll('#containerFlightLayer .container-flight-poof').forEach(poof => {
@@ -6461,6 +6562,74 @@ function setPause(state) {
 }
 function togglePause() { if(!gameRunning || gameOver || gameWin || winPending) return; setPause(!isPaused);}
 
+// Visual-only pump-action cannon. Fired only after a projectile is created.
+let skCannonLastShotTime = -10000;
+let skCannonPauseStart = 0;
+function skCannonFireAnimation(){
+    skCannonLastShotTime = performance.now();
+    skCannonPauseStart = 0;
+}
+function skCannonRecoilPose(){
+    const now = skCannonPauseStart || performance.now();
+    const elapsed = now - skCannonLastShotTime;
+    if(elapsed < 0 || elapsed >= 440) return {kick:0,pump:0};
+    const t = elapsed / 440;
+    // Fast backward jolt, followed by a damped forward recovery.
+    const kick = t < .18 ? Math.sin(t/.18*Math.PI/2) :
+        Math.pow(1-(t-.18)/.82, 2) * (1 + .10*Math.sin((t-.18)*17));
+    // Pump sleeve travels backwards after firing, then chambers forwards.
+    const pump = t < .16 ? 0 : t < .42 ? (t-.16)/.26 :
+        t < .70 ? 1 : Math.max(0,1-(t-.70)/.30);
+    return {kick:Math.max(0,kick),pump:Math.max(0,Math.min(1,pump))};
+}
+function skDraw2DCannonRecoil(ctx,cx,cy){
+    if(isCustomMode || !gameRunning)return;
+    const pose=skCannonRecoilPose();
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.rotate(angle + Math.PI/2);
+    ctx.translate(0,pose.kick*12);
+    // Local -Y faces the shot: draw the barrel behind the loaded bubble.
+    const barrel=ctx.createLinearGradient(-12,0,12,0);
+    barrel.addColorStop(0,'#14465f');barrel.addColorStop(.3,'#38bed0');
+    barrel.addColorStop(.66,'#9ffbff');barrel.addColorStop(1,'#16566c');
+    ctx.fillStyle=barrel;
+    ctx.fillRect(-11,-66,22,54);
+    ctx.fillStyle='#152c45';ctx.beginPath();ctx.ellipse(0,-12,19,11,0,0,Math.PI*2);ctx.fill();
+    // Moving pump grip. Travel along the barrel after the initial kick.
+    const sleeveY=-40+pose.pump*19;
+    ctx.fillStyle='#103347';ctx.fillRect(-15,sleeveY,30,19);
+    ctx.strokeStyle='#7cf6ff';ctx.lineWidth=2;ctx.strokeRect(-15,sleeveY,30,19);
+    // Ammo count is attached to the cannon's rectangular pump grip,
+    // so it follows the cannon angle, recoil and sliding pump animation.
+    if(ammo > 0){
+        const label=typeof fmt === 'function' ? fmt(String(ammo)) : String(ammo);
+        ctx.save();
+        ctx.font=`bold ${label.length > 4 ? 9 : label.length > 2 ? 11 : 13}px Storopia, sans-serif`;
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillStyle=ammo < 10 ? '#ff6262' : '#fff1a0';
+        ctx.shadowColor=ammo < 10 ? '#ff3838' : '#ffcf45';
+        ctx.shadowBlur=4;
+        ctx.fillText(label,0,sleeveY+10,27);
+        ctx.restore();
+    }
+    ctx.fillStyle='#e2fcff';ctx.fillRect(-14,-68,28,5);
+    ctx.restore();
+}
+function skUpdate3DCannonRecoil(stage){
+    if(!stage?.cannonGroup || !stage.cannonGroup.visible)return;
+    const pose=skCannonRecoilPose();
+    const group=stage.cannonGroup;
+    // Do not change the aim angle or the projectile's starting position.
+    if(group.userData.skCannonRestY===undefined)group.userData.skCannonRestY=group.position.y;
+    group.position.y=group.userData.skCannonRestY-pose.kick*12;
+    const children=group.children;
+    const barrel=children[0],ring=children[1];
+    if(barrel){if(barrel.userData.skRestY===undefined)barrel.userData.skRestY=barrel.position.y;
+      barrel.position.y=barrel.userData.skRestY-pose.pump*10;}
+    if(ring){if(ring.userData.skRestY===undefined)ring.userData.skRestY=ring.position.y;
+      ring.position.y=ring.userData.skRestY-pose.pump*19;}
+}
 function shoot() {
 if (winPending || containerBonusPending || containerFinishing || gameOver || gameWin || conversionQueue.length > 0 || chainPopActive) return;
 
@@ -6490,6 +6659,7 @@ if (dragBubblesEnabled && draggedBubble) return;
         dy: Math.sin(angle) * 12,
         color: currentBall,    
     });
+    skCannonFireAnimation();
 
     ammo--;
     currentBall = nextBall;
@@ -7400,8 +7570,7 @@ function drawHurryWarning(sec) {
     ctx.shadowColor=accent;ctx.shadowBlur=15;
     ctx.beginPath();ctx.roundRect(x-155,y-55,310,110,17);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
     ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.globalAlpha=.82;ctx.fillStyle=accent;ctx.font='bold 27px Storopia, sans-serif';ctx.fillText('HURRY UP!',x,y-21);
-    ctx.globalAlpha=.85;ctx.fillStyle='#fff';ctx.font='bold 20px Storopia, sans-serif';ctx.fillText(`${remaining}s  •  SHOOT NOW`,x,y+20);
+    ctx.globalAlpha=.82;ctx.fillStyle=accent;ctx.font='bold 27px Storopia, sans-serif';ctx.fillText(`HURRY! (${remaining})`,x,y-21);
     ctx.restore();
 }
 function autoShootCurrentBubble() {
@@ -7643,6 +7812,29 @@ for (let i = fallingBubbles.length - 1; i >= 0; i--) {
     b.vy += 0.04; // soft gravity
     b.x += b.vx;
     b.y += b.vy;
+    if(sk3DEnabled){
+        if(!Number.isFinite(b.z))b.z=(Math.random()-.5)*55;
+        b.vz=Number(b.vz)||((Math.random()-.5)*.35);
+        b.z+=b.vz*normalParticleFrameScale;
+        b.vz*=.994;
+        const far=85-RADIUS;
+        if(b.z < -far){b.z=-far;b.vz=Math.abs(b.vz)*.65;}
+        if(b.z > far){b.z=far;b.vz=-Math.abs(b.vz)*.65;}
+        const left=RADIUS,right=canvas.width-RADIUS;
+        if(b.x<left){b.x=left;b.vx=Math.abs(b.vx)*.65;}
+        if(b.x>right){b.x=right;b.vx=-Math.abs(b.vx)*.65;}
+        // Resolve sphere contacts in all three spatial axes.
+        for(const other of fallingBubbles){
+            if(other===b)continue;
+            const dx=b.x-other.x,dy=b.y-other.y,dz=b.z-(other.z||0);
+            const d=Math.hypot(dx,dy,dz);
+            if(d>0.001 && d<RADIUS*2){
+                const overlap=(RADIUS*2-d)*.5;
+                b.x+=dx/d*overlap;b.y+=dy/d*overlap;b.z+=dz/d*overlap;
+                b.vx+=dx/d*.045;b.vy+=dy/d*.045;b.vz+=dz/d*.045;
+            }
+        }
+    }
     // fade slightly
     b.life -= 0.01;
     const DEADLINE_SCORE = 10;
@@ -8096,18 +8288,11 @@ function getSnapPreview(x, y) {
     };
 }
 function getCanvasPos(evt) {
-    const rect = canvas.getBoundingClientRect();
-
-    if (evt.touches) {
-        return {
-            x: evt.touches[0].clientX - rect.left,
-            y: evt.touches[0].clientY - rect.top
-        };
-    }
-
+    const rect=canvas.getBoundingClientRect();
+    const pointer=evt.touches?.[0]||evt;
     return {
-        x: evt.clientX - rect.left,
-        y: evt.clientY - rect.top
+        x:(pointer.clientX-rect.left)*canvas.width/Math.max(1,rect.width),
+        y:(pointer.clientY-rect.top)*canvas.height/Math.max(1,rect.height)
     };
 }
 // --- Pointer (touch + mouse) aiming support ---
@@ -8115,14 +8300,12 @@ let activeAimPointerId = null;
 
 function updateAimFromClientXY(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
-
-  mouseX = clientX - rect.left;
-  mouseY = clientY - rect.top;
-
-  angle = Math.atan2(
-    mouseY - (canvas.height - 80),
-    mouseX - (canvas.width / 2)
-  );
+  mouseX = (clientX - rect.left) * canvas.width / Math.max(1,rect.width);
+  mouseY = (clientY - rect.top) * canvas.height / Math.max(1,rect.height);
+  angle = Math.atan2(mouseY - (canvas.height - 80), mouseX - canvas.width / 2);
+  if (mouseX >= 0 && mouseX <= canvas.width && mouseY >= 0 && mouseY <= canvas.height)
+    skCountCannonSpins();
+  else skResetCannonSpinSample();
 }
 
 // Pointer down = start aiming (hold)
@@ -8442,26 +8625,8 @@ if (panicMode) {
             // ---- CURRENT BALL ----
 const cx = canvas.width / 2;
 const cy = canvas.height - 80;
-if (ammo => -1) {
-    ctx.save();
-
-    ctx.font = "bold 14px Storopia";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-
-    const counterX = canvas.width / 2 + 60;
-    const counterY = canvas.height - 80 + RADIUS + 8;
-
-     // 🔴 red under 10, 🟡 normal otherwise
-    ctx.fillStyle = ammo < 10 ? "#ff4444" : "#ffcc00";
-    if (ammo < 10) {
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = "#ff4444";
-}
-    ctx.fillText(fmt(ammo.toString()), counterX, counterY);
-
-    ctx.restore();
-}
+// Cannon is drawn behind the loaded ball; recoil never changes projectile physics.
+skDraw2DCannonRecoil(ctx,cx,cy);
 // Current bubble (including colourless) with aiming glow.
 drawAmmoBubble(ctx, cx, cy, RADIUS, currentBall, isAiming);
 if (isAiming) {
@@ -8852,13 +9017,50 @@ function formatCooldownMS(ms) {
 
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
+// Sir Spins-a-Lot: count the cannon's actual angular travel whenever a valid
+// pointer position changes the aim. The cannon follows the cursor even when
+// the mouse button is NOT held, so the old isAiming-only game-loop counter
+// missed most turns. This counter also works in the shared 3D board.
+const SK_CANNON_TURN_KEY = 'skCannonSpinRadians';
+let skCannonSpinRadians = (() => {
+    try { return Math.max(0, Number(localStorage.getItem(SK_CANNON_TURN_KEY)) || 0); }
+    catch (_) { return 0; }
+})();
+let skPreviousCannonAim = null;
+let skLastSavedCannonRevolution = Math.floor(skCannonSpinRadians / (Math.PI * 2));
+function skResetCannonSpinSample(){ skPreviousCannonAim = null; }
+function skCountCannonSpins(){
+    if (unlockedAchievements.CANNON_SPIN_20 || !gameRunning || isPaused ||
+        gameOver || gameWin || isCustomMode || !Number.isFinite(angle)) {
+        skResetCannonSpinSample();
+        return;
+    }
+    if (skPreviousCannonAim !== null) {
+        const delta = Math.atan2(Math.sin(angle-skPreviousCannonAim),
+                                 Math.cos(angle-skPreviousCannonAim));
+        // Ignore teleports/re-entering the board; ordinary mouse movement
+        // is counted in either direction, including repeated left/right turns.
+        if (Math.abs(delta) < 1.4) {
+            skCannonSpinRadians += Math.abs(delta);
+            const turns = Math.floor(skCannonSpinRadians / (Math.PI * 2));
+            if (turns !== skLastSavedCannonRevolution) {
+                skLastSavedCannonRevolution = turns;
+                try { localStorage.setItem(SK_CANNON_TURN_KEY, String(skCannonSpinRadians)); } catch (_) {}
+            }
+            if (skCannonSpinRadians >= 20 * Math.PI * 2) {
+                unlockAchievement('CANNON_SPIN_20');
+                try { localStorage.removeItem(SK_CANNON_TURN_KEY); } catch (_) {}
+            }
+        }
+    }
+    skPreviousCannonAim = angle;
+}
 let activeGameLoopRequest = 0;
 function gameLoop(now) {
     if (activeGameLoopRequest) cancelAnimationFrame(activeGameLoopRequest);
     activeGameLoopRequest = requestAnimationFrame(gameLoop);
 
     if (!gameRunning) return;
-
     const delta = now - lastFrameTime;
 
     // A monitor/browser cannot display more frames than its refresh rate.
@@ -8871,8 +9073,10 @@ function gameLoop(now) {
     update();
     updateRainbowMode();
     hurryTick(delta);
-    draw();
+    if(typeof sk3DBeginOriginalTextFrame==='function')sk3DBeginOriginalTextFrame();
+    try{draw();}finally{if(typeof sk3DEndOriginalTextFrame==='function')sk3DEndOriginalTextFrame();}
     drawConfettiOverlay();
+    if (typeof renderSK3D === "function") renderSK3D();
 }
 
 function initializeAmmo(type, savedAmmo = null) {
@@ -9174,7 +9378,9 @@ function startMode(m, isLoad = false, isNextLevel = false) {
         lastTickSecond = null;
 		campaignFinished = false;
     }
-    lostProjectileReturnInProgress = false; gameRunning = true; gameOver = false; gameWin = false; isPaused = false; document.body.classList.remove('container-flight-paused'); isCustomMode = false; isPlaytesting = false;
+    lostProjectileReturnInProgress = false; gameRunning = true;
+    if(typeof window.skSyncAccountCardVisibility==='function')window.skSyncAccountCardVisibility();
+    gameOver = false; gameWin = false; isPaused = false; document.body.classList.remove('container-flight-paused'); isCustomMode = false; isPlaytesting = false;
     lastClearWasPerfect = false;
     if (!isLoad) {
 
@@ -9251,7 +9457,22 @@ suppressAutosaveOnce = false; // always clear after startMode
     refreshFavicon();
 
 
+// The selected 3D mode is persisted across reloads. Read it directly as
+// well as checking the active renderer flag, which may reset after a load error.
+function skCustomEditorBlockedIn3D() {
+    let saved3D = false;
+    try { saved3D = localStorage.getItem('sk3d-mode') === 'true'; } catch (_) {}
+    return saved3D || (typeof sk3DEnabled !== 'undefined' && sk3DEnabled);
+}
+function skWarnCustomEditor3D() {
+    alert('Custom mode only works in 2D mode.\nTurn off 3D Mode in the main menu to use the editor.');
+}
+
 function enterCustomEditor() {
+    if (skCustomEditorBlockedIn3D()) {
+        skWarnCustomEditor3D();
+        return false;
+    }
     showSecretText('Loading: Custom Mode...', 2500)   
     fadeTransition(() => {
     ammo = 0;
@@ -9396,75 +9617,55 @@ function hasParentAbove(r, c) {
         bubbles.some(b => b.row === pr && b.col === pc)
     );
 }
-function drawAimVisualizer() {
-    // Ghost is independent of the separate aiming-line toggle.
-    if ((!aimEnabled && !showGhost) || isPaused || gameOver || gameWin || isCustomMode ||
-        projectiles.length > 0 || winPending || conversionQueue.length > 0 ||
-        chainPopActive || ammo <= 0) return;
-
-    const startX = canvas.width / 2;
-    const startY = canvas.height - 80;
-    let simX = startX, simY = startY;
-    let dx = Math.cos(angle) * 5;
-    let dy = Math.sin(angle) * 5;
-    if (!Number.isFinite(dx) || !Number.isFinite(dy) || dy >= -0.001) return;
-
-    const path = [{x: simX, y: simY}];
-    let hit = false;
-    for (let i = 0; i < 1800; i++) {
-        let nextX = simX + dx;
-        let nextY = simY + dy;
-        if (nextX <= RADIUS || nextX >= canvas.width - RADIUS) {
-            dx = -dx;
-            nextX = Math.max(RADIUS, Math.min(canvas.width - RADIUS, nextX));
-            path.push({x: nextX, y: nextY});
-        }
-        simX = nextX;
-        simY = nextY;
-        if (simY <= RADIUS) { simY = RADIUS; hit = true; }
-        if (!hit) {
-            for (const b of bubbles) {
-                if (Math.hypot(simX - b.x, simY - b.y) <= RADIUS * RADIUS_OFFSET) {
-                    hit = true;
-                    break;
-                }
-            }
-        }
-        if (hit) break;
-    }
-    if (!hit) return;
-    path.push({x: simX, y: simY});
-
-    ctx.save();
-    if (aimEnabled) {
-        ctx.strokeStyle = currentBall || '#ffffff';
-        ctx.globalAlpha = 0.45;
-        ctx.lineWidth = 2;
-        ctx.setLineDash([]); // Solid aiming line, including wall bounces
-        ctx.beginPath();
-        ctx.moveTo(path[0].x, path[0].y);
-        for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
-        ctx.stroke();
-        ctx.setLineDash([]);
-    }
-    // Ghost only controls the landing bubble; the aim line is independent.
-    if (showGhost) {
-    ctx.globalAlpha = 0.42;
-    drawAmmoBubble(ctx, simX, simY, RADIUS - 2, currentBall);
-    if (colorblindMode) {
-        ctx.globalAlpha = 0.85;
-        ctx.font = '16px Storopia';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#ffffff';
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 3;
-        const symbol = COLOR_EMOJIS[currentBall] || '❔';
-        ctx.strokeText(symbol, simX, simY);
-        ctx.fillText(symbol, simX, simY);
-    }
-    }
-    ctx.restore();
+// One predictor for both Canvas2D and the shared Three.js arcade scene.
+// Match the *discrete* projectile update: move 12 px, reverse horizontal speed
+// when beyond a wall (no clamp), then check ceiling followed by bubble contacts.
+function skPredictProjectileTrajectory(firingAngle=angle){
+ const originX=canvas.width/2,originY=canvas.height-80;
+ let x=originX,y=originY,dx=Math.cos(firingAngle)*12,dy=Math.sin(firingAngle)*12;
+ if(!Number.isFinite(dx)||!Number.isFinite(dy)||dy>=-0.00001)return null;
+ const path=[{x,y}];
+ let collision=false;
+ for(let i=0;i<1600;i++){
+  x+=dx;y+=dy;
+  path.push({x,y});
+  if(x<RADIUS||x>canvas.width-RADIUS)dx=-dx;
+  if(y<RADIUS){collision=true;break;}
+  if(bubbles.some(b=>Math.hypot(x-b.x,y-b.y)<RADIUS*RADIUS_OFFSET)){collision=true;break;}
+  if(y>canvas.height+RADIUS)break;
+ }
+ if(!collision)return null;
+ // snapToGrid backs up by half of the projectile's CURRENT velocity before
+ // calculating the row and column. Mirror it for a truthful ghost preview.
+ const sx=x-dx*.5,sy=y-dy*.5;
+ let row=Math.max(0,Math.round((sy-RADIUS)/ROW_HEIGHT));
+ let off=row%2?RADIUS:0;
+ let col=Math.max(0,Math.min(row%2?9:10,Math.round((sx-RADIUS-off)/(RADIUS*2))));
+ let pos=getGridCoords(row,col);
+ if(bubbles.some(b=>b.row===row&&b.col===col)){row++;pos=getGridCoords(row,col);}
+ return {path,impact:{x,y},landing:{x:pos.x,y:pos.y,row,col},angle:firingAngle};
+}
+function drawAimVisualizer(){
+ if((!aimEnabled&&!showGhost)||isPaused||gameOver||gameWin||isCustomMode||
+ projectiles.length>0||winPending||conversionQueue.length>0||chainPopActive||ammo<=0||mouseY >= DEADLINE||!isInGameCanvas)return;
+ const result=skPredictProjectileTrajectory();if(!result)return;
+ ctx.save();
+ if(aimEnabled){
+  ctx.strokeStyle=currentBall||'#ffffff';ctx.globalAlpha=.54;ctx.lineWidth=2;ctx.setLineDash([]);
+  ctx.beginPath();
+  result.path.forEach((pt,i)=>{if(i===0)ctx.moveTo(pt.x,pt.y);else ctx.lineTo(pt.x,pt.y);});
+  ctx.stroke();
+ }
+ if(showGhost){
+  const {x,y}=result.landing;
+  ctx.globalAlpha=.42;drawAmmoBubble(ctx,x,y,RADIUS-2,currentBall);
+  if(colorblindMode){
+   ctx.globalAlpha=.85;ctx.font='16px Storopia';ctx.textAlign='center';ctx.textBaseline='middle';
+   ctx.fillStyle='#fff';ctx.strokeStyle='#000';ctx.lineWidth=3;
+   const symbol=COLOR_EMOJIS[currentBall]||'❔';ctx.strokeText(symbol,x,y);ctx.fillText(symbol,x,y);
+  }
+ }
+ ctx.restore();
 }
 
 function shouldPlaceBubble(r, c) {
@@ -10561,6 +10762,13 @@ function loadSecretLevelData(s, fileName = "save file") {
     return true;
 }
 function loadSaveData(s, fileName = "save file") {
+    // A custom save invokes the editor asynchronously; block before any
+    // loading overlay, fade, or state changes can start.
+    if (s?.level === 'CUSTOM LEVEL' && skCustomEditorBlockedIn3D()) {
+        skWarnCustomEditor3D();
+        isLoadingSave = false;
+        return false;
+    }
     isLoadingSave = true;
     showSecretText(`Loading: ${fileName}...`, 2500);
 
@@ -10577,6 +10785,11 @@ function loadSaveData(s, fileName = "save file") {
         customAuthorName = s.authorName || "";
 
         if (s.level === "CUSTOM LEVEL") {
+            if (skCustomEditorBlockedIn3D()) {
+                skWarnCustomEditor3D();
+                isLoadingSave = false;
+                return;
+            }
             enterCustomEditor();
 
             bubbles = [];
@@ -10846,7 +11059,17 @@ if (!skipExitSavePromptForSafety && !autosaveEnabled && gameRunning && !gameOver
     console.clear();
     setBrowserTitle("⭐ SK's Bubble Shooter");
     gameRunning = false;
-    document.getElementById('mainMenu').style.display = 'block';
+    // Restore the actual menu FIRST. A WebGL cleanup problem must never
+    // prevent the rest of the exit-to-menu callback from finishing.
+    const restoredMenu = document.getElementById('mainMenu');
+    restoredMenu.style.display = 'block';
+    restoredMenu.style.visibility = 'visible';
+    restoredMenu.style.opacity = '1';
+    if(typeof window.skSyncAccountCardVisibility==='function')window.skSyncAccountCardVisibility();
+    document.body.classList.remove('sk3d-ui-active');
+    document.body.classList.toggle('sk3d-menu-active',Boolean(sk3DEnabled));
+    try { if(typeof sk3DExitGameplayUI === 'function') sk3DExitGameplayUI(); }
+    catch (err) { console.error('3D exit UI cleanup failed (menu restored safely):',err); }
     document.getElementById('gameUI').style.display = 'none';
     document.getElementById('customUI').style.display = 'none';
     document.getElementById('mobileControls').style.display = 'none';
@@ -11074,7 +11297,7 @@ for(const [key,label,defaultValue] of choices){const el=document.createElement('
 
 // Images are stored as Blobs in IndexedDB, so they persist across browser restarts
 // without overflowing localStorage. Blob URLs are recreated on each page load.
-const imageSlots=[['back','Background'],['loading','Loading screen']];
+const imageSlots=[['back','Background'],['loading','Loading screen'],['scenefloor','3D scene floor'],['scenewall','3D scene walls'],['sceneback','3D scene backdrop'],['scenewallleft','3D left wall'],['scenewallright','3D right wall'],['sceneceiling','3D ceiling']];
 const imageURLs={};
 let themeImageDB=null;
 let themeImageCleanupRequested=false;
@@ -11112,13 +11335,22 @@ function imageTransaction(key,method,blob){return new Promise((resolve,reject)=>
 })}
 function displayThemeImage(key,blob){
   if(imageURLs[key]){URL.revokeObjectURL(imageURLs[key]);delete imageURLs[key]}
-  const element=key==='back'?document.body:document.getElementById('secretOverlay');
-  const className=key==='back'?'theme-background-image':'theme-loading-image';
-  const cssVar=key==='back'?'--custom-background-image':'--custom-loading-image';
-  element.classList.remove(className);element.style.removeProperty(cssVar);
-  if(blob){imageURLs[key]=URL.createObjectURL(blob);element.style.setProperty(cssVar,'url("'+imageURLs[key]+'")');element.classList.add(className)}
   const status=document.getElementById('theme-image-status-'+key);
-  if(status)status.textContent=blob?'Custom image saved in browser storage':'Using selected background colour';
+  if(key==='back' || key==='loading'){
+    const element=key==='back'?document.body:document.getElementById('secretOverlay');
+    const className=key==='back'?'theme-background-image':'theme-loading-image';
+    const cssVar=key==='back'?'--custom-background-image':'--custom-loading-image';
+    element.classList.remove(className);element.style.removeProperty(cssVar);
+    if(blob){imageURLs[key]=URL.createObjectURL(blob);element.style.setProperty(cssVar,'url("'+imageURLs[key]+'")');element.classList.add(className)}
+    if(status)status.textContent=blob?'Custom image saved in browser storage':'Using selected background colour';
+    return;
+  }
+  window.sk3DSceneTextureURLs=window.sk3DSceneTextureURLs||{scenefloor:null,scenewall:null,sceneback:null};
+  window.sk3DSceneTextureURLs[key]=blob?(imageURLs[key]=URL.createObjectURL(blob)):null;
+  window.sk3DSceneTextureBlobs=window.sk3DSceneTextureBlobs||{};
+  window.sk3DSceneTextureBlobs[key]=blob||null;
+  if(status)status.textContent=blob?'Custom 3D scene texture saved in browser storage':'Using the default 3D scene material';
+  if(typeof window.applySK3DSceneTextures==='function')window.applySK3DSceneTextures();
 }
 for(const [key,label] of imageSlots){
   const row=document.createElement('div');row.className='theme-image-row';
@@ -11191,15 +11423,16 @@ document.getElementById('themeStudio').addEventListener('click',e=>{if(e.target.
  <div class="account-dialog-inner">
   <h2>☁️ ACCOUNT &amp; SETTINGS</h2>
   <div id="bubbleAccountDetails"></div>
-  <div class="cloud-settings-status" id="bubbleSettingsStatusLine" aria-live="polite"><span>☁️ Cloud: <strong id="settingCloudState">Offline</strong></span><span>💾 Autosave: <strong id="settingAutosaveState">—</strong></span><span>▦ Grid: <strong id="settingGridState">—</strong></span><span>👁️ Ghost: <strong id="settingGhostState">—</strong></span><span>🎨 Colourblind: <strong id="settingColourblindState">—</strong></span></div>
+  <div class="cloud-settings-status" id="bubbleSettingsStatusLine" aria-live="polite"><span>☁️ Cloud: <strong id="settingCloudState">Offline</strong></span><span>💾 Autosave: <strong id="settingAutosaveState">—</strong></span><span>▦ Grid: <strong id="settingGridState">—</strong></span><span>👁️ Ghost: <strong id="settingGhostState">—</strong></span><span>🎨 Colourblind: <strong id="settingColourblindState">—</strong></span><span>🖥️ HUD: <strong id="settingHudState">—</strong></span></div>
   <div class="visual-pref-controls" aria-label="Visual settings">
     <button type="button" id="settingGridToggle" onclick="bubbleToggleVisualSetting('grid')">▦ Grid: Off</button>
     <button type="button" id="settingGhostToggle" onclick="bubbleToggleVisualSetting('ghost')">👻 Ghost: On</button>
     <button type="button" id="settingColourblindToggle" onclick="bubbleToggleVisualSetting('colourblind')">🎨 Colourblind: Off</button>
+    <button type="button" id="settingHudToggle" onclick="bubbleToggleVisualSetting('hud')">🖥️ HUD: On</button>
   </div>
   <p id="bubbleVisualSummary" class="account-note">🎮 Visual preferences are saved on this device.</p>
   <div><button onclick="bubbleSyncVisualPreferences(true)">☁️ Sync visual preferences</button></div>
-  <p id="bubbleImageSummary" class="account-note">🖼️ Background and loading screen images are stored locally until synced.</p>
+  <p id="bubbleImageSummary" class="account-note">🖼️ Scene images sync to Google when signed in, if your Firestore image permissions allow the additional image documents.</p>
   <div><button onclick="bubbleSyncImages()">🖼️ Sync background &amp; loading images</button></div>
   <p id="bubbleCloudSummary" class="account-note">Checking cloud saves...</p>
   <p id="bubbleAchievementSummary" class="account-note">🏆 Achievements will sync with your Google account.</p>
@@ -11450,7 +11683,7 @@ let visualSyncTimer=null, visualSyncBusy=false;
 const visualStatus=message=>{const el=$('bubbleVisualSummary');if(el)el.textContent=message;};
 function refreshVisualControls(){
  const values=window.bubbleVisualPreferences?.get();if(!values)return;
- for(const [key,id,label,icon] of [['grid','settingGridToggle','Grid','▦'],['ghost','settingGhostToggle','Ghost','👻'],['colourblind','settingColourblindToggle','Colourblind','🎨']]){
+ for(const [key,id,label,icon] of [['grid','settingGridToggle','Grid','▦'],['ghost','settingGhostToggle','Ghost','👻'],['colourblind','settingColourblindToggle','Colourblind','🎨'],['hud','settingHudToggle','HUD','🖥️']]){
   const button=$(id);if(!button)continue;
   button.textContent=icon+' '+label+': '+(values[key]?'On':'Off');
   button.setAttribute('aria-pressed',String(values[key]));
@@ -11474,13 +11707,13 @@ async function syncVisualPreferences(force=false){
   const remoteTime=Number(remote?.updatedAt||0);
   if(remote&&!force&&(remoteTime>localTime || !localTime)){
    window.bubbleVisualPreferences.set(remote.settings,remoteTime);
-   visualStatus('✅ Grid, Ghost and Colourblind settings downloaded from Google Cloud.');
+   visualStatus('✅ Grid, Ghost, Colourblind and HUD settings downloaded from Google Cloud.');
   }else if(!remote || force || localTime>remoteTime){
    if(!await cloudWriteAllowed(uid))return;
    const timestamp=Math.max(Date.now(),remoteTime+1);
    await setDoc(ref,{settings:window.bubbleVisualPreferences.get(),updatedAt:timestamp});
    localStorage.setItem('bubbleVisualUpdatedAt',String(timestamp));
-   visualStatus('✅ Grid, Ghost and Colourblind settings uploaded to Google Cloud.');
+   visualStatus('✅ Grid, Ghost, Colourblind and HUD settings uploaded to Google Cloud.');
   }else visualStatus('✅ Visual settings are already synced.');
   refreshVisualControls();updateSettingsStatusLine();
  }catch(err){
@@ -11517,10 +11750,11 @@ async function compactImage(blob){
 }
 async function syncThemeImage(key,force=false){
  const uid=activeUser?.uid;if(!uid||cloudDeleteInProgress||!db)return;
- const label=key==='back'?'Background':'Loading screen';
+ const imageNames={back:'Background',loading:'Loading screen',scenefloor:'Scene floor',scenewall:'Scene walls',sceneback:'Scene backdrop',scenewallleft:'Left wall',scenewallright:'Right wall',sceneceiling:'Ceiling'};
+ const label=imageNames[key]||key;
  try{
   if(!await cloudWriteAllowed(uid))return;
-  const documentId=key==='back'?'image_background':'image_loading';
+  const documentId=key==='back'?'image_background':key==='loading'?'image_loading':'image_'+key;
   const ref=doc(db,'bubbleUsers',uid,'preferences',documentId);
   const remoteSnap=await getDoc(ref);if(activeUser?.uid!==uid||cloudDeleteInProgress)return;
   const remote=remoteSnap.exists()?remoteSnap.data():null;
@@ -11544,7 +11778,7 @@ async function syncThemeImage(key,force=false){
   }else imageStatus('🖼️ '+label+' image already synced.');
  }catch(err){
   const code=String(err?.code||'unknown');
-  const path='bubbleUsers/'+uid+'/preferences/'+(key==='back'?'image_background':'image_loading');
+  const path='bubbleUsers/'+uid+'/preferences/'+(key==='back'?'image_background':key==='loading'?'image_loading':'image_'+key);
   let reason='The cloud request could not be completed.';
   let action='Check your connection and try syncing again.';
   if(code==='permission-denied'){
@@ -11565,9 +11799,9 @@ async function syncThemeImage(key,force=false){
   imageStatus(message);
  }
 }
-window.bubbleSyncImages=()=>{if(!requireAccount())return;void (async()=>{await syncThemeImage('back');await syncThemeImage('loading');})();};
+window.bubbleSyncImages=()=>{if(!requireAccount())return;void (async()=>{for(const key of ['back','loading','scenefloor','scenewall','sceneback','scenewallleft','scenewallright','sceneceiling'])await syncThemeImage(key);})();};
 window.addEventListener('bubbleThemeImageChanged',e=>{
- const key=e.detail?.key;if(!['back','loading'].includes(key))return;
+ const key=e.detail?.key;if(!['back','loading','scenefloor','scenewall','sceneback','scenewallleft','scenewallright','sceneceiling'].includes(key))return;
  localStorage.setItem(imageStampKey(key),String(Date.now()));
  if(imageSyncTimers[key])clearTimeout(imageSyncTimers[key]);
  if(activeUser)imageSyncTimers[key]=setTimeout(()=>void syncThemeImage(key),1300);
@@ -11580,6 +11814,7 @@ function updateSettingsStatusLine(){
  set('settingGridState',visual?(visual.grid?'On':'Off'):'—');
  set('settingGhostState',visual?(visual.ghost?'On':'Off'):'—');
  set('settingColourblindState',visual?(visual.colourblind?'On':'Off'):'—');
+ set('settingHudState',visual?(visual.hud?'On':'Off'):'—');
 }
 setInterval(()=>{if($('bubbleAccountDialog')?.style.display==='flex')updateSettingsStatusLine();},750);
 
@@ -11963,7 +12198,7 @@ if(configured){
       void synchronizeAchievements(user.uid);
       void syncTheme();
       void syncVisualPreferences();
-      void (async()=>{await syncThemeImage('back');await syncThemeImage('loading');})();
+      void (async()=>{for(const key of ['back','loading','scenefloor','scenewall','sceneback','scenewallleft','scenewallright','sceneceiling'])await syncThemeImage(key);})();
     })();
    } else if(!user){if($('bubbleResumeCloudButton'))$('bubbleResumeCloudButton').style.display='none';showAchievementCloudStatus('🏆 Achievements saved locally. Log in to sync.');themeStatus('🎨 Colour settings saved locally.');}
   });
@@ -11987,16 +12222,1822 @@ updateCard();
   if (!menu || !card) return;
 
   function syncAccountCardVisibility() {
-    const showingMenu = window.getComputedStyle(menu).display !== 'none';
+    // The card belongs to the menu only; computed menu visibility alone is
+    // insufficient during fades, game-mode transitions, and loaded saves.
+    const showingMenu = !gameRunning && window.getComputedStyle(menu).display !== 'none';
     card.classList.toggle('account-menu-visible', showingMenu);
+    card.style.display = showingMenu ? 'block' : 'none';
   }
 
   new MutationObserver(syncAccountCardVisibility).observe(menu, {
     attributes: true,
     attributeFilter: ['style', 'class', 'hidden']
   });
+  window.skSyncAccountCardVisibility = syncAccountCardVisibility;
   syncAccountCardVisibility();
 })();
+</script>
+<style>
+#sk3dCameraControls{display:none;position:fixed;bottom:14px;left:26px;transform:none;z-index:8000;padding:9px 12px;border:1px solid #5fe4ec88;border-radius:18px;background:#07101dde;color:#dffaff;box-shadow:0 9px 30px #000a;text-align:left;font-size:11px;max-width:min(92vw,460px);box-sizing:border-box;backdrop-filter:blur(5px)}
+#sk3dCameraControls button{font-size:12px;margin:2px;padding:7px 10px;min-width:0}
+#sk3dCameraControls .sk3d-hint{display:block;color:#9cc9dc;margin-top:3px}
+body.sk3d-menu-active #mainMenu,body.sk3d-menu-active #bubbleAccountCard{position:relative;z-index:5;}
+#sk3dToggle{border:2px solid #79cfff!important;box-shadow:0 0 12px #58a4ff55;}
+body.sk3d-ui-active #gameUI{backdrop-filter:blur(7px)}
+#sk3dToggle.sk3d-on{background:linear-gradient(120deg,#0a5961,#28366d)!important;border-color:#50ffe1!important;}
+.sk3d-screen-backdrop{position:fixed!important;inset:0!important;z-index:1!important;pointer-events:none!important;opacity:1;transition:opacity .22s ease;}
+.sk3d-screen-backdrop canvas{width:100%!important;height:100%!important;display:block!important;opacity:1}
+.sk3d-hud{position:absolute!important;top:0;left:0;width:100%;height:100%;pointer-events:none!important;border:0!important;background:transparent!important;box-shadow:none!important;display:block!important;z-index:8;}
+.sk3d-layer{position:absolute!important;top:0;left:0;width:100%;height:100%;pointer-events:none!important;border:0!important;border-radius:15px!important;background:transparent!important;box-shadow:none!important;display:block!important;z-index:7;}
+#containerPanel .sk3d-layer{border-radius:18px!important;}
+body.sk3d-ui-active #gameCanvas,body.sk3d-ui-active #containerCanvas{background:transparent!important;box-shadow:0 0 0 transparent!important}
+body.sk3d-ui-active #containerPanel{background:transparent!important;box-shadow:0 0 0 transparent!important}
+body.sk3d-ui-active #mainMenu,body.sk3d-ui-active #bubbleAccountCard,body.sk3d-ui-active .game-container,body.sk3d-ui-active #gameUI,body.sk3d-ui-active #sk3dCameraControls,body.sk3d-ui-active #bubbleAccountDialog,body.sk3d-ui-active .panel,body.sk3d-ui-active #debugConsole,body.sk3d-ui-active #debugOverlayPanel{position:relative;z-index:5}
+body.sk3d-ui-active .bars-container{position:fixed!important;top:auto!important;right:18px!important;bottom:18px!important;left:auto!important;display:flex!important;z-index:8200!important;background:rgba(7,16,29,.82);padding:12px 10px;border-radius:18px;border:1px solid rgba(95,228,236,.38);backdrop-filter:blur(5px)}
+body.sk3d-ui-active #mobileControls{position:fixed!important;top:auto!important;left:auto!important;right:140px!important;bottom:26px!important;transform:none!important;z-index:8200!important;background:rgba(7,16,29,.82);padding:10px;border-radius:18px;border:1px solid rgba(95,228,236,.38);backdrop-filter:blur(5px)}
+body.sk3d-ui-active #containerFuelWrapper{position:fixed!important;top:auto!important;left:auto!important;right:285px!important;bottom:18px!important;z-index:8200!important;background:rgba(7,16,29,.82);padding:10px;border-radius:18px;border:1px solid rgba(95,228,236,.38);backdrop-filter:blur(5px)}
+body.sk3d-ui-active.sk3d-hud-hidden .bars-container,body.sk3d-ui-active.sk3d-hud-hidden #mobileControls,body.sk3d-ui-active.sk3d-hud-hidden #containerFuelWrapper{display:none!important}
+@media(max-width:980px){body.sk3d-ui-active .bars-container{right:10px!important;bottom:10px!important}body.sk3d-ui-active #mobileControls{right:125px!important;bottom:18px!important}body.sk3d-ui-active #containerFuelWrapper{right:260px!important;bottom:10px!important}}
+
+/* 3D World: one viewport renderer in puzzle modes, plus container renderer when required. */
+body.sk3d-ui-active #sk3dScreenBackdrop{display:none!important}
+body.sk3d-ui-active canvas.sk3d-world-canvas{position:fixed!important;inset:0!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:#020714!important;pointer-events:none!important;z-index:2!important;display:block!important}
+body.sk3d-ui-active #gameCanvas{opacity:0!important;pointer-events:auto!important;cursor:crosshair}
+body.sk3d-ui-active #containerCanvas{opacity:0!important;pointer-events:auto!important}
+body.sk3d-ui-active #containerPanel .sk3d-layer{opacity:1!important}
+body.sk3d-ui-active #gameUI{position:fixed!important;top:18px!important;left:18px!important;right:auto!important;bottom:auto!important;z-index:8300!important;margin:0!important;backdrop-filter:blur(8px);background:rgba(13,26,49,.82)!important;border-radius:18px;padding:16px 18px!important;box-shadow:0 10px 26px #0008}
+body.sk3d-ui-active canvas.sk3d-world-canvas{background:transparent!important}
+body.sk3d-ui-active #containerPanel{border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important}
+body.sk3d-ui-active .sk3d-detached-container,body.sk3d-ui-active .sk3d-detached-container-hud{position:fixed!important;z-index:3!important;display:block!important;pointer-events:none!important;border:0!important;background:transparent!important;box-shadow:none!important}
+body.sk3d-ui-active .sk3d-board-canvas,body.sk3d-ui-active .sk3d-board-hud{position:fixed!important;display:block!important;pointer-events:none!important;border:0!important;background:transparent!important;box-shadow:none!important}
+body.sk3d-ui-active .sk3d-board-canvas{z-index:3!important}
+body.sk3d-ui-active .sk3d-board-hud{z-index:8!important}
+body.sk3d-ui-active .sk3d-detached-container-hud{z-index:8!important}
+body.sk3d-ui-active #bubbleAccountCard.account-menu-visible{position:fixed!important;right:16px!important;left:auto!important;bottom:16px!important;top:auto!important;z-index:9000!important;margin:0!important;width:min(320px,calc(100vw - 32px))!important}
+body.sk3d-menu-active #bubbleAccountCard.account-menu-visible{position:fixed!important;right:16px!important;left:auto!important;bottom:16px!important;top:auto!important;z-index:9000!important;margin:0!important;width:min(320px,calc(100vw - 32px))!important}
+body.sk3d-menu-active #mainMenu{position:relative!important;z-index:6!important}
+#sk3dSceneSettings{display:none;position:fixed;inset:0;z-index:15000;background:rgba(0,3,12,.85);backdrop-filter:blur(12px);align-items:center;justify-content:center;padding:12px;box-sizing:border-box}
+#sk3dSceneSettings.open{display:flex}
+#sk3dSceneSettings .sk3d-settings-dialog{width:min(780px,97vw);max-height:90dvh;overflow:auto;padding:20px;border-radius:22px;border:1px solid #5de4e7;background:linear-gradient(135deg,#132b47,#060f22);box-shadow:0 0 45px #13ccea44;color:#d8fcff}
+#sk3dSceneSettings .sk3d-light-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;max-width:500px;margin:auto}
+#sk3dSceneSettings .sk3d-light-card{border:1px solid #4be4ec55;border-radius:13px;padding:12px;background:#06172bbb}
+#sk3dSceneSettings .sk3d-light-card label{display:flex;flex-direction:column;gap:4px;margin:9px 0;font-size:12px}
+#sk3dSceneSettings .sk3d-light-card input[type=range]{width:100%}
+#sk3dSceneSettings .sk3d-light-card input[type=color]{width:100%;height:35px}
+#sk3dSceneSettings h2{color:#7bf7ec;margin-top:0}
+#sk3dSceneSettings .sk3d-settings-footer{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:14px}
+#sk3dCameraControls .sk3d-light-settings{border-color:#5de4e7}
+@media(max-width:720px){body.sk3d-menu-active #bubbleAccountCard.account-menu-visible{bottom:8px!important;right:8px!important;width:min(235px,calc(100vw - 16px))!important}#sk3dSceneSettings .sk3d-settings-dialog{padding:12px}}
+
+/* Shared arcade room: the puzzle and container are objects in one Three.js scene. */
+body.sk3d-ui-active #sk3dScreenBackdrop{display:block!important;z-index:2!important}
+body.sk3d-ui-active #sk3dScreenBackdrop canvas{display:block!important;width:100%!important;height:100%!important}
+body.sk3d-ui-active canvas.sk3d-world-canvas,
+body.sk3d-ui-active canvas.sk3d-board-canvas,
+body.sk3d-ui-active canvas.sk3d-detached-container{display:none!important}
+body.sk3d-ui-active #gameCanvas,body.sk3d-ui-active #containerCanvas{opacity:0!important;pointer-events:auto!important}
+body.sk3d-ui-active .sk3d-hud,body.sk3d-ui-active .sk3d-board-hud,body.sk3d-ui-active .sk3d-detached-container-hud{
+ position:fixed!important;pointer-events:none!important;border:0!important;background:transparent!important;z-index:9!important;
+}
+body.sk3d-ui-active #containerPanel{background:transparent!important;box-shadow:none!important;border:0!important}
+body.sk3d-ui-active #gameUI{top:16px!important;left:16px!important;right:auto!important;z-index:8500!important}
+body.sk3d-menu-active #bubbleAccountCard.account-menu-visible{position:fixed!important;bottom:14px!important;right:14px!important;top:auto!important;left:auto!important;z-index:9000!important}
+body.sk3d-ui-active #containerFlightLayer{visibility:hidden!important;pointer-events:none!important}
+</style>
+<script>
+/* Three.js visualization uses the existing level geometry and game state.
+   X/Y rules and saves remain backward-compatible; Z is extra physics when enabled. */
+let sk3DEnabled=false;
+try{sk3DEnabled=localStorage.getItem('sk3d-mode')==='true';}catch(_e){}
+let sk3DLoading=false,sk3DFailed=false,sk3DScenes=null;
+window.sk3DSceneTextureURLs=window.sk3DSceneTextureURLs||{scenefloor:null,scenewall:null,sceneback:null};
+function updateSK3DButton(){
+ const btn=document.getElementById('sk3dToggle');if(!btn)return;
+ btn.textContent='🧊 3D MODE: '+(sk3DEnabled?'ON':'OFF');
+ btn.classList.toggle('sk3d-on',sk3DEnabled);
+}
+function syncSK3DUIState(){
+ document.body.classList.toggle('sk3d-ui-active',Boolean(sk3DEnabled&&gameRunning));
+ document.body.classList.toggle('sk3d-menu-active',Boolean(sk3DEnabled&&!gameRunning));
+ document.body.classList.toggle('sk3d-hud-hidden',!sk3DShowHUD);
+ const wrap=document.getElementById('containerFuelWrapper');
+ if(wrap&&containerMode)wrap.style.display=(sk3DEnabled&&sk3DShowHUD)?'flex':(containerMode?'flex':'none');
+}
+function toggleSK3D(){
+ // Change modes only across a reload, so no old Three.js canvases,
+ // event handlers, or HUD elements survive the mode transition.
+ const next=!sk3DEnabled;
+ try{localStorage.setItem('sk3d-mode',String(next));}catch(err){
+  console.warn('Unable to store the 3D mode preference:',err);
+  alert('Unable to save the 3D mode setting. Please allow local storage.');
+  return;
+ }
+ window.location.reload();
+}
+// Three.js r187 uses ES modules, not the removed legacy three.min.js build.
+// First try the locally hosted GitHub Pages files. A pinned CDN fallback keeps
+// the HTML testable until js/three.module.js + js/three.core.js are uploaded.
+function loadSK3D(){
+ if(!sk3DEnabled||sk3DScenes||sk3DLoading||sk3DFailed)return;
+ if(window.THREE){initSK3D();return;}
+ sk3DLoading=true;
+ import('./js/three.module.js')
+  .catch(localError=>{
+   console.info('Local Three.js r187 files unavailable; trying the CDN.');
+   return import('https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js');
+  })
+  .then(THREE=>{
+   window.THREE=THREE;
+   sk3DLoading=false;
+   if(sk3DEnabled)initSK3D();
+  })
+  .catch(err=>{
+   sk3DLoading=false;sk3DFailed=true;
+   sk3DEnabled=false;
+   updateSK3DButton();syncSK3DUIState();
+   console.error('Three.js r187 could not load. Upload js/three.module.js and js/three.core.js or check the connection.',err);
+  });
+}
+function createSK3DBackdrop(){
+ const T=window.THREE;
+ const wrapper=document.createElement('div');wrapper.id='sk3dScreenBackdrop';wrapper.className='sk3d-screen-backdrop';
+ const scene=new T.Scene();scene.background=new T.Color(0x01040c);scene.fog=new T.Fog(0x01040c,760,2700);
+ const camera=new T.PerspectiveCamera(52,window.innerWidth/window.innerHeight,1,5000);camera.position.set(0,220,580);camera.lookAt(0,40,-180);
+ const renderer=new T.WebGLRenderer({alpha:false,antialias:true,powerPreference:'high-performance'});
+ renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));renderer.setSize(window.innerWidth,window.innerHeight,false);renderer.outputColorSpace=T.SRGBColorSpace;
+ wrapper.appendChild(renderer.domElement);document.body.prepend(wrapper);
+ scene.add(new T.HemisphereLight(0x7eb7ff,0x02050d,0.34));
+ const key=new T.DirectionalLight(0xaee6ff,0.42);key.position.set(-500,650,500);scene.add(key);
+ const fill=new T.PointLight(0x1db0d0,1300,1700);fill.position.set(0,90,240);scene.add(fill);
+ const magentaFill=new T.PointLight(0xc145ff,980,1600);magentaFill.position.set(0,220,-140);scene.add(magentaFill);
+ const floorMat=new T.MeshStandardMaterial({color:0x06111e,emissive:0x051325,emissiveIntensity:.18,roughness:0.72,metalness:0.12});
+ const floor=new T.Mesh(new T.PlaneGeometry(2400,2200),floorMat);floor.rotation.x=-Math.PI/2;floor.position.set(0,-115,-120);scene.add(floor);
+ const floorGlow=new T.Mesh(new T.PlaneGeometry(1500,980),new T.MeshBasicMaterial({color:0x081f36,transparent:true,opacity:.42}));floorGlow.rotation.x=-Math.PI/2;floorGlow.position.set(0,-114.2,-160);scene.add(floorGlow);
+ const grid=new T.GridHelper(2400,40,0x2aa1d2,0x102c4f);grid.position.set(0,-114.5,-120);grid.material.transparent=true;grid.material.opacity=.22;/* The arcade floor is intentionally smooth: no grid. */
+ const wallMat=new T.MeshStandardMaterial({color:0x06101d,roughness:1,metalness:0.02,emissive:0x061326,emissiveIntensity:.58});
+ const backWall=new T.Mesh(new T.PlaneGeometry(2600,1500),wallMat);backWall.position.set(0,360,-900);scene.add(backWall);
+ const sideWallMat=new T.MeshStandardMaterial({color:0x102036,roughness:.91,metalness:.04,emissive:0x06152a,emissiveIntensity:.18,side:T.DoubleSide});
+ const leftWall=new T.Mesh(new T.PlaneGeometry(1200,1300),sideWallMat);leftWall.rotation.y=Math.PI/2;leftWall.position.set(-920,220,-250);scene.add(leftWall);
+ const rightWall=leftWall.clone();rightWall.material=leftWall.material.clone();rightWall.position.x=920;rightWall.name='SK3DRightWall';scene.add(rightWall);
+ leftWall.name='SK3DLeftWall';
+ const ceiling=new T.Mesh(new T.PlaneGeometry(2400,1900),new T.MeshStandardMaterial({color:0x050c16,roughness:1,metalness:.02,emissive:0x020811,emissiveIntensity:.15}));ceiling.name='SK3DCeiling';ceiling.rotation.x=Math.PI/2;ceiling.position.set(0,650,-210);scene.add(ceiling);
+ const runway=new T.Mesh(new T.PlaneGeometry(760,1200),new T.MeshBasicMaterial({color:0x0b1f39,transparent:true,opacity:.32}));runway.rotation.x=-Math.PI/2;runway.position.set(0,-114,-100);/* Remove decorative floor runway. */
+ // No vertical pillars, light bars or marquee across the arcade room.
+ const glowBars=[];
+ const starPositions=[];
+ for(let i=0;i<300;i++){
+  const a=i*2.399963229728653,r=Math.sqrt((i+.5)/300);
+  starPositions.push(Math.cos(a)*r*1200,(Math.sin(a)*.75+0.1)*850+120,-1200+((i*53)%280));
+ }
+ const starGeometry=new T.BufferGeometry();starGeometry.setAttribute('position',new T.Float32BufferAttribute(starPositions,3));
+ const stars=new T.Points(starGeometry,new T.PointsMaterial({color:0x8ed9ff,size:3,sizeAttenuation:true,transparent:true,opacity:.52}));scene.add(stars);
+ return {wrapper,scene,camera,renderer,stars,glowBars,materials:{floor:[floorMat],wall:[sideWallMat],back:[wallMat]}};
+}
+function createSK3DStage(source,depth,opts={}){
+ const T=window.THREE,w=source.width,h=source.height,isContainer=Boolean(opts.isContainer);
+ const scene=new T.Scene();scene.background=new T.Color(0x030712);scene.fog=new T.Fog(0x030712,300,1280);
+ const camera=new T.PerspectiveCamera(35,w/h,.5,4000);
+ const cameraDistance=h/(2*Math.tan(T.MathUtils.degToRad(35)/2));
+ camera.position.set(0,18,cameraDistance+115);camera.lookAt(0,0,0);
+ const renderer=new T.WebGLRenderer({alpha:false,antialias:true,powerPreference:'high-performance'});
+ renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));renderer.setSize(w,h,false);
+ renderer.outputColorSpace=T.SRGBColorSpace;
+ renderer.domElement.className='sk3d-layer';renderer.domElement.style.width='100%';renderer.domElement.style.height='100%';
+ source.parentElement.appendChild(renderer.domElement);
+ scene.add(new T.HemisphereLight(0xbfd9ff,0x08111d,.54));
+ const key=new T.DirectionalLight(0xe4f7ff,.72);key.position.set(-230,280,430);scene.add(key);
+ const fill=new T.PointLight(0x37c8ee,2200,900);fill.position.set(210,-90,230);scene.add(fill);
+ const fillMagenta=new T.PointLight(0xb44fff,900,760);fillMagenta.position.set(-170,40,140);scene.add(fillMagenta);
+ const rim=new T.DirectionalLight(0x4f87bf,.30);rim.position.set(260,-150,-260);scene.add(rim);
+ const geometry=new T.SphereGeometry(1,26,18);
+ const wallmat=new T.MeshStandardMaterial({color:0x0a2037,metalness:.12,roughness:.84,transparent:true,opacity:.28,side:T.DoubleSide,depthWrite:false,emissive:0x09172c,emissiveIntensity:.14});
+ const frameMat=new T.MeshStandardMaterial({color:0x4ce7ef,metalness:.18,roughness:.48,emissive:0x073342,emissiveIntensity:.10,side:T.DoubleSide});
+ const backMat=new T.MeshStandardMaterial({color:0x091322,roughness:.86,metalness:.03,emissive:0x061120,emissiveIntensity:.16});
+ const back=new T.Mesh(new T.BoxGeometry(w,h,6),backMat);
+ back.position.z=-depth/2-4;scene.add(back);
+ const box=(sx,sy,sz,x,y,z,mat=frameMat)=>{const m=new T.Mesh(new T.BoxGeometry(sx,sy,sz),mat);m.position.set(x,y,z);if(mat===frameMat)m.userData.sk3DReceivesArcadeLight=true;scene.add(m);return m;};
+ box(7,h,depth,-w/2,0,0);box(7,h,depth,w/2,0,0);
+ box(w+8,6,depth,0,-h/2,0);
+ if(!isContainer)box(w+8,5,depth,0,h/2,0);
+ const left=new T.Mesh(new T.PlaneGeometry(depth,h),wallmat);left.rotation.y=Math.PI/2;left.position.x=-w/2;left.userData.sk3DReceivesArcadeLight=true;scene.add(left);
+ const right=left.clone();right.position.x=w/2;right.userData.sk3DReceivesArcadeLight=true;scene.add(right);
+ // Mirror the real Canvas2D grid rather than drawing a different 40px square grid.
+ // The original puzzle uses 34px staggered rows, 20px bubble radii and
+ // alternating 11/10 bubble positions; the 2D container has no grid.
+ const gridpts=[];
+ if(!isContainer){
+  const gridZ=-depth/2+5;
+  for(let r=0;r<15;r++){
+   const y=RADIUS+r*ROW_HEIGHT;
+   gridpts.push(-w/2,h/2-y,gridZ,w/2,h/2-y,gridZ);
+   const offset=(r%2===0)?0:RADIUS;
+   const cols=(r%2===0)?11:10;
+   for(let c=0;c<cols;c++){
+    const cx=RADIUS+offset+c*RADIUS*2-w/2;
+    const cy=h/2-y;
+    const segments=28;
+    for(let n=0;n<segments;n++){
+     const a=n*Math.PI*2/segments,b=(n+1)*Math.PI*2/segments;
+     gridpts.push(cx+Math.cos(a)*RADIUS,cy+Math.sin(a)*RADIUS,gridZ,
+                  cx+Math.cos(b)*RADIUS,cy+Math.sin(b)*RADIUS,gridZ);
+    }
+   }
+  }
+ }
+ const gridGeo=new T.BufferGeometry();gridGeo.setAttribute('position',new T.Float32BufferAttribute(gridpts,3));
+ const gridOverlay=new T.LineSegments(gridGeo,new T.LineBasicMaterial({color:0x00ffcc,transparent:true,opacity:.25,depthWrite:false}));
+ gridOverlay.name='SK3DExact2DGrid';
+ gridOverlay.visible=!isContainer&&Boolean(showGrid);
+ scene.add(gridOverlay);
+ const danger=new T.Mesh(new T.BoxGeometry(w-8,3,3),new T.MeshBasicMaterial({color:0xff3535}));
+ danger.position.set(0,h/2-(isContainer?CONTAINER_RED_LINE_Y:DEADLINE),depth/2+2);scene.add(danger);
+ const surface=new T.Mesh(new T.PlaneGeometry(w,h),new T.MeshBasicMaterial({color:0x071426,transparent:true,opacity:.16,depthWrite:false}));
+ surface.position.z=-depth/2+3;scene.add(surface);
+ const cannonGroup=new T.Group();scene.add(cannonGroup);
+ if(!isContainer){
+   const cannonMat=new T.MeshStandardMaterial({color:0x2caebf,metalness:.58,roughness:.32});
+   const barrel=new T.Mesh(new T.CylinderGeometry(11,15,74,24),cannonMat);barrel.position.y=30;cannonGroup.add(barrel);
+   const ring=new T.Mesh(new T.TorusGeometry(13,4,9,24),new T.MeshStandardMaterial({color:0xb2efff,metalness:.55,roughness:.2}));ring.position.y=68;ring.rotation.x=Math.PI/2;cannonGroup.add(ring);
+   const base=new T.Mesh(new T.SphereGeometry(20,20,14),new T.MeshStandardMaterial({color:0x23394f,metalness:.48,roughness:.38}));cannonGroup.add(base);
+   cannonGroup.position.set(0,-h/2+80,35);
+ }else cannonGroup.visible=false;
+ const fuelMat=new T.MeshPhysicalMaterial({color:0x33ff66,transparent:true,opacity:.20,roughness:.55,metalness:.05,depthWrite:false,side:T.DoubleSide});
+ const fuelMesh=new T.Mesh(new T.BoxGeometry(w-12,1,7),fuelMat);fuelMesh.visible=false;scene.add(fuelMesh);
+ const environment=new T.Group();scene.add(environment);
+ const stageFloorMat=new T.MeshStandardMaterial({color:0x07111f,metalness:.18,roughness:.70,emissive:0x071624,emissiveIntensity:.16});
+ const stageFloor=new T.Mesh(new T.BoxGeometry(w+340,16,depth+420),stageFloorMat);
+ stageFloor.position.set(0,-h/2-35,-100);environment.add(stageFloor);
+ const stageGlow=new T.Mesh(new T.PlaneGeometry(w+220,depth+250),new T.MeshBasicMaterial({color:isContainer?0x11355c:0x0e2842,transparent:true,opacity:.26}));stageGlow.rotation.x=-Math.PI/2;stageGlow.position.set(0,-h/2-26,-100);environment.add(stageGlow);
+ const floorGrid=new T.GridHelper(Math.max(w+300,depth+420),22,0x2bcfff,0x0a2740);
+ floorGrid.position.set(0,-h/2-25,-100);floorGrid.material.transparent=true;floorGrid.material.opacity=.23;environment.add(floorGrid);
+ const rearWallMat=new T.MeshStandardMaterial({color:0x05101d,emissive:0x051226,emissiveIntensity:.34,roughness:1});
+ const rearWall=new T.Mesh(new T.PlaneGeometry(w+600,h+450),rearWallMat);
+ rearWall.position.set(0,0,-depth/2-300);environment.add(rearWall);
+ const headerGlow=new T.Mesh(new T.BoxGeometry(w+170,10,10),new T.MeshBasicMaterial({color:0x42daff,transparent:true,opacity:.72}));headerGlow.position.set(0,h/2+35,-depth/2-60);environment.add(headerGlow);
+ const headerGlow2=new T.Mesh(new T.BoxGeometry(w+170,6,6),new T.MeshBasicMaterial({color:0xc14dff,transparent:true,opacity:.35}));headerGlow2.position.set(0,h/2+22,-depth/2-58);environment.add(headerGlow2);
+ for(let side of [-1,1]){
+  const pillar=new T.Mesh(new T.CylinderGeometry(13,17,h+140,14),new T.MeshStandardMaterial({color:0x0f2234,metalness:.52,roughness:.42}));
+  pillar.position.set(side*(w/2+72),-15,-depth/2-65);environment.add(pillar);
+  const strip=new T.Mesh(new T.CylinderGeometry(3,3,h+125,10),new T.MeshBasicMaterial({color:0x23cfea,transparent:true,opacity:.45}));
+  strip.position.set(side*(w/2+72),-15,-depth/2-51);environment.add(strip);
+  const magStrip=new T.Mesh(new T.BoxGeometry(7,h+90,7),new T.MeshBasicMaterial({color:0xc14dff,transparent:true,opacity:.18}));
+  magStrip.position.set(side*(w/2+90),-10,-depth/2-60);environment.add(magStrip);
+  const footLight=new T.PointLight(side<0?0x42d9ff:0xc14dff,360,260);footLight.position.set(side*(w/2+70),-h/2+25,54);environment.add(footLight);
+ }
+ const starPositions=[];
+ for(let i=0;i<160;i++){
+  const a=i*2.399963229728653,r=Math.sqrt((i+.5)/160);
+  starPositions.push(Math.cos(a)*r*(w+600),Math.sin(a)*r*(h+500),-depth/2-295+((i*37)%15));
+ }
+ const starGeometry=new T.BufferGeometry();starGeometry.setAttribute('position',new T.Float32BufferAttribute(starPositions,3));
+ const stars=new T.Points(starGeometry,new T.PointsMaterial({color:0x84dfff,size:2.1,sizeAttenuation:true,transparent:true,opacity:.34}));
+ environment.add(stars);
+ const glowLight=new T.PointLight(0x00d9ff,1700,680);glowLight.position.set(0,-h/2-70,130);scene.add(glowLight);
+ const underLight=new T.PointLight(0x8b3dff,720,520);underLight.position.set(0,-h/2-40,-10);scene.add(underLight);
+ // Cabinet shell around the entire playfield. The actual game meshes remain unobstructed.
+ const cabinet=new T.Group();environment.add(cabinet);
+ const shellMat=new T.MeshStandardMaterial({color:0x070e1c,metalness:.62,roughness:.27});
+ const trimMat=new T.MeshStandardMaterial({color:0x0e3149,metalness:.52,roughness:.3,emissive:0x0d4560,emissiveIntensity:.24});
+ const glassMat=new T.MeshPhysicalMaterial({color:0x60d9f6,metalness:.08,roughness:.1,transparent:true,opacity:.055,depthWrite:false,side:T.DoubleSide});
+ const chrome=(sx,sy,sz,x,y,z,material)=>{const o=new T.Mesh(new T.BoxGeometry(sx,sy,sz),material);o.position.set(x,y,z);cabinet.add(o);return o;};
+ chrome(22,h+58,depth+35,-w/2-17,0,-6,shellMat);
+ chrome(22,h+58,depth+35,w/2+17,0,-6,shellMat);
+ chrome(w+64,24,depth+35,0,h/2+17,-6,shellMat);
+ chrome(w+64,29,depth+35,0,-h/2-19,-6,shellMat);
+ chrome(6,h+28,7,-w/2-3,0,depth/2+16,trimMat);
+ chrome(6,h+28,7,w/2+3,0,depth/2+16,trimMat);
+ chrome(w+12,6,7,0,h/2+3,depth/2+16,trimMat);
+ chrome(w+12,6,7,0,-h/2-3,depth/2+16,trimMat);
+ const screenGlass=new T.Mesh(new T.PlaneGeometry(w-8,h-8),glassMat);screenGlass.position.z=depth/2+5;cabinet.add(screenGlass);
+ const marquee=new T.Mesh(new T.BoxGeometry(w+54,24,18),trimMat);marquee.position.set(0,h/2+37,depth/2+10);cabinet.add(marquee);
+ const marqueeStripe=new T.Mesh(new T.BoxGeometry(w+26,4,5),new T.MeshBasicMaterial({color:isContainer?0xff58c9:0x4ce7fb,transparent:true,opacity:.7}));marqueeStripe.position.set(0,h/2+22,depth/2+21);cabinet.add(marqueeStripe);
+ const ledStrip=new T.Mesh(new T.BoxGeometry(w+44,5,6),new T.MeshBasicMaterial({color:0x45baff,transparent:true,opacity:.65}));ledStrip.position.set(0,-h/2-32,depth/2+21);cabinet.add(ledStrip);
+ const hud=document.createElement('canvas');hud.width=w;hud.height=h;hud.className='sk3d-hud';
+ source.parentElement.appendChild(hud);
+ return {scene,camera,renderer,geometry,meshes:[],fx:[],depth,source,cannonGroup,fuelMesh,hud,hudCtx:hud.getContext('2d'),aimLine:null,ghost:null,cameraDistance,orbitYaw:isContainer?.24:0,orbitPitch:isContainer?.08:0,orbitZoom:1,environment,isContainer,materials:{floor:[stageFloorMat],wall:[backMat,wallmat],back:[rearWallMat]}};
+}
+function initSK3D(){
+ if(!sk3DEnabled||sk3DScenes||!window.THREE)return;
+ try{
+   sk3DScenes={backdrop:createSK3DBackdrop(),game:createSK3DStage(document.getElementById('gameCanvas'),170,{isContainer:false}),container:createSK3DStage(document.getElementById('containerCanvas'),170,{isContainer:true})};
+   if(typeof window.applySK3DSceneTextures==='function')window.applySK3DSceneTextures();
+   syncSK3DUIState();
+ }catch(err){sk3DFailed=true;sk3DEnabled=false;updateSK3DButton();syncSK3DUIState();console.warn('3D renderer unavailable:',err);}
+}
+function hideSK3D(){
+ document.body.classList.remove('sk3d-ui-active');
+ if(!sk3DScenes)return;
+ if(sk3DScenes.backdrop)sk3DScenes.backdrop.wrapper.style.display='none';
+ for(const [key,stage] of Object.entries(sk3DScenes)){
+   if(key==='backdrop')continue;
+   stage.renderer.domElement.style.display='none';
+   stage.hud.style.display='none';
+ }
+}
+function syncSK3DSpheres(stage,objects){
+ const T=window.THREE;
+ while(stage.meshes.length<objects.length){
+  const mesh=new T.Mesh(stage.geometry,new T.MeshPhysicalMaterial({roughness:.17,metalness:.07,clearcoat:1,clearcoatRoughness:.09,transparent:true}));
+  mesh.userData.rim=new T.Mesh(new T.SphereGeometry(1,16,12),new T.MeshBasicMaterial({color:0xf5fbff,transparent:true,opacity:.8,wireframe:true}));
+  stage.scene.add(mesh);stage.meshes.push(mesh);
+ }
+ for(let i=0;i<stage.meshes.length;i++){
+  const mesh=stage.meshes[i],entry=objects[i];mesh.visible=!!entry;if(!entry)continue;
+  const b=entry.b,rad=Math.max(2,entry.radius);
+  mesh.position.set(b.x-stage.source.width/2,stage.source.height/2-b.y,Number(b.z)||0);
+  mesh.scale.setScalar(rad);
+  mesh.userData.skColourless=(b.color==null && rad>=10);
+  const color=b.color??'#050a10';mesh.material.color.set(color);
+  mesh.material.emissive.set(color);mesh.material.emissiveIntensity=b.color==null?.04:.14;
+  mesh.material.opacity=entry.opacity??1;
+  // Distinguish colourless bubbles with a visible white ring in 3D.
+  if(b.color==null){mesh.material.color.set('#090c15');mesh.material.emissive.set('#0b0e15');}
+ }
+}
+function sk3DText(g,str,x,y,size=16,color='#eaffff'){
+ g.fillStyle=color;g.font=`bold ${size}px Storopia, sans-serif`;g.textAlign='center';g.textBaseline='middle';
+ g.shadowColor='#000b';g.shadowBlur=5;g.fillText(str,x,y);g.shadowBlur=0;
+}
+function sk3DProject(stage,x,y,z=0){
+ const T=window.THREE;
+ const v=new T.Vector3(x-stage.source.width/2,stage.source.height/2-y,z);
+ v.project(stage.camera);
+ return {x:(v.x*.5+.5)*stage.source.width,y:(-v.y*.5+.5)*stage.source.height,visible:v.z>-1&&v.z<1};
+}
+window.applySK3DSceneTextures=function applySK3DSceneTextures(){
+ if(!window.THREE||!sk3DScenes)return;
+ const T=window.THREE;const loader=new T.TextureLoader();
+ const urls=window.sk3DSceneTextureURLs||{};
+ const setTexture=(materials,url,repeatX=1,repeatY=1)=>{
+  const mats=[].concat(materials||[]).filter(Boolean);
+  for(const mat of mats){
+   if(!url){mat.map=null;mat.needsUpdate=true;continue;}
+   loader.load(url,tex=>{tex.colorSpace=T.SRGBColorSpace;tex.wrapS=T.RepeatWrapping;tex.wrapT=T.RepeatWrapping;tex.repeat.set(repeatX,repeatY);mat.map=tex;mat.needsUpdate=true;});
+  }
+ };
+ const stages=[sk3DScenes.backdrop,sk3DScenes.game,sk3DScenes.container].filter(Boolean);
+ for(const stage of stages){
+   setTexture(stage.materials?.floor,urls.scenefloor,stage===sk3DScenes.backdrop?8:4,stage===sk3DScenes.backdrop?8:4);
+   setTexture(stage.materials?.wall,urls.scenewall,2,2);
+   setTexture(stage.materials?.back,urls.sceneback||urls.scenewall,3,2);
+ }
+}
+window.addEventListener('resize',()=>{
+ if(!sk3DScenes||!sk3DScenes.backdrop||!window.THREE)return;
+ const stage=sk3DScenes.backdrop;
+ stage.camera.aspect=window.innerWidth/window.innerHeight;stage.camera.updateProjectionMatrix();
+ stage.renderer.setSize(window.innerWidth,window.innerHeight,false);
+});
+/* Text mirror: every Canvas2D fillText/strokeText call from the original 2D game
+   is copied with its original font, transform, alignment, colour and opacity.
+   This preserves level labels, score popups, pause/win/fail screens, hints,
+   warnings, bonus messages and future strings without re-implementing them. */
+let sk3DCaptureText=false;
+const sk3DTextSkipEmojis=new Set(['❔','❓']);
+function sk3DTextIsIcon(text){
+ if(!colorblindMode)return false;
+ const value=String(text);
+ return sk3DTextSkipEmojis.has(value)||Object.values(COLOR_EMOJIS).includes(value);
+}
+function sk3DInstallTextCapture(){
+ if(!sk3DScenes)return;
+ for(const stage of [sk3DScenes.game,sk3DScenes.container]){
+  const original=stage.source.getContext('2d');
+  if(original.__sk3DMirrorInstalled)continue;
+  original.__sk3DMirrorInstalled=true;
+  for(const method of ['fillText','strokeText']){
+   const native=original[method].bind(original);
+   original[method]=function(text,x,y,maxWidth){
+    if(sk3DCaptureText&&sk3DEnabled&&sk3DShowHUD&&!sk3DTextIsIcon(text)){
+     const overlay=stage.hudCtx;
+     overlay.save();
+     const matrix=original.getTransform();
+     overlay.setTransform(matrix.a,matrix.b,matrix.c,matrix.d,matrix.e,matrix.f);
+     overlay.font=original.font;
+     overlay.textAlign=original.textAlign;
+     overlay.textBaseline=original.textBaseline;
+     overlay.direction=original.direction;
+     overlay.fillStyle=original.fillStyle;
+     overlay.strokeStyle=original.strokeStyle;
+     overlay.lineWidth=original.lineWidth;
+     overlay.lineJoin=original.lineJoin;
+     overlay.miterLimit=original.miterLimit;
+     overlay.globalAlpha=original.globalAlpha;
+     overlay.shadowColor=original.shadowColor;
+     overlay.shadowBlur=original.shadowBlur;
+     overlay.shadowOffsetX=original.shadowOffsetX;
+     overlay.shadowOffsetY=original.shadowOffsetY;
+     if(maxWidth===undefined)overlay[method](text,x,y);
+     else overlay[method](text,x,y,maxWidth);
+     overlay.restore();
+    }
+    return maxWidth===undefined?native(text,x,y):native(text,x,y,maxWidth);
+   };
+  }
+ }
+}
+function sk3DBeginOriginalTextFrame(){
+ if(!sk3DEnabled||!sk3DScenes||!sk3DShowHUD)return;
+ sk3DInstallTextCapture();
+ for(const stage of [sk3DScenes.game,sk3DScenes.container])stage.hudCtx.clearRect(0,0,stage.hud.width,stage.hud.height);
+ sk3DCaptureText=true;
+}
+function sk3DEndOriginalTextFrame(){sk3DCaptureText=false;}
+function updateSK3DHUD(stage,container){
+ // The original game's wording already lives on the mirrored text layer.
+ // Only colourblind symbols need reprojection to compensate for camera orbit.
+ if(!sk3DShowHUD||!colorblindMode)return;
+ const g=stage.hudCtx;
+ const renderIcon=(b,radius)=>{
+  const p=sk3DProject(stage,b.x,b.y,Number(b.z)||0);
+  if(p.visible)sk3DText(g,b.color==null?'❔':(COLOR_EMOJIS[b.color]||'❔'),p.x,p.y,radius);
+ };
+ if(container){for(const b of container_bubbles)renderIcon(b,Math.max(12,Math.min(24,containerRadius(b)*.72)));}
+ else{
+  for(const b of bubbles)renderIcon(b,16);
+  for(const b of fallingBubbles)renderIcon(b,16);
+  for(const b of projectiles)renderIcon(b,16);
+  const w=stage.source.width,h=stage.source.height;
+  if(ammo>0)renderIcon({x:w/2,y:h-80,z:57,color:currentBall},18);
+  if(ammo>1)renderIcon({x:w/2+60,y:h-80,z:57,color:nextBall},14);
+ }
+}
+function sk3DAim(stage){
+ const T=window.THREE;
+ if(stage.aimLine){stage.aimLine.parent?.remove(stage.aimLine);stage.aimLine.geometry.dispose();stage.aimLine.material.dispose();stage.aimLine=null;}
+ if(stage.ghost)stage.ghost.visible=false;
+ if(isPaused||gameWin||gameOver||isCustomMode||winPending||ammo<=0||projectiles.length||(!aimEnabled&&!showGhost)||mouseY >= DEADLINE||conversionQueue.length > 0)return;
+ const prediction=skPredictProjectileTrajectory();if(!prediction)return;
+ // The landing slot is computed using exactly the same row/col and
+ // occupied-slot fallback as snapToGrid(), not an arbitrary impact location.
+ const snapped=prediction.landing;
+ const snapCoords=getGridCoords(snapped.row,snapped.col);
+ prediction.landing={...snapped,x:snapCoords.x,y:snapCoords.y};
+ // In shared arcade mode the aiming line is attached to the real visible
+ // puzzle group; never to the hidden legacy renderer scene.
+ const parent=sk3DScenes?.sharedWorld?.puzzle||stage.scene;
+ const point=p=>new T.Vector3(p.x-stage.source.width/2,stage.source.height/2-p.y,48);
+ if(aimEnabled){
+  stage.aimLine=new T.Line(new T.BufferGeometry().setFromPoints(prediction.path.map(point)),new T.LineBasicMaterial({color:currentBall||0xffffff,transparent:true,opacity:.85}));
+  parent.add(stage.aimLine);
+ }
+ if(showGhost){
+  if(!stage.ghost){stage.ghost=new T.Mesh(stage.geometry,new T.MeshPhysicalMaterial({color:0xffffff,transparent:true,opacity:.42,roughness:.18,clearcoat:1,depthWrite:false}));}
+  if(stage.ghost.parent!==parent)parent.add(stage.ghost);
+  stage.ghost.visible=true;stage.ghost.position.copy(point(prediction.landing));stage.ghost.scale.setScalar(RADIUS-2);stage.ghost.material.color.set(currentBall||'#ffffff');
+ }
+}
+
+// Camera orbit is view-only: left-click aiming and the puzzle grid retain their existing rules.
+let sk3DCameraPreset='front';
+function sk3DUpdateCamera(stage){
+ const T=window.THREE;
+ const d=(stage.cameraDistance+95)*stage.orbitZoom;
+ const yaw=stage.orbitYaw,pitch=stage.orbitPitch;
+ stage.camera.position.set(Math.sin(yaw)*Math.cos(pitch)*d,Math.sin(pitch)*d+20,Math.cos(yaw)*Math.cos(pitch)*d);
+ stage.camera.lookAt(0,0,0);
+ stage.camera.updateProjectionMatrix();
+}
+function sk3DSetCamera(preset){
+ sk3DCameraPreset=preset;
+ if(!sk3DScenes)return;
+ for(const stage of [sk3DScenes.game,sk3DScenes.container].filter(Boolean)){
+  if(preset==='front'){stage.orbitYaw=0;stage.orbitPitch=0;stage.orbitZoom=1;}
+  else if(preset==='angled'){stage.orbitYaw=.38;stage.orbitPitch=.13;stage.orbitZoom=1.13;}
+  else if(preset==='top'){stage.orbitYaw=.18;stage.orbitPitch=.62;stage.orbitZoom=1.2;}
+  sk3DUpdateCamera(stage);
+ }
+}
+function sk3DEnableCameraUI(){
+ const bar=document.getElementById('sk3dCameraControls');
+ if(bar)bar.style.display=sk3DEnabled&&gameRunning?'block':'none';
+}
+function sk3DInstallOrbit(){
+ const canvasEl=document.getElementById('gameCanvas');
+ if(!canvasEl||canvasEl.dataset.sk3dOrbit)return;
+ canvasEl.dataset.sk3dOrbit='1';
+ let drag=false,lastX=0,lastY=0;
+ canvasEl.addEventListener('contextmenu',e=>{if(sk3DEnabled)e.preventDefault();});
+ canvasEl.addEventListener('pointerdown',e=>{
+  if(!sk3DEnabled||e.button!==1||!sk3DScenes)return;
+  drag=true;lastX=e.clientX;lastY=e.clientY;canvasEl.setPointerCapture(e.pointerId);e.preventDefault();e.stopImmediatePropagation();
+ },true);
+ canvasEl.addEventListener('pointermove',e=>{
+  if(!drag||!sk3DEnabled||!sk3DScenes)return;
+  const dx=e.clientX-lastX,dy=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;
+  for(const stage of [sk3DScenes.game,sk3DScenes.container].filter(Boolean)){
+   stage.orbitYaw=Math.max(-.94,Math.min(.94,stage.orbitYaw+dx*.006));
+   stage.orbitPitch=Math.max(-.65,Math.min(.82,stage.orbitPitch+dy*.005));
+  }
+  e.preventDefault();e.stopImmediatePropagation();
+ },true);
+ canvasEl.addEventListener('pointerup',e=>{if(e.button===1){drag=false;e.preventDefault();e.stopImmediatePropagation();}},true);
+ canvasEl.addEventListener('pointercancel',()=>drag=false);
+ canvasEl.addEventListener('wheel',e=>{
+  if(!sk3DEnabled||!gameRunning||!sk3DScenes)return;
+  for(const stage of [sk3DScenes.game,sk3DScenes.container].filter(Boolean))stage.orbitZoom=Math.max(.85,Math.min(1.95,stage.orbitZoom*Math.exp(e.deltaY*.001)));
+  e.preventDefault();
+ },{passive:false});
+}
+function renderSK3D(){
+ sk3DEnableCameraUI();
+ syncSK3DUIState();
+ if(!sk3DEnabled){hideSK3D();return;}
+ if(!sk3DScenes){loadSK3D();return;}
+ const backdrop=sk3DScenes.backdrop,game=sk3DScenes.game,box=sk3DScenes.container;
+ if(backdrop&&!gameRunning){
+  backdrop.wrapper.style.display='block';
+  backdrop.stars.rotation.y+=0.0008;
+  backdrop.glowBars.forEach((bar,i)=>{bar.material.opacity=.38+Math.sin(performance.now()*0.0015+i)*.08;});
+  backdrop.renderer.render(backdrop.scene,backdrop.camera);
+ }
+ if(!gameRunning){for(const stage of [game,box]){stage.renderer.domElement.style.display='none';stage.hud.style.display='none';}return;}
+ game.renderer.domElement.style.display='block';game.hud.style.display=sk3DShowHUD?'block':'none';
+ const gameObjects=[...bubbles.map(b=>({b,radius:RADIUS-1,opacity:isChainPendingFallBubble(b)?.6:1})),...fallingBubbles.map(b=>({b,radius:RADIUS-1,opacity:Math.max(.25,Math.min(.85,b.life??.8))})),...projectiles.map(b=>({b,radius:RADIUS-1})),...particles.slice(0,220).map(b=>({b:{...b,z:42},radius:Math.max(2,(Number(b.size)||2)*1.8),opacity:Math.max(.18,Math.min(1,b.life??1))}))];
+ if(containerMode&&containerFlights.length){
+   const rect=canvas.getBoundingClientRect();
+   for(const f of containerFlights){
+     const t=Math.min(1,(f.age||0)/(f.duration||1));
+     const eased=t*t*(3-2*t);
+     const sx=((f.x-rect.left)/Math.max(1,rect.width))*canvas.width;
+     const sy=((f.y-rect.top)/Math.max(1,rect.height))*canvas.height;
+     const ex=((f.tx-rect.left)/Math.max(1,rect.width))*canvas.width;
+     const ey=((f.ty-rect.top)/Math.max(1,rect.height))*canvas.height;
+     const px=sx+(ex-sx)*eased;
+     const py=sy+(ey-sy)*eased+Math.sin(Math.PI*t)*(-70);
+     const pz=55+Math.sin(Math.PI*t)*55;
+     gameObjects.push({b:{x:px,y:py,z:pz,color:f.color||'#ffffff'},radius:7+(1-t)*5,opacity:.9});
+   }
+ }
+ if(!isCustomMode&&ammo>0){gameObjects.push({b:{x:canvas.width/2,y:canvas.height-80,z:57,color:currentBall},radius:RADIUS});if(ammo>1)gameObjects.push({b:{x:canvas.width/2+60,y:canvas.height-80,z:57,color:nextBall},radius:RADIUS*.72});}
+ syncSK3DSpheres(game,gameObjects);
+ game.cannonGroup.visible=!isCustomMode&&!isPaused;
+ game.cannonGroup.rotation.z=-angle-Math.PI/2;
+ skUpdate3DCannonRecoil(game);
+ sk3DAim(game);
+ sk3DUpdateCamera(game);
+ updateSK3DHUD(game,false);
+ game.renderer.render(game.scene,game.camera);
+ box.renderer.domElement.style.display=containerMode?'block':'none';box.hud.style.display=(containerMode&&sk3DShowHUD)?'block':'none';if(box.skDetached){box.renderer.domElement.classList.add('sk3d-detached-container');box.hud.classList.add('sk3d-detached-container-hud');}
+ if(containerMode){
+  syncSK3DSpheres(box,[...container_bubbles.map(b=>({b,radius:containerRadius(b)-1,opacity:b.life??1})),...containerParticles.slice(0,220).map(b=>({b:{...b,z:42},radius:Math.max(2,(Number(b.size)||2)*1.8),opacity:Math.max(.18,Math.min(1,b.life??1))}))]);
+  const fuel=Math.max(0,Math.min(100,containerFuel))/100;
+  box.fuelMesh.visible=fuel>0;
+  box.cannonGroup.visible=false;
+  box.fuelMesh.scale.y=Math.max(.001,fuel*box.source.height);
+  box.fuelMesh.position.set(0,-box.source.height/2+fuel*box.source.height/2,-box.depth/2+13);
+  box.fuelMesh.material.color.set(containerFuel<=20?'#ff3333':containerFuel<=50?'#ffdd33':'#33ff66');
+  sk3DUpdateCamera(box);
+  updateSK3DHUD(box,true);
+  box.renderer.render(box.scene,box.camera);
+ }
+}
+
+/* One-screen 3D world. The 2D canvases stay in place for input and exact text mirroring. */
+const sk3DLightDefaults={
+ color:'#94daff',intensity:1.1,azimuth:-44,elevation:48
+};
+let sk3DLightSettings=(()=>{
+ try{
+  const saved=JSON.parse(localStorage.getItem('sk3d-light-settings')||'{}');
+  const value=saved.arcade||saved.backdrop||saved;
+  return {...sk3DLightDefaults,...value};
+ }catch(_e){return {...sk3DLightDefaults};}
+})();
+function sk3DSaveLighting(){
+ localStorage.setItem('sk3d-light-settings',JSON.stringify({arcade:sk3DLightSettings}));
+ localStorage.setItem('bubbleVisualUpdatedAt',String(Date.now()));
+ window.dispatchEvent(new Event('bubbleVisualPreferencesChanged'));
+}
+function sk3DApplyLighting(){
+ const world=sk3DScenes?.backdrop;
+ if(!world || !window.THREE)return;
+ const T=window.THREE;
+ const cfg=sk3DLightSettings;
+ const brightness=Math.max(0,Math.min(8,Number(cfg.intensity) || 0));
+ const az=T.MathUtils.degToRad(Number(cfg.azimuth)||0);
+ const el=T.MathUtils.degToRad(Number(cfg.elevation)||0);
+ const selected=new T.Color(cfg.color||'#94daff');
+ const direction=new T.Vector3(Math.sin(az)*Math.cos(el),Math.sin(el),Math.cos(az)*Math.cos(el));
+ // Lighting is owned by the arcade scene, which also contains the 3D boards.
+ // The previous implementation changed only one light and left several bright
+ // cyan/purple lights unchanged, masking both colour and direction.
+ if(!world.skLight){
+  world.skLight=world.scene.children.find(obj=>obj.isDirectionalLight)||null;
+ }
+ const key=world.skLight;
+ if(key){
+  const target=new T.Vector3(0,155,0);
+  key.target.position.copy(target);
+  if(!key.target.parent)world.scene.add(key.target);
+  key.position.copy(direction).multiplyScalar(850).add(target);
+  key.target.updateMatrixWorld();
+  key.color.copy(selected);
+  // Put most illumination in the directional source so its angle matters.
+  key.intensity=brightness*5.0;
+ }
+ world.scene.traverse(obj=>{
+  if(!obj.isLight||obj===key)return;
+  if(!obj.userData.sk3DBaseColor)obj.userData.sk3DBaseColor=obj.color.clone();
+  if(obj.userData.sk3DBaseIntensity===undefined)obj.userData.sk3DBaseIntensity=obj.intensity;
+  if(obj.isDirectionalLight){
+   // No competing fixed-direction rim lights in this shared scene.
+   obj.intensity=0;
+  }else if(obj.isHemisphereLight||obj.isAmbientLight){
+   obj.color.copy(selected).lerp(new T.Color('#ffffff'),.16);
+   if(obj.groundColor)obj.groundColor.set('#080b17');
+   obj.intensity=brightness*.32;
+  }else if(obj.isPointLight||obj.isSpotLight){
+   // Preserve a little arcade accent colour without hiding the chosen light.
+   obj.color.copy(selected).lerp(obj.userData.sk3DBaseColor,.15);
+   obj.intensity=obj.userData.sk3DBaseIntensity*brightness*.4;
+  }
+ });
+ const shared=sk3DScenes?.sharedWorld;
+ if(shared){
+  for(const group of [shared.puzzle,shared.jar]){
+   if(!group)continue;
+   group.traverse(obj=>{if(obj.isLight)obj.intensity=0;});
+  }
+ }
+ // The scene renderer is also used while the menu is open. Applying values
+ // immediately provides a live preview without waiting for gameplay to resume.
+ if(sk3DEnabled){
+  if(shared&&gameRunning&&typeof sk3DRenderSharedOnly==='function')sk3DRenderSharedOnly();
+  else world.renderer.render(world.scene,world.camera);
+ }
+}
+function sk3DMakeRoom(stage){
+ if(stage.skWorldRoom)return;
+ const T=window.THREE;
+ const room=new T.Group();stage.scene.add(room);
+ const floorMat=new T.MeshStandardMaterial({color:0x152838,roughness:.52,metalness:.2});
+ const wallMat=new T.MeshStandardMaterial({color:0x122036,roughness:.92,side:T.DoubleSide});
+ const rearMat=new T.MeshStandardMaterial({color:0x0f1a2e,roughness:.93});
+ const floor=new T.Mesh(new T.PlaneGeometry(3900,3400),floorMat);
+ floor.rotation.x=-Math.PI/2;floor.position.set(0,-stage.source.height/2-65,-550);room.add(floor);
+ const back=new T.Mesh(new T.PlaneGeometry(3900,1800),rearMat);back.position.set(0,130,-960);room.add(back);
+ for(let side of [-1,1]){
+  const sideWall=new T.Mesh(new T.PlaneGeometry(2400,1800),wallMat);
+  sideWall.rotation.y=side*Math.PI/2;sideWall.position.set(side*1550,150,-400);room.add(sideWall);
+ }
+ const grid=new T.GridHelper(3600,52,0x16abc3,0x123b55);grid.position.set(0,-stage.source.height/2-64,-390);
+ grid.material.transparent=true;grid.material.opacity=0;/* hidden room grid */
+ const strips=[]; // Removed the room's vertical neon poles and bars.
+ const ceiling=new T.Mesh(new T.PlaneGeometry(3900,3000),new T.MeshStandardMaterial({color:0x07101d,roughness:.92,side:T.DoubleSide}));
+ ceiling.rotation.x=Math.PI/2;ceiling.position.set(0,750,-450);room.add(ceiling);
+ const ambient=[];
+ for(let i=0;i<52;i++){
+  const orb=new T.Mesh(new T.SphereGeometry(5+Math.random()*10,10,10),new T.MeshBasicMaterial({color:i%3===0?0x3de6ff:(i%3===1?0xc25cff:0x88ffcc),transparent:true,opacity:.35+Math.random()*.24}));
+  orb.position.set((Math.random()-.5)*2600,-180+Math.random()*760,-820+Math.random()*560);
+  orb.userData={ax:orb.position.x,ay:orb.position.y,az:orb.position.z,spd:.45+Math.random()*.8,phase:Math.random()*Math.PI*2,r:18+Math.random()*40};
+  room.add(orb);ambient.push(orb);
+ }
+ stage.skWorldRoom=room;stage.skWorldLEDs=strips;stage.skAmbientOrbs=ambient;
+ stage.materials.floor.push(floorMat);
+ stage.materials.wall.push(wallMat);
+ stage.materials.back.push(rearMat);
+}
+function sk3DSetViewport(stage){
+ if(!stage||!window.THREE)return;
+ const setHUDRect=(hud,rect,source)=>{
+  if(!hud||!rect)return;
+  hud.style.left=rect.left+'px';
+  hud.style.top=rect.top+'px';
+  hud.style.width=(rect.width||source.width)+'px';
+  hud.style.height=(rect.height||source.height)+'px';
+  if(hud.width!==source.width)hud.width=source.width; if(hud.height!==source.height)hud.height=source.height;
+ };
+ if(stage===sk3DScenes?.game){
+  if(containerMode){
+   const el=document.getElementById('gameCanvas');
+   const rect=el?el.getBoundingClientRect():{left:0,top:0,width:440,height:640};
+   const w=Math.max(1,rect.width||440),h=Math.max(1,rect.height||640);
+   if(stage.skViewportWidth!==w||stage.skViewportHeight!==h){
+    stage.renderer.setSize(w,h,false);stage.camera.aspect=w/h;stage.camera.updateProjectionMatrix();stage.skViewportWidth=w;stage.skViewportHeight=h;
+   }
+   stage.renderer.domElement.style.left=rect.left+'px';
+   stage.renderer.domElement.style.top=rect.top+'px';
+   stage.renderer.domElement.style.width=w+'px';
+   stage.renderer.domElement.style.height=h+'px';
+   stage.renderer.domElement.classList.add('sk3d-board-canvas');
+   stage.renderer.domElement.classList.remove('sk3d-world-canvas');
+   stage.hud.classList.add('sk3d-board-hud');
+   document.body.appendChild(stage.hud);
+   setHUDRect(stage.hud,rect,stage.source);
+   const d=(stage.cameraDistance+95)*stage.orbitZoom;
+   const yaw=stage.orbitYaw,pitch=stage.orbitPitch;
+   stage.camera.position.set(Math.sin(yaw)*Math.cos(pitch)*d,Math.sin(pitch)*d+20,Math.cos(yaw)*Math.cos(pitch)*d);
+   stage.camera.lookAt(0,0,0);stage.camera.updateProjectionMatrix();
+   return;
+  }
+  const vw=Math.max(1,window.innerWidth),vh=Math.max(1,window.innerHeight);
+  if(stage.skViewportWidth!==vw||stage.skViewportHeight!==vh){
+   stage.renderer.setSize(vw,vh,false);stage.camera.aspect=vw/vh;stage.camera.updateProjectionMatrix();stage.skViewportWidth=vw;stage.skViewportHeight=vh;
+  }
+  stage.renderer.domElement.style.left='0px';
+  stage.renderer.domElement.style.top='0px';
+  stage.renderer.domElement.style.width='100vw';
+  stage.renderer.domElement.style.height='100vh';
+  stage.renderer.domElement.classList.add('sk3d-world-canvas');
+  stage.renderer.domElement.classList.remove('sk3d-board-canvas');
+  stage.hud.classList.remove('sk3d-board-hud');
+  const d=(stage.cameraDistance+120)*stage.orbitZoom;
+  const yaw=stage.orbitYaw,pitch=stage.orbitPitch;
+  stage.camera.position.set(Math.sin(yaw)*Math.cos(pitch)*d,Math.sin(pitch)*d+20,Math.cos(yaw)*Math.cos(pitch)*d+35);
+  stage.camera.lookAt(0,0,0);stage.camera.updateProjectionMatrix();
+  return;
+ }
+ if(stage===sk3DScenes?.container){
+  const panel=document.getElementById('containerPanel');
+  const rect=panel?panel.getBoundingClientRect():{left:0,top:0,width:440,height:640};
+  const w=Math.max(1,rect.width||440),h=Math.max(1,rect.height||640);
+  if(stage.skViewportWidth!==w||stage.skViewportHeight!==h){
+   stage.renderer.setSize(w,h,false);stage.camera.aspect=w/h;stage.camera.updateProjectionMatrix();stage.skViewportWidth=w;stage.skViewportHeight=h;
+  }
+  stage.renderer.domElement.style.left=rect.left+'px';
+  stage.renderer.domElement.style.top=rect.top+'px';
+  stage.renderer.domElement.style.width=w+'px';
+  stage.renderer.domElement.style.height=h+'px';
+  stage.renderer.domElement.classList.add('sk3d-detached-container');
+  stage.hud.classList.add('sk3d-detached-container-hud');
+  setHUDRect(stage.hud,rect,stage.source);
+ }
+ const d=(stage.cameraDistance+95)*stage.orbitZoom;
+ const yaw=stage.orbitYaw,pitch=stage.orbitPitch;
+ stage.camera.position.set(Math.sin(yaw)*Math.cos(pitch)*d,Math.sin(pitch)*d+20,Math.cos(yaw)*Math.cos(pitch)*d);
+ stage.camera.lookAt(0,0,0);
+ stage.camera.updateProjectionMatrix();
+}
+const sk3DOldCameraUpdate=sk3DUpdateCamera;
+sk3DUpdateCamera=function(stage){sk3DSetViewport(stage);};
+sk3DProject=function(stage,x,y,z=0){
+ const v=new window.THREE.Vector3(x-stage.source.width/2,stage.source.height/2-y,z);v.project(stage.camera);
+ return {x:(v.x*.5+.5)*stage.source.width,y:(-v.y*.5+.5)*stage.source.height,visible:v.z>-1&&v.z<1};
+};
+const sk3DOldInit=initSK3D;
+initSK3D=function(){
+ sk3DOldInit();
+ if(!sk3DScenes||!sk3DScenes.game||sk3DScenes.game.skWorldReady)return;
+ const game=sk3DScenes.game,box=sk3DScenes.container;
+ game.skWorldReady=true;
+ game.renderer.domElement.classList.add('sk3d-world-canvas');
+ document.body.appendChild(game.renderer.domElement);
+ document.body.appendChild(game.hud);
+ sk3DMakeRoom(game);
+ // Backdrop already has its own arcade room; it has no source canvas dimensions.
+ if(box&&!box.skDetached){
+   box.skDetached=true;
+   box.renderer.domElement.classList.add('sk3d-detached-container');
+   box.hud.classList.add('sk3d-detached-container-hud');
+   document.body.appendChild(box.renderer.domElement);
+   document.body.appendChild(box.hud);
+   sk3DMakeRoom(box);
+ }
+ sk3DApplyLighting();
+ if(typeof window.applySK3DSceneTextures==='function')window.applySK3DSceneTextures();
+};
+const sk3DOldRender=renderSK3D;
+renderSK3D=function(){
+ const now=performance.now()*0.001;
+ if(sk3DEnabled&&gameRunning&&sk3DScenes?.backdrop){
+  sk3DScenes.backdrop.wrapper.style.display='none';
+ }
+ if(sk3DScenes){
+   if(containerMode&&sk3DScenes.game&&sk3DScenes.container){sk3DScenes.container.orbitYaw=sk3DScenes.game.orbitYaw;sk3DScenes.container.orbitPitch=sk3DScenes.game.orbitPitch;sk3DScenes.container.orbitZoom=sk3DScenes.game.orbitZoom;}
+   for(const stage of [sk3DScenes.game,sk3DScenes.container,sk3DScenes.backdrop]){
+     if(!stage)continue;
+     (stage.skWorldLEDs||[]).forEach((led,i)=>{led.material.opacity=.28+Math.sin(now*1.4+i)*.18;});
+     (stage.skAmbientOrbs||[]).forEach((orb,i)=>{const u=orb.userData||{};orb.position.x=u.ax+Math.sin(now*u.spd+u.phase)*u.r;orb.position.y=u.ay+Math.cos(now*(u.spd*.7)+u.phase)*u.r*.45;orb.position.z=u.az+Math.sin(now*(u.spd*.55)+u.phase)*u.r*.7;orb.material.opacity=.32+((Math.sin(now*2+i)+1)*.18);});
+   }
+ }
+ sk3DOldRender();
+ if(sk3DEnabled&&gameRunning&&sk3DScenes?.backdrop)sk3DScenes.backdrop.wrapper.style.display='none';
+ if(sk3DScenes?.container){
+   const show=sk3DEnabled&&gameRunning&&containerMode;
+   sk3DScenes.container.renderer.domElement.style.display=show?'block':'none';
+   sk3DScenes.container.hud.style.display=(show&&sk3DShowHUD)?'block':'none';
+ }
+};
+// Loading the Blob through createImageBitmap avoids revoked-object-URL races.
+// A fresh CanvasTexture per material also prevents image corruption.
+let sk3DTextureGeneration=0;
+window.applySK3DSceneTextures=async function(){
+ if(!window.THREE||!sk3DScenes)return;
+ const generation=++sk3DTextureGeneration,T=window.THREE;
+ const blobs=window.sk3DSceneTextureBlobs||{};
+ const stages=[sk3DScenes.backdrop,sk3DScenes.game,sk3DScenes.container].filter(Boolean);
+ const makeTextureFromBlob=async(blob)=>{
+  if(!blob)return null;
+  const bitmap=await createImageBitmap(blob);
+  const c=document.createElement('canvas');c.width=bitmap.width;c.height=bitmap.height;
+  const g=c.getContext('2d');g.drawImage(bitmap,0,0);if(bitmap.close)bitmap.close();
+  const tex=new T.CanvasTexture(c);tex.needsUpdate=true;tex.colorSpace=T.SRGBColorSpace;tex.wrapS=T.ClampToEdgeWrapping;tex.wrapT=T.ClampToEdgeWrapping;tex.repeat.set(1,1);return tex;
+ };
+ const prepared={};
+ for(const key of ['scenefloor','scenewall','sceneback','scenewallleft','scenewallright','sceneceiling']){
+  try{prepared[key]=await makeTextureFromBlob(blobs[key]||null);}catch(e){console.warn('3D texture decode failed',key,e);prepared[key]=null;}
+  if(generation!==sk3DTextureGeneration)return;
+ }
+ const pickMats=(stage,key)=>{
+   let mats=key==='scenefloor'?(stage.materials?.floor||[]):key==='scenewall'?(stage.materials?.wall||[]):(stage.materials?.back||[]);
+   mats=[...mats].filter(Boolean).filter(m=>!m.transparent || m.opacity>=0.8);
+   if(key==='scenewall'&&mats.length>1)mats=[mats[0]];
+   return mats;
+ };
+ for(const stage of stages){
+  for(const key of ['scenefloor','scenewall','sceneback']){
+   for(const mat of pickMats(stage,key)){
+    if(!mat.userData.skOriginalColor)mat.userData.skOriginalColor=mat.color?.clone?.()||null;
+    if(mat.userData.skCustomTexture){mat.userData.skCustomTexture.dispose();mat.userData.skCustomTexture=null;}
+    if(mat.userData.skOriginalEmissive===undefined && mat.emissive)mat.userData.skOriginalEmissive=mat.emissive.clone();
+    const src=prepared[key];
+    if(!src){
+      mat.map=null;
+      if(mat.userData.skOriginalColor&&mat.color)mat.color.copy(mat.userData.skOriginalColor);
+      if(mat.userData.skOriginalEmissive&&mat.emissive)mat.emissive.copy(mat.userData.skOriginalEmissive);
+      mat.opacity=Math.max(mat.opacity||1,0.95);
+      mat.needsUpdate=true;
+      continue;
+    }
+    const tex=src.clone();tex.needsUpdate=true;tex.anisotropy=Math.min(8,stage.renderer.capabilities.getMaxAnisotropy());
+    mat.map=tex;mat.userData.skCustomTexture=tex;
+    if(mat.color)mat.color.set('#ffffff');
+    if(mat.emissive)mat.emissive.set('#000000');
+    mat.opacity=1;
+    mat.transparent=false;
+    mat.needsUpdate=true;
+   }
+  }
+ }
+};
+// Smooth camera controls. Do not capture typing in forms, text boxes or debug console.
+const sk3DKeys=new Set();
+function sk3DCanOrbitKey(){const el=document.activeElement;return sk3DEnabled&&gameRunning&&!document.getElementById('sk3dSceneSettings')?.classList.contains('open')&&!(el&&(/INPUT|TEXTAREA|SELECT/.test(el.tagName)||el.isContentEditable));}
+window.addEventListener('keydown',e=>{if(!sk3DCanOrbitKey())return;const k=e.key.toLowerCase();if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){sk3DKeys.add(k);if(k.startsWith('arrow'))e.preventDefault();}},true);
+window.addEventListener('keyup',e=>sk3DKeys.delete(e.key.toLowerCase()));
+window.addEventListener('blur',()=>sk3DKeys.clear());
+let sk3DOrbitLast=0;
+function sk3DOrbitKeys(t){requestAnimationFrame(sk3DOrbitKeys);
+ const dt=Math.min(.06,Math.max(0,(t-sk3DOrbitLast)/1000||0));sk3DOrbitLast=t;
+ if(!sk3DCanOrbitKey()||!sk3DScenes)return;
+ const h=(sk3DKeys.has('d')||sk3DKeys.has('arrowright')?1:0)-(sk3DKeys.has('a')||sk3DKeys.has('arrowleft')?1:0);
+ const v=(sk3DKeys.has('s')||sk3DKeys.has('arrowdown')?1:0)-(sk3DKeys.has('w')||sk3DKeys.has('arrowup')?1:0);
+ if(!h&&!v)return;
+ for(const stage of [sk3DScenes.game,sk3DScenes.container]){if(!stage)continue;stage.orbitYaw+=h*dt*1.15;stage.orbitPitch=Math.max(-1.17,Math.min(1.17,stage.orbitPitch+v*dt*1.05));}
+}
+requestAnimationFrame(sk3DOrbitKeys);
+function sk3DSettingsRender(){
+ const wrap=document.getElementById('sk3dSceneSettings');
+ if(!wrap)return;
+ wrap.querySelectorAll('[data-setting]').forEach(el=>{
+  const value=sk3DLightSettings[el.dataset.setting];
+  if(value!==undefined)el.value=String(value);
+ });
+}
+window.sk3DOpenSettings=function(){
+ sk3DSettingsRender();
+ document.getElementById('sk3dSceneSettings')?.classList.add('open');
+};
+window.sk3DCloseSettings=function(){
+ document.getElementById('sk3dSceneSettings')?.classList.remove('open');
+};
+window.sk3DResetLights=function(){
+ sk3DLightSettings={...sk3DLightDefaults};
+ sk3DSaveLighting();
+ sk3DSettingsRender();
+ sk3DApplyLighting();
+};
+function sk3DInstallSettings(){
+ if(document.getElementById('sk3dSceneSettings'))return;
+ const modal=document.createElement('div');
+ modal.id='sk3dSceneSettings';
+ modal.role='dialog';modal.setAttribute('aria-modal','true');
+ const row=(title,setting,min,max,step)=>`<label>${title}<input type="range" min="${min}" max="${max}" step="${step}" data-setting="${setting}" value="${sk3DLightSettings[setting]}"></label>`;
+ modal.innerHTML=`<div class="sk3d-settings-dialog">
+  <h2>🌌 Arcade Scene Lighting</h2>
+  <p>These settings control the single arcade scene, including both gameplay boards and the main menu. Changes are previewed immediately and saved on this device.</p>
+  <div class="sk3d-light-grid"><div class="sk3d-light-card">
+   <strong>Arcade scene</strong>
+   <label>Light colour<input type="color" data-setting="color" value="${sk3DLightSettings.color}"></label>
+   ${row('Light azimuth (left/right)','azimuth',-180,180,1)}
+   ${row('Light elevation (up/down)','elevation',-85,85,1)}
+   ${row('Brightness','intensity',0,8,.1)}
+  </div></div>
+  <p id="sk3DLightPlacementInfo" style="font-size:12px;color:#9deee8">Move the arcade light with the mouse, then left-click to lock its position.</p>
+  <div class="sk3d-settings-footer"><button type="button" id="sk3dPlaceLight">🎯 Position light with mouse</button>
+   <button type="button" id="sk3dResetLights">↺ Reset lighting</button>
+   <button type="button" id="sk3dCloseLights">✓ Done</button>
+  </div></div>`;
+ document.body.appendChild(modal);
+ modal.querySelectorAll('[data-setting]').forEach(el=>el.addEventListener('input',()=>{
+  const key=el.dataset.setting;
+  sk3DLightSettings[key]=key==='color'?el.value:Number(el.value);
+  sk3DSaveLighting();
+  sk3DApplyLighting();
+ }));
+ modal.querySelector('#sk3dResetLights').onclick=sk3DResetLights;
+ modal.querySelector('#sk3dPlaceLight').onclick=()=>{
+  sk3DLightPlacementActive=true;sk3DCloseSettings();
+  const hint=document.getElementById('sk3dLightPlacementHint');if(hint)hint.style.display='block';
+ };
+ modal.querySelector('#sk3dCloseLights').onclick=sk3DCloseSettings;
+ modal.addEventListener('pointerdown',e=>{if(e.target===modal)sk3DCloseSettings();});
+ const menu=document.getElementById('mainMenu'),btn=document.createElement('button');
+ btn.id='sk3dSceneSettingsBtn';btn.textContent='🌌 3D SCENE SETTINGS';btn.onclick=sk3DOpenSettings;
+ const toggle=document.getElementById('sk3dToggle');
+ if(toggle)toggle.after(btn);else menu?.append(btn);
+ const toolbar=document.getElementById('sk3dCameraControls');
+ if(toolbar){
+  const button=document.createElement('button');
+  button.className='sk3d-light-settings';button.textContent='⚙ Lighting';
+  button.onclick=sk3DOpenSettings;toolbar.append(button);
+ }
+}
+document.addEventListener('DOMContentLoaded',sk3DInstallSettings);
+
+document.addEventListener('DOMContentLoaded',()=>{
+ updateSK3DButton();sk3DInstallOrbit();syncSK3DUIState();if(sk3DEnabled)loadSK3D();
+ const toolbar=document.createElement('div');toolbar.id='sk3dCameraControls';
+ toolbar.innerHTML='<strong>🌌 3D SCENE CAMERA</strong><span class="sk3d-hint">Middle-drag / WASD / arrows: orbit · Mouse wheel: zoom · Left-click: shoot</span>';
+ document.body.appendChild(toolbar);
+ // The neon room also remains visible behind the main menu, even with the gameplay loop stopped.
+ const menuSceneLoop=()=>{
+  requestAnimationFrame(menuSceneLoop);
+  if(!sk3DEnabled||gameRunning||!sk3DScenes?.backdrop)return;
+  const st=sk3DScenes.backdrop;
+  st.wrapper.style.display='block';
+  st.stars.rotation.y+=.00025;
+  // The normal gameplay renderer is idle in the menu. Keep the shared ambient
+  // particle positions moving independently without activating either board.
+  if(sk3DScenes.sharedWorld&&typeof sk3DAnimateSharedParticles==='function'){
+   sk3DAnimateSharedParticles(performance.now());
+  }
+  st.renderer.render(st.scene,st.camera);
+ };
+ requestAnimationFrame(menuSceneLoop);
+});
+
+/* Unity-style SetActive for world-space puzzle and container boards.
+   Both boards are children of the menu's actual arcade-room THREE.Scene.
+   2D canvases remain solely as input surfaces / original text capture. */
+const sk3DOriginalSceneInit=initSK3D;
+initSK3D=function(){
+ sk3DOriginalSceneInit();
+ if(sk3DScenes?.backdrop)sk3DPrepareSharedWorld();
+};
+function sk3DPrepareSharedWorld(){
+ const scenes=sk3DScenes;
+ if(!scenes||scenes.sharedWorld||!window.THREE)return;
+ const T=window.THREE,world=scenes.backdrop;
+ const puzzle=new T.Group(),jar=new T.Group();
+ puzzle.name='PuzzleBoard_SetActive';jar.name='ContainerBoard_SetActive';
+ world.scene.add(puzzle,jar);
+ // The 3D canvases are not rendered as textures: move their actual meshes
+ // into the arcade scene and retain their existing physics/world positions.
+ scenes.sharedWorld={puzzle,jar,sparks:null,flightMeshes:[]};
+ for(const [stage,group] of [[scenes.game,puzzle],[scenes.container,jar]]){
+  group.position.set(stage===scenes.game?0:520,240,110);
+  stage.skSharedGroup=group;
+  stage.skBoardKind=stage===scenes.game?'puzzle':'container';
+  // Hide the redundant room from each formerly separate canvas.
+  stage.environment.visible=false;
+  if(stage.skWorldRoom)stage.skWorldRoom.visible=false;
+  sk3DMoveSceneMeshes(stage);
+ }
+ sk3DCreateSharedParticles();
+ sk3DSetActiveBoards(false,false);
+}
+function sk3DMoveSceneMeshes(stage){
+ if(!stage?.skSharedGroup)return;
+ for(const obj of [...stage.scene.children]){
+  if(obj===stage.environment||obj===stage.skWorldRoom||obj.isLight||obj.isCamera)continue;
+  stage.skSharedGroup.add(obj);
+ }
+}
+function sk3DSetActiveBoards(showPuzzle,showContainer){
+ const s=sk3DScenes?.sharedWorld;if(!s)return;
+ s.puzzle.visible=Boolean(showPuzzle);
+ s.jar.visible=Boolean(showContainer);
+ // No independent board WebGL camera views. All use the same arcade renderer.
+ for(const stage of [sk3DScenes.game,sk3DScenes.container]){
+  stage.renderer.domElement.style.display='none';
+ }
+}
+function sk3DCreateSharedParticles(){
+ const s=sk3DScenes.sharedWorld,T=window.THREE;
+ const n=130,positions=new Float32Array(n*3),colours=new Float32Array(n*3),velocity=[];
+ const palette=[new T.Color(0x40f2ff),new T.Color(0xd17aff),new T.Color(0xffd77a),new T.Color(0x7affc2)];
+ for(let i=0;i<n;i++){
+  positions[3*i]=(Math.random()-.5)*1550;
+  positions[3*i+1]=(Math.random()-.5)*1100;
+  positions[3*i+2]=100+(Math.random()-.5)*800;
+  const c=palette[i%palette.length];colours[3*i]=c.r;colours[3*i+1]=c.g;colours[3*i+2]=c.b;
+  velocity.push({speed:12+Math.random()*22,phase:Math.random()*7});
+ }
+ const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.BufferAttribute(positions,3));geometry.setAttribute('color',new T.BufferAttribute(colours,3));
+ const material=new T.PointsMaterial({size:5.5,sizeAttenuation:true,vertexColors:true,transparent:true,opacity:.82,depthWrite:false,blending:T.AdditiveBlending});
+ const points=new T.Points(geometry,material);points.name='ArcadeAmbientParticles';
+ sk3DScenes.backdrop.scene.add(points);s.sparks={points,velocity};
+ // Reusable 3D orbs for the existing container flying-particle timing.
+ for(let i=0;i<45;i++){
+  const mesh=new T.Mesh(new T.SphereGeometry(7,12,10),new T.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.95,depthWrite:false}));
+  mesh.visible=false;mesh.name='ContainerFlight3D';
+  sk3DScenes.backdrop.scene.add(mesh);s.flightMeshes.push(mesh);
+ }
+}
+function sk3DAnimateSharedParticles(t){
+ const s=sk3DScenes?.sharedWorld;if(!s)return;
+ const dt=Math.min(.06,(t-(s.lastTime??t))/1000);s.lastTime=t;
+ const sparks=s.sparks;
+ if(sparks){
+  const attr=sparks.points.geometry.attributes.position;
+  for(let i=0;i<sparks.velocity.length;i++){
+   const k=3*i,v=sparks.velocity[i];
+   attr.array[k+1]+=v.speed*dt;
+   attr.array[k]+=Math.sin(t*.0006+v.phase)*dt*5;
+   if(attr.array[k+1]>670)attr.array[k+1]=-450;
+  }
+  attr.needsUpdate=true;
+ }
+ for(const [i,orb] of s.flightMeshes.entries()){
+  const f=containerMode?containerFlights[i]:null;
+  orb.visible=Boolean(sk3DEnabled&&gameRunning&&f);
+  if(!f)continue;
+  const stage=sk3DScenes.game.source;
+  const progress=Math.min(1,(f.age||0)/(f.duration||1));
+  const eased=progress*progress*(3-2*progress);
+  const startX=s.puzzle.position.x+Number(f.bubble?.x??stage.width/2)-stage.width/2;
+  const targetX=s.jar.position.x+(Number(f.bubble?.x??stage.width/2)/stage.width*sk3DScenes.container.source.width-sk3DScenes.container.source.width/2);
+  const fromY=s.puzzle.position.y+stage.height/2-DEADLINE;
+  const toY=s.jar.position.y+sk3DScenes.container.source.height/2+CONTAINER_R;
+  orb.position.set(startX+(targetX-startX)*eased,fromY+(toY-fromY)*eased+Math.sin(Math.PI*progress)*180,190+Math.sin(Math.PI*progress)*110);
+  orb.scale.setScalar(Math.max(.45,1-progress*.35));
+  orb.material.color.set(f.color||'#ffffff');
+  orb.material.opacity=.95-progress*.2;
+ }
+}
+const sk3DLegacyRenderShared=renderSK3D;
+renderSK3D=function(){
+ // Let the original game update all bubble, aiming, and HUD meshes.
+ sk3DLegacyRenderShared();
+ if(!sk3DEnabled||!sk3DScenes?.backdrop)return;
+ sk3DPrepareSharedWorld();
+ const scenes=sk3DScenes,shared=scenes.sharedWorld,world=scenes.backdrop;
+ if(!shared)return;
+ for(const st of [scenes.game,scenes.container])sk3DMoveSceneMeshes(st);
+ const play=Boolean(gameRunning);
+ const two=play&&Boolean(containerMode);
+ sk3DSetActiveBoards(play,two);
+ // The 3D grid must follow the exact same showGrid setting as Canvas2D.
+ for(const st of [scenes.game,scenes.container]){
+  const grid=st.scene.getObjectByName('SK3DExact2DGrid');
+  if(grid)grid.visible=Boolean(play&&showGrid&&!st.isContainer);
+ }
+ // Both visual boards use the same 440x640 game-coordinate scale and depth.
+ shared.puzzle.scale.set(1,1,1);shared.jar.scale.set(1,1,1);
+ shared.puzzle.position.set(two?-275:0,240,110);
+ shared.jar.position.set(275,240,110);
+ world.wrapper.style.display='block';
+ const camera=world.camera;
+ if(play){
+  const yaw=scenes.game.orbitYaw,pitch=scenes.game.orbitPitch;
+  const d=(two?1220:1020)*scenes.game.orbitZoom;
+  const focus=new window.THREE.Vector3(0,230,90);
+  camera.position.set(focus.x+Math.sin(yaw)*Math.cos(pitch)*d,focus.y+Math.sin(pitch)*d,focus.z+Math.cos(yaw)*Math.cos(pitch)*d);
+  camera.lookAt(focus);
+ }else{
+  camera.position.set(0,220,580);camera.lookAt(0,40,-180);
+ }
+ sk3DAnimateSharedParticles(performance.now());
+ // 2D original strings remain captured on their own transparent HUD overlays.
+ // Project each board's center to place the readable labels over the real object.
+ for(const [stage,group,active] of [[scenes.game,shared.puzzle,play],[scenes.container,shared.jar,two]]){
+  const hud=stage.hud;
+  hud.style.display=active&&sk3DShowHUD?'block':'none';
+  if(!active)continue;
+  const point=group.position.clone().project(camera);
+  const x=(point.x*.5+.5)*window.innerWidth;
+  const y=(-point.y*.5+.5)*window.innerHeight;
+  const height=Math.min(window.innerHeight*.78,(two?540:610));
+  const width=height*stage.source.width/stage.source.height;
+  hud.style.left=(x-width/2)+'px';hud.style.top=(y-height/2)+'px';
+  hud.style.width=width+'px';hud.style.height=height+'px';
+ }
+ camera.updateProjectionMatrix();
+ world.renderer.render(world.scene,camera);
+};
+// Ensure menu / 2D toggles restore the original renderer visibility.
+const sk3DLegacyHideShared=hideSK3D;
+hideSK3D=function(){
+ if(sk3DScenes?.sharedWorld)sk3DSetActiveBoards(false,false);
+ sk3DLegacyHideShared();
+};
+
+
+/* Shared-world corrections: active-game lighting, world-projected icons,
+   3D flying icon orbit, menu SetActive cleanup and camera restoration. */
+function sk3DWorldPoint(group,stage,x,y,z=0){
+ const T=window.THREE;
+ return group.localToWorld(new T.Vector3(Number(x)-stage.source.width/2,stage.source.height/2-Number(y),Number(z)||0));
+}
+function sk3DWindowProjection(point){
+ const v=point.clone().project(sk3DScenes.backdrop.camera);
+ return {x:(v.x*.5+.5)*window.innerWidth,y:(-v.y*.5+.5)*window.innerHeight,visible:v.z>-1&&v.z<1};
+}
+function sk3DAlignBoardHUD(stage,group,visible){
+ const h=stage.hud;
+ h.style.display=visible&&sk3DShowHUD?'block':'none';
+ if(!visible)return;
+ const corners=[
+  sk3DWindowProjection(sk3DWorldPoint(group,stage,0,0)),
+  sk3DWindowProjection(sk3DWorldPoint(group,stage,stage.source.width,0)),
+  sk3DWindowProjection(sk3DWorldPoint(group,stage,0,stage.source.height)),
+  sk3DWindowProjection(sk3DWorldPoint(group,stage,stage.source.width,stage.source.height))
+ ];
+ if(!corners.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)))return;
+ const left=Math.min(...corners.map(p=>p.x)),right=Math.max(...corners.map(p=>p.x));
+ const top=Math.min(...corners.map(p=>p.y)),bottom=Math.max(...corners.map(p=>p.y));
+ h.style.left=left+'px';h.style.top=top+'px';h.style.width=Math.max(1,right-left)+'px';h.style.height=Math.max(1,bottom-top)+'px';
+ stage.skScreenRect={left,top,width:Math.max(1,right-left),height:Math.max(1,bottom-top)};
+}
+function sk3DDrawWorldIcons(stage,group,bubbleList){
+ if(!sk3DShowHUD||!colorblindMode||!stage.skScreenRect)return;
+ const rect=stage.skScreenRect;
+ const g=stage.hudCtx;
+ for(const item of bubbleList){
+  if(!item||!Number.isFinite(Number(item.x))||!Number.isFinite(Number(item.y)))continue;
+  const pos=sk3DWindowProjection(sk3DWorldPoint(group,stage,item.x,item.y,item.z||0));
+  if(!pos.visible)continue;
+  const x=(pos.x-rect.left)/rect.width*stage.hud.width;
+  const y=(pos.y-rect.top)/rect.height*stage.hud.height;
+  const sz=Math.max(12,Math.min(28,Number(item.r)||16));
+  sk3DText(g,item.color==null?'❔':(COLOR_EMOJIS[item.color]||'❔'),x,y,sz);
+ }
+}
+// The legacy per-board camera is not the camera that renders shared-world bubbles.
+// Replace its icon-only HUD routine; text still comes from original Canvas2D capture.
+updateSK3DHUD=function(){};
+function sk3DUpdateProjectedIcons(){
+ const s=sk3DScenes?.sharedWorld;
+ if(!s||!gameRunning||!sk3DEnabled)return;
+ const game=sk3DScenes.game,box=sk3DScenes.container;
+ sk3DAlignBoardHUD(game,s.puzzle,true);
+ sk3DAlignBoardHUD(box,s.jar,Boolean(containerMode));
+ sk3DDrawWorldIcons(game,s.puzzle,[
+  ...bubbles.map(b=>({...b,r:16})),...fallingBubbles.map(b=>({...b,r:16})),...projectiles.map(b=>({...b,r:16})),
+  ...(ammo>0?[{x:game.source.width/2,y:game.source.height-80,z:57,color:currentBall,r:18}]:[]),
+  ...(ammo>1?[{x:game.source.width/2+60,y:game.source.height-80,z:57,color:nextBall,r:14}]:[])
+ ]);
+ if(containerMode)sk3DDrawWorldIcons(box,s.jar,container_bubbles.map(b=>({...b,r:Math.max(12,Math.min(26,containerRadius(b)*.7))})));
+}
+
+const sk3DPrevSharedPrep=sk3DPrepareSharedWorld;
+sk3DPrepareSharedWorld=function(){
+ sk3DPrevSharedPrep();
+ const scenes=sk3DScenes,s=scenes?.sharedWorld;
+ if(!s||s.skDecorated)return;
+ s.skDecorated=true;
+ const T=window.THREE;
+ // Both boards use the arcade room lights; no separate board lighting.\n // Extra back wall is activated for gameplay only, independently of both boards.
+ const backMat=new T.MeshStandardMaterial({color:0x142943,roughness:.9,metalness:.05,side:T.DoubleSide});
+ const backWall=new T.Mesh(new T.PlaneGeometry(1950,1050),backMat);
+ backWall.position.set(0,230,-470);
+ backWall.name='GameplayBackWall_SetActive';
+ scenes.backdrop.scene.add(backWall);s.gameplayWall=backWall;
+ backWall.visible=false;
+ scenes.backdrop.materials.back.push(backMat);
+ // Colourblind emblems follow the moving 3D flight orbs, not the screen overlay.
+ s.flightIcons=[];
+ s.flightIconCache=new Map();
+ for(let i=0;i<s.flightMeshes.length;i++){
+  const sprite=new T.Sprite(new T.SpriteMaterial({color:0xffffff,transparent:true,depthTest:false,depthWrite:false}));
+  sprite.scale.set(23,23,1);sprite.visible=false;sprite.renderOrder=60;
+  scenes.backdrop.scene.add(sprite);s.flightIcons.push(sprite);
+ }
+ s.initialCamera={position:scenes.backdrop.camera.position.clone(),quaternion:scenes.backdrop.camera.quaternion.clone(),zoom:scenes.backdrop.camera.zoom};
+ s.initialOrbit={yaw:0,pitch:0,zoom:1};
+ sk3DApplyLighting();
+};
+function sk3DFlightSymbolTexture(symbol){
+ const s=sk3DScenes.sharedWorld;
+ if(s.flightIconCache.has(symbol))return s.flightIconCache.get(symbol);
+ const c=document.createElement('canvas');c.width=128;c.height=128;
+ const g=c.getContext('2d');g.textAlign='center';g.textBaseline='middle';g.font='94px sans-serif';g.fillText(symbol,64,65);
+ const texture=new window.THREE.CanvasTexture(c);texture.colorSpace=window.THREE.SRGBColorSpace;
+ s.flightIconCache.set(symbol,texture);return texture;
+}
+function sk3DAnimateFlightIcons(){
+ const s=sk3DScenes?.sharedWorld;if(!s?.flightIcons)return;
+ s.flightIcons.forEach((sprite,i)=>{
+  const f=sk3DEnabled&&gameRunning&&containerMode&&colorblindMode?containerFlights[i]:null;
+  const orb=s.flightMeshes[i];
+  sprite.visible=Boolean(f&&orb?.visible);
+  if(!sprite.visible)return;
+  const symbol=f.bubble?.color==null?'❔':(COLOR_EMOJIS[f.bubble.color]||'❔');
+  const texture=sk3DFlightSymbolTexture(symbol);
+  if(sprite.material.map!==texture){sprite.material.map=texture;sprite.material.needsUpdate=true;}
+  const p=Math.min(1,(f.age||0)/(f.duration||1));
+  const a=(f.age||0)*12;
+  const approach=Math.max(0,Math.min(1,(p-.65)/.35));
+  const r=20*(1-approach*approach*(3-2*approach));
+  sprite.position.copy(orb.position);
+  sprite.position.x+=Math.cos(a)*r;sprite.position.y+=Math.sin(a)*r;
+  sprite.position.z+=15;
+  sprite.material.opacity=Math.max(.4,1-p*.2);
+ });
+}
+function sk3DResetSharedCamera(){
+ const s=sk3DScenes?.sharedWorld,w=sk3DScenes?.backdrop;
+ if(!s||!w)return;
+ const state=s.initialCamera;
+ if(state){w.camera.position.copy(state.position);w.camera.quaternion.copy(state.quaternion);w.camera.zoom=state.zoom;w.camera.updateProjectionMatrix();}
+ for(const stage of [sk3DScenes.game,sk3DScenes.container]){
+  stage.orbitYaw=s.initialOrbit?.yaw||0;stage.orbitPitch=s.initialOrbit?.pitch||0;stage.orbitZoom=s.initialOrbit?.zoom||1;
+ }
+}
+const sk3DPreviousSetActive=sk3DSetActiveBoards;
+sk3DSetActiveBoards=function(showPuzzle,showContainer){
+ sk3DPreviousSetActive(showPuzzle,showContainer);
+ const s=sk3DScenes?.sharedWorld;if(!s)return;
+ if(s.gameplayWall)s.gameplayWall.visible=Boolean(showPuzzle);
+ if(!showPuzzle){
+  for(const obj of s.flightMeshes)obj.visible=false;
+  for(const obj of s.flightIcons||[])obj.visible=false;
+  for(const stage of [sk3DScenes.game,sk3DScenes.container])stage.hud.style.display='none';
+ }
+};
+function sk3DReturnToMenuVisuals(){
+ if(!sk3DScenes?.sharedWorld)return;
+ sk3DSetActiveBoards(false,false);
+ sk3DResetSharedCamera();
+ sk3DScenes.backdrop.wrapper.style.display=sk3DEnabled?'block':'none';
+ sk3DScenes.backdrop.renderer.render(sk3DScenes.backdrop.scene,sk3DScenes.backdrop.camera);
+}
+// The game's fade transition finishes asynchronously, and its gameplay render
+// loop stops on the menu; observe the actual menu switch as the reliable signal.
+document.addEventListener('DOMContentLoaded',()=>{
+ const menu=document.getElementById('mainMenu');
+ if(!menu)return;
+ const update=()=>{
+  const onMenu=getComputedStyle(menu).display!=='none';
+  if(onMenu&&!gameRunning){
+   try{sk3DExitGameplayUI();}catch(err){console.warn('3D HUD cleanup:',err);}
+   try{sk3DReturnToMenuVisuals();}catch(err){console.warn('3D menu redraw:',err);}
+  }
+ };
+ new MutationObserver(update).observe(menu,{attributes:true,attributeFilter:['style','class','hidden']});
+ update();
+});
+function sk3DRenderSharedOnly(){
+ const world=sk3DScenes?.backdrop;
+ if(world&&sk3DEnabled){sk3DUpdateProjectedIcons();sk3DAnimateFlightIcons();world.renderer.render(world.scene,world.camera);}
+}
+// Called once after legacy renderer and shared scene have updated the camera.
+const sk3DPreviousFinalRender=renderSK3D;
+renderSK3D=function(){
+ sk3DPreviousFinalRender();
+ const s=sk3DScenes?.sharedWorld;if(!s)return;
+ if(!sk3DEnabled||!gameRunning){
+  sk3DSetActiveBoards(false,false);
+  for(const icon of s.flightIcons||[])icon.visible=false;
+  if(!gameRunning)sk3DResetSharedCamera();
+  return;
+ }
+ sk3DRenderSharedOnly();
+};
+
+
+/* Three.js cursor-to-board aiming. Click and drag on the actual visible
+   3D board, not the invisible, untransformed original Canvas2D element. */
+let sk3DPointerAimId=null;
+function sk3DHitPuzzleBoard(clientX,clientY){
+ const scenes=sk3DScenes,shared=scenes?.sharedWorld,T=window.THREE;
+ if(!T||!shared||!gameRunning||!shared.puzzle.visible)return null;
+ const cam=scenes.backdrop.camera;
+ const mouse=new T.Vector2(clientX/Math.max(1,innerWidth)*2-1,-clientY/Math.max(1,innerHeight)*2+1);
+ const ray=new T.Raycaster();ray.setFromCamera(mouse,cam);
+ shared.puzzle.updateWorldMatrix(true,false);
+ const origin=shared.puzzle.localToWorld(new T.Vector3(0,0,0));
+ const normal=new T.Vector3(0,0,1).transformDirection(shared.puzzle.matrixWorld);
+ const plane=new T.Plane().setFromNormalAndCoplanarPoint(normal,origin);
+ const worldPoint=new T.Vector3();if(!ray.ray.intersectPlane(plane,worldPoint))return null;
+ const local=shared.puzzle.worldToLocal(worldPoint);
+ const x=local.x+canvas.width/2,y=canvas.height/2-local.y;
+ if(x<0||x>canvas.width||y<0||y>canvas.height)return null;
+ return {x,y};
+}
+function sk3DUpdateCursorAim(clientX,clientY){
+ const hit=sk3DHitPuzzleBoard(clientX,clientY);
+ if(!hit){skResetCannonSpinSample();return false;}
+ mouseX=hit.x;mouseY=hit.y;
+ angle=Math.atan2(mouseY-(canvas.height-80),mouseX-canvas.width/2);
+ skCountCannonSpins();
+ return true;
+}
+// Capture pointer events before the 2D handlers; don't interfere with buttons,
+// modal settings, menus or right-button camera orbit controls.
+window.addEventListener('pointermove',e=>{
+ if(!sk3DEnabled||!gameRunning||!sk3DScenes?.sharedWorld)return;
+ if(sk3DPointerAimId!==null&&e.pointerId!==sk3DPointerAimId)return;
+ if(sk3DPointerAimId!==null){sk3DUpdateCursorAim(e.clientX,e.clientY);return;}
+ if(e.pointerType==='mouse')sk3DUpdateCursorAim(e.clientX,e.clientY);
+},true);
+window.addEventListener('pointerdown',e=>{
+ if(!sk3DEnabled||!gameRunning||!sk3DScenes?.sharedWorld||!e.isPrimary||e.button!==0||
+    isCustomMode||dragBubblesEnabled||gameOver||gameWin||winPending)return;
+ if(e.target.closest('button,input,select,textarea,[role="dialog"],#gameUI,#mobileControls,#sk3dCameraControls,#debugConsole'))return;
+ if(!sk3DUpdateCursorAim(e.clientX,e.clientY))return;
+ e.stopImmediatePropagation();e.preventDefault();
+ if(isPaused){setPause(false);return;}
+ if(conversionQueue.length||chainPopActive||ammo<=0)return;
+ sk3DPointerAimId=e.pointerId;isAiming=true;
+},true);
+function sk3DEndWorldAim(e){
+ if(sk3DPointerAimId===null||e.pointerId!==sk3DPointerAimId)return;
+ // Do not shoot when released off the physical game board.
+ const inside=sk3DUpdateCursorAim(e.clientX,e.clientY);
+ if(e.type==='pointerup'&&inside&&isAiming&&gameRunning&&!isPaused&&!gameOver&&!gameWin&&
+    !winPending&&!containerBonusPending&&!containerFinishing&&conversionQueue.length===0&&!chainPopActive&&ammo>0&&
+    mouseY<=DEADLINE)shoot();
+ isAiming=false;sk3DPointerAimId=null;
+ e.stopImmediatePropagation();e.preventDefault();
+}
+window.addEventListener('pointerup',sk3DEndWorldAim,true);
+window.addEventListener('pointercancel',sk3DEndWorldAim,true);
+
+
+
+/* The original 3D HUD canvas styles force display:block with !important.
+   Explicitly hide every gameplay overlay whenever the game is not running;
+   restoring 3D gameplay uses the normal renderer's visibility updates. */
+function sk3DExitGameplayUI(){
+ const body=document.body;
+ body.classList.remove('sk3d-ui-active');
+ body.classList.add('sk3d-menu-active');
+ const hideIds=[
+  'gameUI','mobileControls','containerFuelWrapper','containerPanel',
+  'sk3dCameraControls','containerFlightLayer','debugOverlayPanel'
+ ];
+ for(const id of hideIds){
+  const el=document.getElementById(id);
+  if(el)el.style.display='none';
+ }
+ const bars=document.querySelector('.bars-container');
+ if(bars)bars.style.display='none';
+ const world=sk3DScenes?.sharedWorld;
+ if(world){
+  if(world.puzzle)world.puzzle.visible=false;
+  if(world.jar)world.jar.visible=false;
+  if(world.gameplayWall)world.gameplayWall.visible=false;
+  for(const obj of world.flightMeshes||[])obj.visible=false;
+  for(const obj of world.flightIcons||[])obj.visible=false;
+  if(Array.isArray(world.hitboxMeshes))for(const obj of world.hitboxMeshes)obj.visible=false;
+ }
+ if(sk3DScenes){
+  for(const stage of [sk3DScenes.game,sk3DScenes.container]){
+   if(!stage)continue;
+   if(stage.hud){
+    stage.hud.style.display='none';
+    try{stage.hud.getContext('2d')?.clearRect(0,0,stage.hud.width,stage.hud.height);}catch(_e){}
+   }
+   if(stage.renderer?.domElement)stage.renderer.domElement.style.display='none';
+  }
+  if(typeof sk3DResetSharedCamera==='function'){
+   try{sk3DResetSharedCamera();}catch(err){console.warn('Could not reset arcade camera:',err);}
+  }
+  if(sk3DEnabled&&sk3DScenes.backdrop){
+   const back=sk3DScenes.backdrop;
+   back.wrapper.style.display='block';
+   try{back.renderer.render(back.scene,back.camera);}catch(err){console.warn('Arcade menu redraw failed:',err);}
+  }
+ }
+}
+/* 3D arcade polish and state-safe mode switches. */
+function showSK3D(){
+ // Compatibility with code that still calls the old show helper.
+ if(!sk3DEnabled)return;
+ if(!sk3DScenes)loadSK3D();
+ else sk3DApplyVisibilityFix();
+}
+function sk3DApplyVisibilityFix(){
+ const sc=sk3DScenes,s=sc?.sharedWorld;
+ if(!sc)return;
+ if(!sk3DEnabled||!gameRunning){
+  if(s){s.puzzle.visible=false;s.jar.visible=false;if(s.gameplayWall)s.gameplayWall.visible=false;}
+  for(const st of [sc.game,sc.container]){
+   if(!st)continue;
+   st.renderer.domElement.style.display='none';st.hud.style.display='none';
+   if(st.aimLine)st.aimLine.visible=false;
+   if(st.ghost)st.ghost.visible=false;
+  }
+  const controls=document.getElementById('sk3dCameraControls');if(controls)controls.style.display='none';
+  const flight=document.getElementById('containerFlightLayer');
+  if(flight&&sk3DEnabled)flight.style.display='none';
+  if(!sk3DEnabled&&sc.backdrop)sc.backdrop.wrapper.style.display='none';
+  else if(sc.backdrop&&!gameRunning)sc.backdrop.wrapper.style.display='block';
+ }else{
+  if(s){s.puzzle.visible=true;s.jar.visible=Boolean(containerMode);if(s.gameplayWall)s.gameplayWall.visible=true;}
+ }
+}
+// Toggle-off must not leave a delayed world draw or stale overlay on top of 2D.
+const sk3DLastHide=hideSK3D;
+hideSK3D=function(){
+ try{sk3DLastHide();}catch(e){console.warn('3D hide recovered:',e);}
+ sk3DApplyVisibilityFix();
+};
+const sk3DLastToggle=toggleSK3D;
+toggleSK3D=function(){
+ sk3DLastToggle();
+ sk3DApplyVisibilityFix();
+};
+
+// Display the 2D debug hitboxes as translucent THREE spheres in the shared
+// world. Positions and collision radii match drawBubbleHitboxes().
+function sk3DUpdateHitboxSpheres(){
+ const sc=sk3DScenes,shared=sc?.sharedWorld,T=window.THREE;
+ if(!shared||!T)return;
+ if(!shared.skHitboxGroups){
+  const make=(parent,color)=>{
+   const group=new T.Group(),geo=new T.SphereGeometry(1,20,14),mat=new T.MeshBasicMaterial({color,transparent:true,opacity:.19,depthWrite:false,side:T.DoubleSide});
+   parent.add(group);return {group,geo,mat,meshes:[]};
+  };
+  shared.skHitboxGroups={
+   grid:make(shared.puzzle,0xff3535),
+   falling:make(shared.puzzle,0xffa500),
+   fired:make(shared.puzzle,0x44ff44),
+   container:make(shared.jar,0xff8ec8)
+  };
+ }
+ const sets=shared.skHitboxGroups;
+ const sync=(obj,items,stage,radiusFn)=>{
+  const active=Boolean(sk3DEnabled&&gameRunning&&showBubbleHitBox);
+  obj.group.visible=active;
+  if(!active)return;
+  while(obj.meshes.length<items.length){const mesh=new T.Mesh(obj.geo,obj.mat);obj.group.add(mesh);obj.meshes.push(mesh);}
+  for(let i=0;i<obj.meshes.length;i++){
+   const m=obj.meshes[i],b=items[i];m.visible=!!b;
+   if(!b)continue;
+   m.position.set(b.x-stage.source.width/2,stage.source.height/2-b.y,Number(b.z)||0);
+   m.scale.setScalar(radiusFn(b));
+  }
+ };
+ const collisionRadius=RADIUS*RADIUS_OFFSET;
+ sync(sets.grid,bubbles,sc.game,()=>collisionRadius);
+ sync(sets.falling,fallingBubbles,sc.game,()=>collisionRadius);
+ sync(sets.fired,projectiles,sc.game,()=>collisionRadius);
+ sync(sets.container,containerMode?container_bubbles:[],sc.container,b=>containerRadius(b));
+}
+
+// Animated lighting tint for state feedback. This overrides presentation
+// only; it doesn't overwrite the user's saved arcade light colour/direction.
+const sk3DStatusTint={color:null,weight:0,last:0};
+function sk3DApplyStatusLighting(time){
+ const scene=sk3DScenes?.backdrop?.scene,T=window.THREE;
+ if(!scene||!T)return;
+ const state=(sk3DEnabled&&gameRunning)?(gameOver?'fail':gameWin?'win':panicMode?'panic':'normal'):'normal';
+ const t=Number(time)||performance.now(),dt=Math.min(.12,Math.max(0,(t-(sk3DStatusTint.last||t))/1000));
+ sk3DStatusTint.last=t;
+ const amount=state==='normal'?0:state==='panic'?.48+.40*(.5+.5*Math.sin(t*.010)):1;
+ sk3DStatusTint.weight+=((amount-sk3DStatusTint.weight)*Math.min(1,dt*3.4));
+ const target=state==='win'?new T.Color('#32ff78'):new T.Color('#ff303c');
+ if(!sk3DStatusTint.color)sk3DStatusTint.color=target.clone();
+ else sk3DStatusTint.color.lerp(target,Math.min(1,dt*4));
+ // Base colours come from current shared lighting settings. Never accumulate
+ // tint on top of the previous frame's colours.
+ const baseColor=new T.Color(sk3DLightSettings.color||'#94daff');
+ const main=sk3DScenes.backdrop.skLight||scene.children.find(l=>l.isDirectionalLight);
+ if(main){main.color.copy(baseColor).lerp(sk3DStatusTint.color,sk3DStatusTint.weight);main.intensity=Math.max(0,Math.min(8,Number(sk3DLightSettings.intensity)||0))*5.0*(1+.36*sk3DStatusTint.weight);}
+ // Recalculate fill lighting from the live settings, not a one-time cached
+ // intensity snapshot. This keeps brightness and tint working together.
+ const power=Math.max(0,Math.min(8,Number(sk3DLightSettings.intensity)||0));
+ for(const light of scene.children){
+  if(!light.isLight||light===main)continue;
+  const natural=light.userData.sk3DBaseColor || light.color;
+  if(light.isDirectionalLight){light.intensity=0;continue;}
+  light.color.copy(baseColor).lerp(natural,.15).lerp(sk3DStatusTint.color,sk3DStatusTint.weight*.8);
+  if(light.isAmbientLight||light.isHemisphereLight){
+   light.intensity=power*.32*(1+.2*sk3DStatusTint.weight);
+  }else if(light.isPointLight||light.isSpotLight){
+   const initial=light.userData.sk3DBaseIntensity??light.intensity;
+   light.intensity=initial*power*.4*(1+.2*sk3DStatusTint.weight);
+  }
+ }
+}
+
+const sk3DPreviousSharedDraw=sk3DRenderSharedOnly;
+sk3DRenderSharedOnly=function(){
+ sk3DUpdateHitboxSpheres();
+ sk3DApplyStatusLighting(performance.now());
+ sk3DPreviousSharedDraw();
+};
+const sk3DPreviousFinalFrame=renderSK3D;
+renderSK3D=function(){
+ sk3DPreviousFinalFrame();
+ sk3DApplyVisibilityFix();
+};
+
+// Keep toggle/menu synchronization robust when the gameplay animation loop
+// has stopped, and restore light colours after exiting to the menu.
+document.addEventListener('DOMContentLoaded',()=>{
+ const menu=document.getElementById('mainMenu');
+ if(menu)new MutationObserver(()=>{
+  if(!gameRunning){sk3DApplyVisibilityFix();sk3DStatusTint.weight=0;sk3DStatusTint.last=0;}
+ }).observe(menu,{attributes:true,attributeFilter:['style','class']});
+});
+
+/* SK 3D upgrades: shared scene lighting placement, colourless pulse,
+   distinct wall textures, container arrival burst, and middle mouse orbit. */
+let sk3DLightPlacementActive=false;
+const sk3DActiveBursts=[];
+let sk3DPulseLast=0;
+function sk3DSpawnFlightBurst(color,symbol,screenX,screenY){
+ const scenes=sk3DScenes,shared=scenes?.sharedWorld,T=window.THREE;
+ if(!shared||!T)return;
+ const rect=sk3DScenes.container.source.getBoundingClientRect();
+ const relativeX=rect.width>0?(Number(screenX)-rect.left)/rect.width:.5;
+ const landingX=Math.max(-.5,Math.min(.5,relativeX-.5))*sk3DScenes.container.source.width;
+ const point=new T.Vector3(shared.jar.position.x+landingX,shared.jar.position.y+sk3DScenes.container.source.height/2+CONTAINER_R,195);
+ const palette=color||'#ffffff';
+ for(let i=0;i<14;i++){
+  const mesh=new T.Mesh(new T.SphereGeometry(3.2,9,7),new T.MeshBasicMaterial({color:palette,transparent:true,opacity:1,depthWrite:false}));
+  const a=i*Math.PI*2/14,spd=65+Math.random()*85;
+  mesh.position.copy(point);scenes.backdrop.scene.add(mesh);
+  sk3DActiveBursts.push({mesh,center:point.clone(),vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,age:0,duration:.58});
+ }
+ // Each ring expands and fades in the same time window as the original 2D poof.
+ const ring=new T.Mesh(new T.RingGeometry(7,10,36),new T.MeshBasicMaterial({color:palette,side:T.DoubleSide,transparent:true,opacity:.9,depthWrite:false}));
+ ring.position.copy(point);scenes.backdrop.scene.add(ring);
+ sk3DActiveBursts.push({mesh:ring,center:point.clone(),ring:true,age:0,duration:.53});
+}
+function sk3DFrameImprovements(now){
+ const scenes=sk3DScenes,shared=scenes?.sharedWorld,T=window.THREE;
+ if(!sk3DEnabled||!scenes?.backdrop||!T)return;
+ const t=Number(now)||performance.now();const dt=Math.min(.06,Math.max(0,(t-(sk3DPulseLast||t))/1000));sk3DPulseLast=t;
+ if(shared){
+  for(const stage of [scenes.game,scenes.container]){
+   for(const mesh of stage.meshes||[]){
+    if(!mesh.userData.skColourless||!mesh.visible)continue;
+    const whiteness=(Math.sin(t*.0035)+1)*.5;
+    mesh.material.color.setRGB(whiteness,whiteness,whiteness);
+    mesh.material.emissive.setRGB(whiteness*.12,whiteness*.12,whiteness*.12);
+    mesh.material.emissiveIntensity=.22;
+   }
+  }
+ }
+ if(isPaused||!gameRunning)return;
+ for(let i=sk3DActiveBursts.length-1;i>=0;i--){
+  const b=sk3DActiveBursts[i];b.age+=dt;
+  const f=Math.min(1,b.age/b.duration);
+  if(b.ring)b.mesh.scale.setScalar(1+f*7);
+  else b.mesh.position.set(b.center.x+b.vx*b.age,b.center.y+b.vy*b.age,b.center.z+Math.sin(f*Math.PI)*20);
+  b.mesh.material.opacity=Math.max(0,1-f);
+  if(f>=1){scenes.backdrop.scene.remove(b.mesh);b.mesh.geometry.dispose();b.mesh.material.dispose();sk3DActiveBursts.splice(i,1);}
+ }
+}
+function sk3DApplyPerWallTextures(){
+ const scene=sk3DScenes?.backdrop?.scene,T=window.THREE;
+ if(!scene||!T)return;
+ const blobMap=window.sk3DSceneTextureBlobs||{};
+ // Apply each wall image independently. No image repeat or transparent layering.
+ const named={scenewallleft:'SK3DLeftWall',scenewallright:'SK3DRightWall'};
+ for(const [key,name] of Object.entries(named)){
+  const obj=scene.getObjectByName(name),blob=blobMap[key];if(!obj)continue;
+  obj.userData.skTextureTicket=(obj.userData.skTextureTicket||0)+1;
+  const ticket=obj.userData.skTextureTicket;
+  if(!obj.userData.skBaseMat)obj.userData.skBaseMat=obj.material.clone();
+  if(!blob){if(obj.material.map)obj.material.map.dispose();obj.material=obj.userData.skBaseMat.clone();continue;}
+  createImageBitmap(blob).then(bitmap=>{
+   if(obj.userData.skTextureTicket!==ticket){bitmap.close();return;}
+   const canv=document.createElement('canvas');canv.width=bitmap.width;canv.height=bitmap.height;
+   canv.getContext('2d').drawImage(bitmap,0,0);bitmap.close();
+   const tex=new T.CanvasTexture(canv);tex.colorSpace=T.SRGBColorSpace;
+   if(obj.material.map)obj.material.map.dispose();
+   obj.material=obj.userData.skBaseMat.clone();obj.material.color.set(0xffffff);obj.material.emissive.set(0x000000);
+   obj.material.map=tex;obj.material.needsUpdate=true;
+  }).catch(err=>console.warn('Cannot load custom 3D wall image:',err));
+ }
+ // The arcade room ceiling has a dedicated texture too.
+ const ceiling=scene.getObjectByName('SK3DCeiling');const blob=blobMap.sceneceiling;
+ if(ceiling){
+  ceiling.userData.ticket=(ceiling.userData.ticket||0)+1;const ticket=ceiling.userData.ticket;
+  if(!ceiling.userData.base)ceiling.userData.base=ceiling.material.clone();
+  if(!blob){ceiling.material=ceiling.userData.base.clone();}
+  else createImageBitmap(blob).then(image=>{
+   if(ticket!==ceiling.userData.ticket){image.close();return;}
+   const c=document.createElement('canvas');c.width=image.width;c.height=image.height;c.getContext('2d').drawImage(image,0,0);image.close();
+   ceiling.material=ceiling.userData.base.clone();ceiling.material.color.set(0xffffff);
+   ceiling.material.map=new T.CanvasTexture(c);ceiling.material.map.colorSpace=T.SRGBColorSpace;ceiling.material.needsUpdate=true;
+  }).catch(err=>console.warn('Ceiling texture:',err));
+ }
+}
+const sk3DPriorTextureLoader=window.applySK3DSceneTextures;
+window.applySK3DSceneTextures=async function(){
+ await sk3DPriorTextureLoader?.();sk3DApplyPerWallTextures();
+};
+window.addEventListener('mousemove',e=>{
+ if(!sk3DLightPlacementActive||!sk3DEnabled)return;
+ sk3DLightSettings.azimuth=Math.round((e.clientX/Math.max(1,innerWidth)*2-1)*180);
+ sk3DLightSettings.elevation=Math.round(85-e.clientY/Math.max(1,innerHeight)*170);
+ sk3DApplyLighting();
+},true);
+window.addEventListener('click',e=>{
+ if(!sk3DLightPlacementActive||e.button!==0)return;
+ sk3DLightPlacementActive=false;sk3DSaveLighting();
+ const hint=document.getElementById('sk3dLightPlacementHint');if(hint)hint.style.display='none';
+ if(typeof sk3DSettingsRender==='function')sk3DSettingsRender();
+ e.preventDefault();e.stopImmediatePropagation();
+},true);
+window.addEventListener('keydown',e=>{
+ if(e.key==='Escape'&&sk3DLightPlacementActive){sk3DLightPlacementActive=false;document.getElementById('sk3dLightPlacementHint').style.display='none';}
+});
+// Middle-button orbit must work on the visible shared canvas, not just the transparent input canvas.
+let sk3DMiddleOrbit=null;
+window.addEventListener('pointerdown',e=>{
+ if(e.button!==1||!sk3DEnabled||!gameRunning||!sk3DScenes?.game)return;
+ sk3DMiddleOrbit={x:e.clientX,y:e.clientY};e.preventDefault();e.stopImmediatePropagation();
+},true);
+window.addEventListener('pointermove',e=>{
+ if(!sk3DMiddleOrbit||!sk3DEnabled||!sk3DScenes?.game)return;
+ const dx=e.clientX-sk3DMiddleOrbit.x,dy=e.clientY-sk3DMiddleOrbit.y;
+ sk3DMiddleOrbit.x=e.clientX;sk3DMiddleOrbit.y=e.clientY;
+ for(const stage of [sk3DScenes.game,sk3DScenes.container]){
+  stage.orbitYaw=Math.max(-1.15,Math.min(1.15,stage.orbitYaw+dx*.006));
+  stage.orbitPitch=Math.max(-.85,Math.min(.85,stage.orbitPitch+dy*.005));
+ }
+ e.preventDefault();e.stopImmediatePropagation();
+},true);
+window.addEventListener('pointerup',e=>{if(e.button===1&&sk3DMiddleOrbit){sk3DMiddleOrbit=null;e.preventDefault();e.stopImmediatePropagation();}},true);
+window.addEventListener('blur',()=>sk3DMiddleOrbit=null);
+window.addEventListener('auxclick',e=>{if(e.button===1&&sk3DEnabled)e.preventDefault();},true);
+document.addEventListener('DOMContentLoaded',()=>{
+ const hint=document.createElement('div');hint.id='sk3dLightPlacementHint';hint.textContent='🎯 Move your mouse to position the light · Left-click to lock and save';
+ hint.style.cssText='display:none;position:fixed;z-index:25000;left:50%;top:16px;transform:translateX(-50%);background:#0a1933f5;color:#9df9ec;border:1px solid #56efd9;border-radius:12px;padding:12px;pointer-events:none;text-align:center;';
+ document.body.appendChild(hint);
+});
+/* Keep the flat playfield unlit, but leave the cyan frame and its side walls
+   as Standard materials so they receive the shared arcade lighting. */
+function sk3DRemoveCanvasLighting(){
+ const scenes=sk3DScenes,T=window.THREE;
+ if(!T||!scenes?.sharedWorld)return;
+ for(const stage of [scenes.game,scenes.container]){
+  const group=stage?.skSharedGroup;
+  if(!group)return;
+  const bubbleMeshes=new Set(stage.meshes||[]);
+  const excluded=new Set([stage.cannonGroup,stage.ghost]);
+  const replacements=new Map();
+  group.traverse(obj=>{
+   if(!obj.isMesh||obj.userData.sk3DReceivesArcadeLight||bubbleMeshes.has(obj)||excluded.has(obj))return;
+   // Do not replace gameplay hitbox/particle/ghost effects.
+   if(obj.name?.includes('Hitbox')||obj===stage.fuelMesh&&false)return;
+   if(obj.parent===stage.cannonGroup)return;
+   const replace=mat=>{
+    if(!mat||mat.isMeshBasicMaterial||mat.isShaderMaterial||!mat.isMeshStandardMaterial&&!mat.isMeshPhysicalMaterial)return mat;
+    if(replacements.has(mat))return replacements.get(mat);
+    const next=new T.MeshBasicMaterial({
+     color:mat.color?.clone()||new T.Color('#ffffff'),
+     map:mat.map||null,
+     transparent:mat.transparent,
+     opacity:mat.opacity,
+     side:mat.side,
+     depthWrite:mat.depthWrite,
+     depthTest:mat.depthTest,
+     blending:mat.blending,
+     wireframe:mat.wireframe,
+     alphaTest:mat.alphaTest
+    });
+    next.name=mat.name;
+    next.userData={...mat.userData};
+    replacements.set(mat,next);
+    return next;
+   };
+   obj.material=Array.isArray(obj.material)?obj.material.map(replace):replace(obj.material);
+  });
+  // Colour Studio texture uploads must target the live unlit board materials.
+  if(stage.materials){
+   for(const arr of Object.values(stage.materials)){
+    if(!Array.isArray(arr))continue;
+    for(let i=0;i<arr.length;i++)if(replacements.has(arr[i]))arr[i]=replacements.get(arr[i]);
+   }
+  }
+ }
+}
+const sk3DPriorAnimatedRender=sk3DRenderSharedOnly;
+sk3DRenderSharedOnly=function(){
+ sk3DRemoveCanvasLighting();
+ sk3DFrameImprovements(performance.now());
+ sk3DPriorAnimatedRender();
+};
+
+
+/* Aiming-only 3D current-ammo sparkles.
+   One batched Points draw call; particles are local to the live shared puzzle
+   group, so camera orbit and board relocation don't desynchronise the effect. */
+const sk3DAimSparkleSystem={points:null,particles:[],last:0,spawnCredit:0,texture:null};
+function sk3DCreateAimSparkleTexture(T){
+ const canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;
+ const g=canvas.getContext('2d');
+ g.translate(32,32);
+ const halo=g.createRadialGradient(0,0,0,0,0,28);
+ halo.addColorStop(0,'rgba(255,255,255,.95)');
+ halo.addColorStop(.22,'rgba(255,255,255,.64)');
+ halo.addColorStop(.58,'rgba(255,255,255,.10)');
+ halo.addColorStop(1,'rgba(255,255,255,0)');
+ g.fillStyle=halo;g.fillRect(-32,-32,64,64);
+ // Bright, tapered four-pointed star over a soft halo.
+ g.fillStyle='rgba(255,255,255,.95)';
+ g.beginPath();g.moveTo(0,-24);g.quadraticCurveTo(3,-4,6,-3);
+ g.lineTo(24,0);g.lineTo(6,3);g.quadraticCurveTo(3,4,0,24);
+ g.quadraticCurveTo(-3,4,-6,3);g.lineTo(-24,0);g.lineTo(-6,-3);
+ g.quadraticCurveTo(-3,-4,0,-24);g.fill();
+ const tex=new T.CanvasTexture(canvas);tex.needsUpdate=true;return tex;
+}
+function sk3DEnsureAimSparkles(){
+ const sys=sk3DAimSparkleSystem,shared=sk3DScenes?.sharedWorld,T=window.THREE;
+ if(!shared?.puzzle||!T)return null;
+ if(sys.points){
+  if(sys.points.parent!==shared.puzzle)shared.puzzle.add(sys.points);
+  return sys;
+ }
+ const count=80,positions=new Float32Array(count*3),colors=new Float32Array(count*3);
+ for(let i=0;i<count;i++)positions[i*3+2]=-10000;
+ const geometry=new T.BufferGeometry();
+ geometry.setAttribute('position',new T.BufferAttribute(positions,3));
+ geometry.setAttribute('color',new T.BufferAttribute(colors,3));
+ sys.texture=sk3DCreateAimSparkleTexture(T);
+ const material=new T.PointsMaterial({size:12,map:sys.texture,vertexColors:true,
+   transparent:true,opacity:.96,depthWrite:false,blending:T.AdditiveBlending,
+   sizeAttenuation:true,alphaTest:.015});
+ sys.points=new T.Points(geometry,material);
+ sys.points.name='SK3DCurrentBubbleAimSparkles';
+ sys.points.frustumCulled=false;sys.points.renderOrder=50;
+ shared.puzzle.add(sys.points);
+ sys.particles=Array.from({length:count},()=>({age:100,life:0,x:0,y:0,z:0,vx:0,vy:0,vz:0,size:1}));
+ sys.last=0;sys.spawnCredit=0;
+ return sys;
+}
+function sk3DAnimateAimSparkles(now){
+ const sys=sk3DAimSparkleSystem;
+ const playing=Boolean(sk3DEnabled&&gameRunning&&isAiming&&!isPaused&&
+   !gameOver&&!gameWin&&!isCustomMode&&!winPending&&ammo>0);
+ if(!playing||!sk3DScenes?.sharedWorld?.puzzle){
+  if(sys.points)sys.points.visible=false;
+  sys.last=0;sys.spawnCredit=0;
+  // Reset old particles so reentering aiming never shows stale colours/trails.
+  for(const p of sys.particles)p.age=100;
+  return;
+ }
+ const ready=sk3DEnsureAimSparkles();if(!ready)return;
+ const t=Number(now)||performance.now();
+ const dt=sys.last?Math.max(0,Math.min(.05,(t-sys.last)/1000)):1/60;
+ sys.last=t;sys.points.visible=true;
+ const T=window.THREE;
+ const color=new T.Color(currentBall==null?'#ffffff':currentBall);
+ const position=sys.points.geometry.attributes.position;
+ const tint=sys.points.geometry.attributes.color;
+ // This is the same world-space position as the current ammo bubble mesh.
+ const centerY=sk3DScenes.game.source.height/2-(sk3DScenes.game.source.height-80);
+ const centerZ=57;
+ sys.spawnCredit=Math.min(12,sys.spawnCredit+dt*36);
+ let spawning=Math.floor(sys.spawnCredit);sys.spawnCredit-=spawning;
+ for(const p of sys.particles){
+  p.age+=dt;
+  if(spawning>0&&p.age>=p.life){
+   spawning--;
+   const a=Math.random()*Math.PI*2,theta=(Math.random()-.5)*Math.PI*.8;
+   const r=RADIUS*(.78+Math.random()*.35);
+   p.x=Math.cos(a)*Math.cos(theta)*r;
+   p.y=Math.sin(a)*Math.cos(theta)*r;
+   p.z=Math.sin(theta)*r;
+   p.vx=Math.cos(a)*(15+Math.random()*26);
+   p.vy=Math.sin(a)*(15+Math.random()*26)+10;
+   p.vz=Math.sin(theta)*(16+Math.random()*25)+8;
+   p.age=0;p.life=.36+Math.random()*.48;
+  }
+ }
+ for(let i=0;i<sys.particles.length;i++){
+  const p=sys.particles[i],idx=i*3;
+  if(p.age>=p.life){position.array[idx+2]=-10000;
+   tint.array[idx]=tint.array[idx+1]=tint.array[idx+2]=0;continue;}
+  const elapsed=Math.min(p.age,p.life),f=elapsed/p.life;
+  const envelope=Math.sin(Math.PI*f)**.6*(.6+.4*Math.sin(t*.018+i*2)**2);
+  position.array[idx]=p.x+p.vx*elapsed;
+  position.array[idx+1]=centerY+p.y+p.vy*elapsed;
+  position.array[idx+2]=centerZ+p.z+p.vz*elapsed;
+  tint.array[idx]=color.r*envelope;
+  tint.array[idx+1]=color.g*envelope;
+  tint.array[idx+2]=color.b*envelope;
+ }
+ position.needsUpdate=true;tint.needsUpdate=true;
+}
+// Attach after the existing scene-update wrapper. The shared renderer displays
+// the new points without altering projectile physics, the 2D mode or the HUD.
+const sk3DAimSparklePriorRender=sk3DRenderSharedOnly;
+sk3DRenderSharedOnly=function(){
+ sk3DAnimateAimSparkles(performance.now());
+ sk3DAimSparklePriorRender();
+};
+
 </script>
 </body>
 </html>
