@@ -8386,7 +8386,121 @@ canvas.addEventListener("pointerleave", () => {
   // optional: if you *don't* want aim to cancel when captured, remove this
   if (activeAimPointerId === null) isAiming = false;
 });
+// Ghost-only conversion preview: a travelling, repeating colour pulse through
+// exactly the connected colourless group the real conversion would affect.
+// These states are visual-only; the actual bubble colours are never modified.
+const skGhostColourlessBlend = new WeakMap();
+let skGhostBlendLastFrame = 0;
+let skGhostPulseTarget = null;
+let skGhostPulseColour = null;
+let skGhostPulseStart = 0;
+
+function skUpdateGhostColourlessPreview() {
+    const now = performance.now();
+    const dt = skGhostBlendLastFrame
+        ? Math.min(0.05, (now - skGhostBlendLastFrame) / 1000)
+        : 1 / 60;
+    skGhostBlendLastFrame = now;
+
+    let target = null;
+    const canPreview = showGhost && gameRunning && !isPaused && !isLoading &&
+        !gameOver && !gameWin && !isCustomMode && !winPending &&
+        !chainPopActive && !projectiles.length && !conversionQueue.length &&
+        ammo > 0 && mouseY < DEADLINE && isInGameCanvas && currentBall != null;
+
+    if (canPreview) {
+        const predicted = skPredictProjectileTrajectory();
+        if (predicted) {
+            // Only the FIRST bubble hit can start a colourless conversion.
+            let nearestDistance = Infinity;
+            for (const bubble of bubbles) {
+                const distance = Math.hypot(
+                    predicted.impact.x - bubble.x,
+                    predicted.impact.y - bubble.y
+                );
+                if (distance < RADIUS * RADIUS_OFFSET && distance < nearestDistance) {
+                    nearestDistance = distance;
+                    target = bubble;
+                }
+            }
+        }
+    }
+
+    if (target?.color != null) target = null;
+    if (target !== skGhostPulseTarget || currentBall !== skGhostPulseColour) {
+        skGhostPulseTarget = target;
+        skGhostPulseColour = currentBall;
+        skGhostPulseStart = now;
+    }
+
+    // Breadth-first flood fill matches queueColorlessCluster's neighbour rules.
+    // Distance gives each successive ring of bubbles its own pulse delay.
+    const distances = new Map();
+    if (target) {
+        const queue = [target];
+        distances.set(target, 0);
+        for (let i = 0; i < queue.length; i++) {
+            const bubble = queue[i];
+            for (const neighbour of getNeighbors(bubble)) {
+                if (neighbour.color == null && !distances.has(neighbour)) {
+                    distances.set(neighbour, distances.get(bubble) + 1);
+                    queue.push(neighbour);
+                }
+            }
+        }
+    }
+
+    const elapsed = (now - skGhostPulseStart) / 1000;
+    for (const bubble of bubbles) {
+        if (bubble.color != null) {
+            skGhostColourlessBlend.delete(bubble);
+            continue;
+        }
+
+        const depth = distances.get(bubble);
+        let state = skGhostColourlessBlend.get(bubble);
+        if (!state && depth === undefined) continue;
+        if (!state) {
+            state = { amount: 0, color: currentBall };
+            skGhostColourlessBlend.set(bubble, state);
+        }
+
+        let desired = 0;
+        if (depth !== undefined) {
+            // Start from the impacted bubble, spreading outward in concentric
+            // graph-distance waves. The sin wave repeats as long as it is aimed at.
+            const waveTime = elapsed - depth * 0.13;
+            if (waveTime >= 0) {
+                const entrance = Math.min(1, waveTime / 0.22);
+                const pulse = (1 - Math.cos(waveTime * Math.PI * 2 / 1.35)) / 2;
+                desired = entrance * (0.16 + 0.76 * pulse);
+            }
+            state.color = currentBall;
+        }
+
+        // Interpolate both rising and fading, including when aim moves away.
+        const smoothing = 1 - Math.exp(-(depth === undefined ? 9 : 14) * dt);
+        state.amount += (desired - state.amount) * smoothing;
+        if (depth === undefined && state.amount < 0.004) {
+            skGhostColourlessBlend.delete(bubble);
+        }
+    }
+}
+
+function skDrawGhostColourlessTint(g, bubble, radius) {
+    const state = skGhostColourlessBlend.get(bubble);
+    if (!state || state.amount <= 0.004 || !showGhost) return;
+    g.save();
+    g.globalAlpha *= state.amount;
+    g.fillStyle = state.color;
+    g.beginPath();
+    g.arc(bubble.x, bubble.y, radius, 0, Math.PI * 2);
+    g.fill();
+    drawBubbleSheen(g, bubble.x, bubble.y, radius);
+    g.restore();
+}
  function draw() {
+    skUpdateGhostColourlessPreview();
     containerDrawFrame++;
     if(container_bubbles.length < 120 || containerDrawFrame % 2 === 0) drawContainer();
     drawDebugOverlay();
@@ -8447,6 +8561,7 @@ ctx.globalAlpha = 1;
         
         drawColourlessBubble(ctx,b.x,b.y,chainPendingFallPreview ? RADIUS : RADIUS-2,
             chainPendingFallPreview ? '#ff9500' : '#ffffff',chainPendingFallPreview ? 4 : 2);
+        skDrawGhostColourlessTint(ctx, b, RADIUS - 2);
                if (colorblindMode) {
         const emoji =
             b.color === null
@@ -12547,11 +12662,19 @@ function syncSK3DSpheres(stage,objects){
   mesh.position.set(b.x-stage.source.width/2,stage.source.height/2-b.y,Number(b.z)||0);
   mesh.scale.setScalar(rad);
   mesh.userData.skColourless=(b.color==null && rad>=10);
+  mesh.userData.skSourceBubble=b;
   const color=b.color??'#050a10';mesh.material.color.set(color);
   mesh.material.emissive.set(color);mesh.material.emissiveIntensity=b.color==null?.04:.14;
   mesh.material.opacity=entry.opacity??1;
   // Distinguish colourless bubbles with a visible white ring in 3D.
-  if(b.color==null){mesh.material.color.set('#090c15');mesh.material.emissive.set('#0b0e15');}
+  if(b.color==null){
+    mesh.material.color.set('#090c15');mesh.material.emissive.set('#0b0e15');
+    const preview = showGhost ? skGhostColourlessBlend.get(b) : null;
+    if(preview && preview.amount > 0) {
+      mesh.material.color.lerp(new T.Color(preview.color), preview.amount);
+      mesh.material.emissive.lerp(new T.Color(preview.color), preview.amount * 0.45);
+    }
+  }
  }
 }
 function sk3DText(g,str,x,y,size=16,color='#eaffff'){
@@ -13779,9 +13902,16 @@ function sk3DFrameImprovements(now){
    for(const mesh of stage.meshes||[]){
     if(!mesh.userData.skColourless||!mesh.visible)continue;
     const whiteness=(Math.sin(t*.0035)+1)*.5;
+    // The regular black/white colourless animation remains underneath the
+    // ghost conversion preview, including in the shared 3D render pass.
     mesh.material.color.setRGB(whiteness,whiteness,whiteness);
     mesh.material.emissive.setRGB(whiteness*.12,whiteness*.12,whiteness*.12);
     mesh.material.emissiveIntensity=.22;
+    const preview = showGhost ? skGhostColourlessBlend.get(mesh.userData.skSourceBubble) : null;
+    if(preview && preview.amount > 0.004){
+      mesh.material.color.lerp(new T.Color(preview.color), preview.amount);
+      mesh.material.emissive.lerp(new T.Color(preview.color), preview.amount*.5);
+    }
    }
   }
  }
