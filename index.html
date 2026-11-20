@@ -1425,16 +1425,16 @@ input,select,textarea{accent-color:#58efdf}input:not([type=range]):not([type=che
 @keyframes skPowerDisplayPulse{0%{filter:brightness(1);transform:scale(1)}38%{filter:brightness(2);transform:scale(1.2)}100%{filter:brightness(1);transform:scale(1)}}
 </style>
 <style id="skCoinFXStyles">
-/* Power-ups live below the 2D board; in 3D they dock bottom-left. */
-#skPowerHUD{box-sizing:border-box;width:min(440px,calc(100vw - 24px));max-width:100%;position:relative;z-index:40;margin:12px auto 18px;flex-direction:column;justify-content:center;gap:7px}
+/* Power-ups dock bottom-left in BOTH 2D and 3D gameplay. */
+#skPowerHUD{box-sizing:border-box;position:fixed!important;left:18px!important;bottom:18px!important;top:auto!important;right:auto!important;width:min(340px,calc(100vw - 28px))!important;max-height:45vh;overflow-y:auto;z-index:8300!important;margin:0!important;flex-direction:column;justify-content:center;gap:7px;background:rgba(7,16,29,.9)!important;backdrop-filter:blur(9px);border-color:#64e8db99}
 #skPowerHUD #skPowerButtons{width:100%}
 #skPowerHUD .skCoinBalance{display:inline-block;position:relative;width:auto;font-size:15px;border-radius:15px;padding:5px 12px;background:#2c281680}
 #skGameCoins{display:inline-block}
 body.sk3d-ui-active #skPowerHUD{position:fixed!important;left:18px!important;bottom:18px!important;top:auto!important;right:auto!important;margin:0!important;width:min(340px,calc(100vw - 28px))!important;max-height:45vh;overflow-y:auto;z-index:8300!important;background:rgba(7,16,29,.9)!important;backdrop-filter:blur(9px);border-color:#64e8db99}
-body.sk3d-ui-active #skPowerHUD .skPowerBtn{min-width:65px;font-size:10px;padding:5px 6px}
+#skPowerHUD .skPowerBtn{min-width:65px;font-size:10px;padding:5px 6px}
 body.sk3d-ui-active.sk3d-hud-hidden #skPowerHUD{display:none!important}
 /* The powerup HUD is controlled by skRefreshShop() after menu/game transitions. */
-@media(max-width:600px){body.sk3d-ui-active #skPowerHUD{left:8px!important;bottom:8px!important;width:min(255px,calc(100vw - 16px))!important;max-height:35vh}#skPowerHUD .skPowerBtn{font-size:10px}}
+@media(max-width:600px){#skPowerHUD{left:8px!important;bottom:8px!important;width:min(255px,calc(100vw - 16px))!important;max-height:35vh}#skPowerHUD .skPowerBtn{font-size:10px}}
 #skCoinFlightLayer{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:8500}
 .skFlyingCoin{position:fixed;left:0;top:0;font-size:21px;line-height:1;will-change:transform,opacity;filter:drop-shadow(0 0 8px #ffd34e);pointer-events:none;z-index:1}
 .skCoinPoof{position:fixed;left:0;top:0;width:10px;height:10px;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);background:#ffef9e;box-shadow:0 0 12px 4px #ffc32e;animation:skCoinBurst .48s ease-out forwards}
