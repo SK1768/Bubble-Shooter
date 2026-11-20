@@ -1402,6 +1402,55 @@ input,select,textarea{accent-color:#58efdf}input:not([type=range]):not([type=che
 /* Only show the floating Google account card while the main menu is visible. */
 #bubbleAccountCard { display: none; }
 #bubbleAccountCard.account-menu-visible { display: block; }
+
+/* SK's coin shop and in-game powerup inventory */
+#skShopPanel{display:none;position:fixed;inset:0;z-index:10020;align-items:center;justify-content:center;background:#020715e8;backdrop-filter:blur(8px);padding:16px;box-sizing:border-box}
+#skShopInner{width:min(690px,96vw);max-height:88dvh;overflow:auto;background:linear-gradient(145deg,#1e3455,#081328);border:2px solid #68eede;border-radius:22px;padding:24px;box-shadow:0 0 55px #37d9d555;box-sizing:border-box;text-align:center}
+#skShopInner h2{color:#8affee;font-size:26px;margin:0 0 8px}
+.skCoinBalance{font-weight:bold;color:#ffd866;text-shadow:0 0 12px #e5a82d88}
+#skShopGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0}
+.skShopItem{padding:15px 10px;background:#132840;border:1px solid #6acacb65;border-radius:16px;display:flex;flex-direction:column;align-items:center;gap:9px}
+.skShopEmoji{font-size:34px}.skShopTitle{font-size:15px;font-weight:bold}.skShopDesc{font-size:12px;line-height:1.4;color:#bcd5e5;flex:1}
+.skShopItem button{width:95%;font-size:12px;margin:0}.skShopItem button:disabled,.skPowerBtn:disabled{opacity:.4;cursor:not-allowed;transform:none;filter:none}
+#skPowerHUD{display:none;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;margin:12px auto 0;padding:9px;border:1px solid #54e0d46e;border-radius:13px;background:#07182cb8}
+#skPowerHUD .skPowerBtn{margin:2px;padding:7px 9px;min-width:73px;font-size:11px;line-height:1.45}
+#skPowerHUD .skCoinBalance{width:100%;font-size:13px}
+#skPowerMessage{min-height:17px;font-size:12px;color:#afffec;width:100%}
+</style>
+
+<style id="skPowerAnimationStyles">
+#skPowerAnimationLayer{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:8450}
+.skPowerVisualSprite{position:fixed;left:0;top:0;pointer-events:none;transform:translate(-50%,-50%);font-size:34px;filter:drop-shadow(0 0 12px currentColor);will-change:transform,opacity}
+.skPowerDisplayPulse{animation:skPowerDisplayPulse .9s ease-out!important}
+@keyframes skPowerDisplayPulse{0%{filter:brightness(1);transform:scale(1)}38%{filter:brightness(2);transform:scale(1.2)}100%{filter:brightness(1);transform:scale(1)}}
+</style>
+<style id="skCoinFXStyles">
+/* Power-ups live below the 2D board; in 3D they dock bottom-left. */
+#skPowerHUD{box-sizing:border-box;width:min(440px,calc(100vw - 24px));max-width:100%;position:relative;z-index:40;margin:12px auto 18px;flex-direction:column;justify-content:center;gap:7px}
+#skPowerHUD #skPowerButtons{width:100%}
+#skPowerHUD .skCoinBalance{display:inline-block;position:relative;width:auto;font-size:15px;border-radius:15px;padding:5px 12px;background:#2c281680}
+#skGameCoins{display:inline-block}
+body.sk3d-ui-active #skPowerHUD{position:fixed!important;left:18px!important;bottom:18px!important;top:auto!important;right:auto!important;margin:0!important;width:min(340px,calc(100vw - 28px))!important;max-height:45vh;overflow-y:auto;z-index:8300!important;background:rgba(7,16,29,.9)!important;backdrop-filter:blur(9px);border-color:#64e8db99}
+body.sk3d-ui-active #skPowerHUD .skPowerBtn{min-width:65px;font-size:10px;padding:5px 6px}
+body.sk3d-ui-active.sk3d-hud-hidden #skPowerHUD{display:none!important}
+/* The powerup HUD is controlled by skRefreshShop() after menu/game transitions. */
+@media(max-width:600px){body.sk3d-ui-active #skPowerHUD{left:8px!important;bottom:8px!important;width:min(255px,calc(100vw - 16px))!important;max-height:35vh}#skPowerHUD .skPowerBtn{font-size:10px}}
+#skCoinFlightLayer{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:8500}
+.skFlyingCoin{position:fixed;left:0;top:0;font-size:21px;line-height:1;will-change:transform,opacity;filter:drop-shadow(0 0 8px #ffd34e);pointer-events:none;z-index:1}
+.skCoinPoof{position:fixed;left:0;top:0;width:10px;height:10px;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);background:#ffef9e;box-shadow:0 0 12px 4px #ffc32e;animation:skCoinBurst .48s ease-out forwards}
+@keyframes skCoinBurst{from{opacity:1;transform:translate(-50%,-50%) scale(.5)}to{opacity:0;transform:translate(-50%,-50%) scale(4.3)}}
+.skCoinTargetPulse{animation:skCoinTargetPulse .35s ease-out}
+@keyframes skCoinTargetPulse{0%{transform:scale(1)}42%{transform:scale(1.25);text-shadow:0 0 20px #ffce35}100%{transform:scale(1)}}
+@keyframes skPowerAffordableGlow{0%,100%{box-shadow:0 0 8px #ffd44880,inset 0 0 5px #ffd44822}50%{box-shadow:0 0 22px #ffcf54,inset 0 0 12px #ffd44866}}
+.skPowerBtn.skAffordable{border:1px solid #ffcf54!important;animation:skPowerAffordableGlow 1.5s ease-in-out infinite}
+.skPowerBtn.skFireballArmed{border:2px solid #ff6d28!important;box-shadow:0 0 21px #ff5b1e!important}
+.skPowerBtn.skOnCooldown{opacity:.6;filter:grayscale(.4);cursor:not-allowed;animation:none!important;box-shadow:none!important}
+.skPowerBtn .skPowerCooldown{color:#ffd77b;font-size:11px;font-weight:bold;min-height:0}
+.skPowerBtn.skOnCooldown .skPowerCooldown{margin-top:3px;text-shadow:0 0 7px #ffbb5577}
+@media(prefers-reduced-motion:reduce){.skPowerBtn.skAffordable{animation:none}.skFlyingCoin,.skCoinPoof{animation:none!important}}
+#skRecentCommands{margin-top:9px;display:flex;flex-wrap:wrap;gap:4px;max-height:150px;overflow-y:auto;color:#a9bfd2;font-size:11px}
+#skRecentCommands .skHistoryLabel{width:100%;font-size:10px;letter-spacing:.08em;color:#72fce5}
+#skRecentCommands button{font:11px monospace;padding:5px 7px;margin:1px;border:1px solid #57c6ba70;background:#102b38;border-radius:6px;max-width:100%;overflow-wrap:anywhere;text-align:left}
 </style>
 <style id="themeStudioStyles">
 :root{--theme-wall:#192b49;--theme-menu:#53f5e0;--theme-game:#70ebf0;--theme-pop:#53f5e0;--theme-back:#101e38;--theme-alert:#ff565e;--theme-warn:#ffd454}
@@ -1571,6 +1620,7 @@ body.sk3d-ui-active #bubbleAccountCard.account-menu-visible {
             🏆 CAMPAIGN MODE
         </button>
         <br>
+        <button onclick="skOpenShop()" style="background:linear-gradient(120deg,#8d5a17,#e6a83b);color:#171009!important" onmouseenter="setMenuDesc('Spend earned coins on powerups you can use during levels.')" onmouseleave="clearMenuDesc()">🛒 POWERUP SHOP · <span id="skMenuCoins">0</span> 🪙</button><br>
         <button onclick="openAchievements()"onmouseenter="setMenuDesc('Achievements: Opens a list of achievements you\'ve earned.')" onmouseleave="clearMenuDesc()">🏆 ACHIEVEMENTS</button>
         <br>
         <button onclick="openSaveSlotPopup('load')" style="background:#00aaff; color:#000; font-weight:bold;" onmouseenter="setMenuDesc('Save Slots: Opens your in-game IndexedDB save files, including import and export.')" onmouseleave="clearMenuDesc()">💾 SAVE SLOTS</button>
@@ -1679,9 +1729,15 @@ body.sk3d-ui-active #bubbleAccountCard.account-menu-visible {
 
   
     <div id="debugConsole">
-        <input type="text" id="debugInput" placeholder="Enter a command...">
+        <input type="text" id="debugInput" placeholder="Enter a command..." autocomplete="off">
+        <div id="skRecentCommands" aria-label="Recently used commands"></div>
     </div>
 
+<div id="skShopPanel" role="dialog" aria-modal="true" aria-labelledby="skShopTitle">
+<div id="skShopInner"><h2 id="skShopTitle">🛒 POWER-UP SHOP</h2>
+<div class="skCoinBalance">🪙 Your coins: <span id="skShopCoins">0</span></div>
+<p style="font-size:12px;color:#bcd5e5">Earn 1 coin per popped grid bubble and 50 coins per level completed. Purchased powerups are single-use and saved on this device.</p>
+<div id="skShopGrid"></div><button onclick="skCloseShop()" class="back-btn">⬅ BACK TO MENU</button></div></div>
     <div id="gameUI" class="ui" style="display:none">
         <button class="back-btn" onclick="exitToMenu()">⬅️ MENU</button> |
         <button onclick="saveGame()" style="background:#4CAF50;">SAVE</button>
@@ -1691,6 +1747,7 @@ body.sk3d-ui-active #bubbleAccountCard.account-menu-visible {
         <span id="levelDisplay">Level: 1</span> |
         <span id="scoreDisplay">Score: 0</span> |
         <span id="streakDisplay" style="color:#00e5ff; font-weight:bold;">Streak: x1</span>
+        
 
     </div>
 
@@ -1867,6 +1924,9 @@ body.sk3d-ui-active #bubbleAccountCard.account-menu-visible {
 </div>
 		
     </div>
+
+    <div id="skPowerHUD"><div class="skCoinBalance">🪙 Coins: <span id="skGameCoins">0</span></div><div id="skPowerButtons" style="display:flex;flex-wrap:wrap;justify-content:center;gap:4px"></div><div id="skPowerMessage" aria-live="polite"></div></div>
+    <div id="skCoinFlightLayer" aria-hidden="true"></div><div id="skPowerAnimationLayer" aria-hidden="true"></div>
 
     <input type="file" id="fileInput" accept=".bubblesav" onchange="loadGame(event)">
 
@@ -4677,6 +4737,532 @@ const COLOR_EMOJIS = {
 };
 
 
+
+// ---------------------- SK's coins and single-use powerups ----------------------
+const SK_SHOP_KEY = 'skBubbleShop_v1';
+const SK_POWERUPS = {
+  colourless: {name:'Colourless Destroyer',icon:'⚫',cost:200,description:'Destroys every colourless bubble on the grid.'},
+  fireball: {name:'Fireball',icon:'🔥',cost:90,description:'Shoot a blazing fireball through 10 bubbles, or burst at the ceiling.'},
+  rainbow: {name:'Rainbow Bubble',icon:'🌈',cost:100,description:'Shoot to pop the entire connected group you hit, regardless of colour.'},
+  bomb: {name:'Bomb',icon:'💣',cost:150,description:'Load a pulsing bomb bubble and shoot it to explode on impact or at the ceiling.'},
+  laser: {name:'Laser Beam',icon:'⚡',cost:120,description:'Clears the most crowded row of grid bubbles.'},
+  ammo: {name:'Ammo Pack',icon:'🎯',cost:75,description:'Adds 5 shots to your ammo (not usable in unlimited-ammo modes).'},
+  nova: {name:'Star Nova',icon:'🌟',cost:175,description:'Blasts a cross through the fullest row and column.'},
+  vortex: {name:'Vortex',icon:'🌀',cost:130,description:'Vanishes the lowest occupied row of grid bubbles.'},
+  life: {name:'Extra Life',icon:'❤️',cost:180,description:'Restores one life (up to the game limit).'},
+  meteor: {name:'Meteor Shower',icon:'☄️',cost:160,description:'Breaks up to 12 scattered grid bubbles.'}
+};
+function skReadShop(){try{return skShopNormalise(JSON.parse(localStorage.getItem(SK_SHOP_KEY)||'{}'));}catch(e){return skShopNormalise({});}}
+let skShop=skReadShop();
+// Each signed-in account has its own local cache, separate from the guest wallet.
+let skShopAccountUid=null;
+function skShopNormalise(data){
+ const inventory={};
+ for(const id of Object.keys(SK_POWERUPS)) inventory[id]=Math.max(0,Math.floor(Number(data?.inventory?.[id])||0));
+ const cooldowns={};
+ for(const id of Object.keys(SK_POWERUPS)){
+   const stamp=Number(data?.cooldowns?.[id]);
+   cooldowns[id]=Number.isFinite(stamp)&&stamp>Date.now()?Math.floor(stamp):0;
+ }
+ return {coins:Math.max(0,Math.floor(Number(data?.coins)||0)),inventory,cooldowns};
+}
+window.skShopSetAccount=(uid,data)=>{
+ skShopAccountUid=uid||null;
+ const storageKey=uid?`${SK_SHOP_KEY}_account_${uid}`:SK_SHOP_KEY;
+ let saved=data;
+ if(!saved){try{saved=JSON.parse(localStorage.getItem(storageKey)||'null');}catch(e){}}
+ skShop=skShopNormalise(saved);
+ try{localStorage.setItem(storageKey,JSON.stringify(skShop));}catch(e){}
+ skPendingCoinCredits=0;
+ skRefreshShop();
+};
+window.skShopGetData=()=>JSON.parse(JSON.stringify(skShop));
+window.skShopGuestData=()=>{try{return skShopNormalise(JSON.parse(localStorage.getItem(SK_SHOP_KEY)||'{}'));}catch(e){return skShopNormalise({});}};
+
+let skWinCoinsPaid=false;
+// Track rewards within the current level separately from the saved wallet.
+let skLevelCoinsEarned=0;
+let skLevelCoinSummary=null;
+let skPreviousCannonCurrent=null, skPreviousCannonNext=null;
+function skWinCoinLines(){
+ if(!skLevelCoinSummary)return [];
+ const v=skLevelCoinSummary;
+ return [
+  `🪙 COINS EARNED: ${v.base.toLocaleString()}  ×${v.streak} STREAK  ×${v.perfect} PERFECT`,
+  `🪙 TOTAL EARNED: +${v.total.toLocaleString()} COINS`
+ ];
+}
+function skSaveShop(){
+ try{localStorage.setItem(skShopAccountUid?`${SK_SHOP_KEY}_account_${skShopAccountUid}`:SK_SHOP_KEY,JSON.stringify(skShop));}
+ catch(e){console.warn('Could not save the shop data',e);}
+ skRefreshShop();
+ if(skShopAccountUid&&typeof window.bubbleCloudShopChanged==='function')window.bubbleCloudShopChanged();
+}
+// The actual balance is saved when earned. The HUD balance is held back until
+// its coin icons ARRIVE; queued visual credits are not spendable a second time.
+let skPendingCoinCredits=0;
+let skFireballArmed=false;
+let skRainbowArmed=false;
+let skBombArmed=false;
+// Each power-up has its own real-time five-minute cooldown.
+// Absolute timestamps persist through levels, page reloads and account sync.
+const SK_POWERUP_COOLDOWN_MS=5*60*1000;
+function skPowerCooldownSeconds(id){
+ return Math.max(0,Math.ceil(((skShop.cooldowns?.[id]||0)-Date.now())/1000));
+}
+function skPowerCooldownText(id){
+ const seconds=skPowerCooldownSeconds(id);
+ return `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;
+}
+function skStartPowerCooldown(id){
+ if(!SK_POWERUPS[id])return;
+ if(!skShop.cooldowns)skShop.cooldowns={};
+ skShop.cooldowns[id]=Date.now()+SK_POWERUP_COOLDOWN_MS;
+ skSaveShop();
+}
+function skUpdatePowerCooldownButtons(){
+ const parent=document.getElementById('skPowerButtons');
+ if(!parent)return;
+ for(const button of parent.querySelectorAll('button[data-sk-powerup]')){
+  const id=button.dataset.skPowerup;
+  const remaining=skPowerCooldownSeconds(id);
+  const label=button.querySelector('.skPowerCooldown');
+  if(label)label.textContent=remaining?`⏳ (${skPowerCooldownText(id)})`:'';
+  button.disabled=!!(remaining||!skShop.inventory[id]||!gameRunning||gameOver||gameWin||isPaused);
+  button.classList.toggle('skOnCooldown',remaining>0);
+  button.setAttribute('aria-label',`${SK_POWERUPS[id].name}, ${remaining?'cooldown '+skPowerCooldownText(id):'ready'}, ${skShop.inventory[id]} owned`);
+ }
+}
+setInterval(skUpdatePowerCooldownButtons,500);
+function skGetArmedPowerup(){
+  return skFireballArmed ? 'fireball' : skRainbowArmed ? 'rainbow' : skBombArmed ? 'bomb' : null;
+}
+function skSpecialBubbleIcon(kind,color){
+  if(kind==='fireball') return '🔥';
+  if(kind==='rainbow') return '🌈';
+  if(kind==='bomb') return '💣';
+  return COLOR_EMOJIS[color] || '❔';
+}
+function skHexToRgb(hex){
+  if(!hex||typeof hex!=='string') return {r:255,g:255,b:255};
+  const value=hex.replace('#','');
+  const safe=value.length===3?value.split('').map(c=>c+c).join(''):value;
+  const int=parseInt(safe,16);
+  if(!Number.isFinite(int)) return {r:255,g:255,b:255};
+  return {r:(int>>16)&255,g:(int>>8)&255,b:int&255};
+}
+function skLerp(a,b,t){return a+(b-a)*t;}
+function skRgbString(rgb){return `rgb(${Math.round(rgb.r)}, ${Math.round(rgb.g)}, ${Math.round(rgb.b)})`;}
+function skInterpolatedRainbowColor(offset=0){
+  const palette=(ALL_COLORS||[]).filter(Boolean);
+  if(!palette.length) return '#ffffff';
+  const pos=((performance.now()/210)+(offset||0))%(palette.length);
+  const i0=Math.floor(pos);
+  const i1=(i0+1)%palette.length;
+  const t=pos-i0;
+  const c0=skHexToRgb(palette[i0]);
+  const c1=skHexToRgb(palette[i1]);
+  return skRgbString({r:skLerp(c0.r,c1.r,t),g:skLerp(c0.g,c1.g,t),b:skLerp(c0.b,c1.b,t)});
+}
+function skDrawAmmoOrPowerBubble(context,x,y,radius,color,glow=false,powerKind=null){
+  if(!powerKind){ drawAmmoBubble(context,x,y,radius,color,glow); return; }
+  context.save();
+  const time=performance.now();
+  if(powerKind==='fireball'){
+    const pulse=(Math.sin(time/105)+1)/2;
+    const grad=context.createRadialGradient(x-radius*.28,y-radius*.34,radius*.1,x,y,radius*1.15);
+    grad.addColorStop(0,'#fff6b0');
+    grad.addColorStop(.25,'#ffb13c');
+    grad.addColorStop(.62,'#ff6a12');
+    grad.addColorStop(1,'#8f1800');
+    context.fillStyle=grad;
+    context.shadowColor='#ff6a12';
+    context.shadowBlur=glow?28:16+pulse*10;
+    context.beginPath();context.arc(x,y,radius,0,Math.PI*2);context.fill();
+    context.strokeStyle=`rgba(255, 208, 90, ${0.55+pulse*0.25})`;
+    context.lineWidth=2.5;
+    context.beginPath();context.arc(x,y,radius+1.5,0,Math.PI*2);context.stroke();
+    for(let i=0;i<5;i++){
+      const ang=(time/260)+(Math.PI*2/5)*i;
+      const fx=x+Math.cos(ang)*radius*.68, fy=y+Math.sin(ang)*radius*.68;
+      context.fillStyle=i%2?'#ffcf6b':'#ff5e14';
+      context.beginPath();context.arc(fx,fy,Math.max(1.4,radius*.08),0,Math.PI*2);context.fill();
+    }
+    drawBubbleSheen(context,x,y,radius);
+  }else if(powerKind==='rainbow'){
+    const main=skInterpolatedRainbowColor(0), ring=skInterpolatedRainbowColor(1.8), core=skInterpolatedRainbowColor(3.6);
+    const grad=context.createRadialGradient(x-radius*.22,y-radius*.24,radius*.08,x,y,radius*1.1);
+    grad.addColorStop(0,'#ffffff');
+    grad.addColorStop(.18,core);
+    grad.addColorStop(.63,main);
+    grad.addColorStop(1,ring);
+    context.fillStyle=grad;
+    context.shadowColor=main;
+    context.shadowBlur=glow?28:18;
+    context.beginPath();context.arc(x,y,radius,0,Math.PI*2);context.fill();
+    context.strokeStyle=ring;
+    context.lineWidth=2.5;
+    context.beginPath();context.arc(x,y,radius+1.3,0,Math.PI*2);context.stroke();
+    drawBubbleSheen(context,x,y,radius);
+  }else if(powerKind==='bomb'){
+    const pulse=(Math.sin(time/180)+1)/2;
+    const grad=context.createRadialGradient(x-radius*.24,y-radius*.24,radius*.08,x,y,radius*1.15);
+    grad.addColorStop(0,'#ff7b7b');
+    grad.addColorStop(.28,'#b71212');
+    grad.addColorStop(.72,'#2a0000');
+    grad.addColorStop(1,'#000000');
+    context.fillStyle=grad;
+    context.shadowColor='#ff2a2a';
+    context.shadowBlur=glow?24:12+pulse*14;
+    context.beginPath();context.arc(x,y,radius,0,Math.PI*2);context.fill();
+    context.strokeStyle=pulse>.5?'#ff4c4c':'#2f0000';
+    context.lineWidth=3;
+    context.beginPath();context.arc(x,y,radius+1.2+pulse*.8,0,Math.PI*2);context.stroke();
+    context.fillStyle='rgba(255,255,255,.78)';
+    context.beginPath();context.arc(x-radius*.22,y-radius*.24,Math.max(2,radius*.16),0,Math.PI*2);context.fill();
+  }
+  context.restore();
+}
+function skCoinOrigin(b,preferredCanvas){
+ const el=document.getElementById(preferredCanvas||'gameCanvas');
+ if(el&&b&&Number.isFinite(b.x)&&Number.isFinite(b.y)){
+   const rect=el.getBoundingClientRect();
+   if(rect.width>0&&rect.height>0)return {x:rect.left+(b.x/el.width)*rect.width,y:rect.top+(b.y/el.height)*rect.height};
+ }
+ return {x:innerWidth/2,y:innerHeight/2};
+}
+function skCoinsAreVisible(){
+ const hud=document.getElementById('skPowerHUD');const target=document.getElementById('skGameCoins');
+ return !!(hud&&target&&getComputedStyle(hud).display!=='none'&&target.getBoundingClientRect().width);
+}
+// WebAudio-only coin sound; no external files needed.
+let skCoinAudio=null;
+function skCoinSound(){
+ try{
+   if(typeof soundEnabled!=='undefined'&&!soundEnabled)return;
+   skCoinAudio=skCoinAudio||new (window.AudioContext||window.webkitAudioContext)();
+   if(skCoinAudio.state==='suspended')skCoinAudio.resume();
+   const now=skCoinAudio.currentTime,osc=skCoinAudio.createOscillator(),gain=skCoinAudio.createGain();
+   osc.type='sine';osc.frequency.setValueAtTime(920,now);osc.frequency.exponentialRampToValueAtTime(1440,now+.075);
+   gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(.055,now+.012);gain.gain.exponentialRampToValueAtTime(.0001,now+.14);
+   osc.connect(gain);gain.connect(skCoinAudio.destination);osc.start(now);osc.stop(now+.15);
+ }catch(e){}
+}
+function skCoinArrival(point,value){
+ skPendingCoinCredits=Math.max(0,skPendingCoinCredits-value);
+ skRefreshShop();
+ const layer=document.getElementById('skCoinFlightLayer');
+ if(layer){const poof=document.createElement('span');poof.className='skCoinPoof';poof.style.left=point.x+'px';poof.style.top=point.y+'px';layer.appendChild(poof);poof.addEventListener('animationend',()=>poof.remove(),{once:true});}
+ const target=document.getElementById('skGameCoins');if(target){target.classList.remove('skCoinTargetPulse');void target.offsetWidth;target.classList.add('skCoinTargetPulse');}
+ skCoinSound();
+}
+function skCoinEffect(count,origin){
+ const layer=document.getElementById('skCoinFlightLayer'),target=document.getElementById('skGameCoins');
+ if(!layer||!target||!skCoinsAreVisible())return false;
+ const r=target.getBoundingClientRect(),start=origin&&Number.isFinite(origin.x)&&Number.isFinite(origin.y)?origin:skCoinOrigin();
+ const total=Math.min(count,12,Math.max(1,Math.ceil(Math.sqrt(count)*1.25))); // never spawn more icons than earned coins
+ skPendingCoinCredits+=count;
+ skRefreshShop();
+ let remaining=count;
+ for(let i=0;i<total;i++){
+  const value=Math.ceil(remaining/(total-i));remaining-=value;
+  const coin=document.createElement('span');coin.className='skFlyingCoin';coin.textContent='🪙';
+  const sx=start.x+(Math.random()-.5)*20,sy=start.y+(Math.random()-.5)*20;
+  const endX=r.left+r.width/2,endY=r.top+r.height/2;
+  const arc=(Math.random()-.5)*105;
+  const duration=1050+Math.random()*480;
+  let elapsed=-(i*90),last=0,finished=false;
+  // Explicit left/top coordinates avoid the old top-left (0,0) flash.
+  coin.style.left=sx+'px';coin.style.top=sy+'px';coin.style.transform='translate(-50%,-50%) scale(.8)';
+  layer.appendChild(coin);
+  function frame(now){
+   if(finished)return;
+   if(!last)last=now;
+   // Delta-time integration: correct travel speed at 30/60/120 FPS.
+   const dt=Math.min(65,Math.max(0,now-last));last=now;
+   elapsed+=dt;
+   const t=Math.min(1,Math.max(0,elapsed/duration));
+   const eased=t*t*(3-2*t);
+   const bend=Math.sin(Math.PI*t);
+   const x=sx+(endX-sx)*eased+arc*bend;
+   const y=sy+(endY-sy)*eased-76*bend;
+   coin.style.left=x+'px';coin.style.top=y+'px';
+   coin.style.opacity=String(Math.min(1,t*8));
+   coin.style.transform=`translate(-50%,-50%) scale(${.8+.35*bend-.42*t})`;
+   if(t<1)requestAnimationFrame(frame);
+   else{finished=true;coin.remove();skCoinArrival({x:endX,y:endY},value);}
+  }
+  requestAnimationFrame(frame);
+ }
+ return true;
+}
+function skAddCoins(n,origin){
+ if(isPlaytesting||isCustomMode)return;
+ const coins=Math.max(0,Math.floor(Number(n)||0));if(!coins)return;
+ skShop.coins+=coins;
+ if(gameRunning&&!skWinCoinsPaid)skLevelCoinsEarned+=coins;
+ skCoinEffect(coins,origin);
+ skSaveShop();
+}
+function skAwardWinCoins(){
+ if(skWinCoinsPaid||isPlaytesting||isCustomMode)return;
+ const base=Math.max(0,Math.floor(skLevelCoinsEarned))+50;
+ // Streak 0 means no bonus, rather than multiplying the coins to zero.
+ // Show the actual streaks, including x0. Only positive streaks apply
+ // a reward multiplier; x0 means no bonus (not zero coins).
+ const streak=Math.max(0,Math.floor(Number(streakCount)||0));
+ const perfect=Math.max(0,Math.floor(Number(perfectStreak)||0));
+ const appliedStreak=streak>=1?streak:1;
+ const appliedPerfect=perfect>=1?perfect:1;
+ const total=Math.min(Number.MAX_SAFE_INTEGER,base*appliedStreak*appliedPerfect);
+ const extra=Math.max(0,total-base);
+ skWinCoinsPaid=true;
+ skLevelCoinSummary={base,streak,perfect,total};
+ // 50-coin clear reward and the multiplier bonus remain queued until flight arrival.
+ skAddCoins(50+extra,skCoinOrigin({x:canvas.width/2,y:canvas.height/3}));
+}
+// Synchronize only visibility (not the entire shop button list) every game frame.
+// A level transition can finish after the initial skRefreshShop() call.
+function skSyncPowerHUDVisibility(){
+ const hud=document.getElementById('skPowerHUD');
+ const menu=document.getElementById('mainMenu');
+ const gameUI=document.getElementById('gameUI');
+ if(!hud||!menu||!gameUI)return;
+ const playing=gameRunning&&!isCustomMode&&!isPlaytesting&&
+   getComputedStyle(menu).display==='none'&&getComputedStyle(gameUI).display!=='none';
+ const desired=playing?'flex':'none';
+ if(hud.style.display!==desired)hud.style.display=desired;
+}
+function skRefreshShop(){
+ const n=skShop.coins.toLocaleString();for(const id of ['skShopCoins','skMenuCoins']){const el=document.getElementById(id);if(el)el.textContent=n;} const counter=document.getElementById('skGameCoins');if(counter)counter.textContent=Math.max(0,skShop.coins-skPendingCoinCredits).toLocaleString();
+ const grid=document.getElementById('skShopGrid');if(grid){grid.innerHTML=Object.entries(SK_POWERUPS).map(([id,p])=>`<div class="skShopItem"><span class="skShopEmoji">${p.icon}</span><span class="skShopTitle">${p.name}</span><span class="skShopDesc">${p.description}</span><span style="color:#ffd866">🪙 ${p.cost} · Owned: ${skShop.inventory[id]}</span><button onclick="skBuyPower('${id}')" ${skShop.coins<p.cost?'disabled':''}>BUY</button></div>`).join('');}
+ skSyncPowerHUDVisibility();
+ const buttons=document.getElementById('skPowerButtons');if(buttons){buttons.innerHTML=Object.entries(SK_POWERUPS).map(([id,p])=>`<button data-sk-powerup="${id}" title="${p.description}" onclick="skUsePower('${id}')" class="skPowerBtn ${skShop.coins>=p.cost?'skAffordable':''} ${(id==='fireball'&&skFireballArmed)||(id==='rainbow'&&skRainbowArmed)||(id==='bomb'&&skBombArmed)?'skFireballArmed':''}">${p.icon} ${p.name}<div>×${skShop.inventory[id]}</div><div class="skPowerCooldown" aria-live="off"></div></button>`).join('');skUpdatePowerCooldownButtons();}
+}
+function skOpenShop(){document.getElementById('skShopPanel').style.display='flex';skRefreshShop();}
+function skCloseShop(){document.getElementById('skShopPanel').style.display='none';}
+function skBuyPower(id){const item=SK_POWERUPS[id];if(!item||skShop.coins<item.cost)return;skShop.coins-=item.cost;skShop.inventory[id]++;skSaveShop();}
+function skPowerMessage(t){const el=document.getElementById('skPowerMessage');if(el)el.textContent=t;}
+// Power-ups bypass normal snapToGrid(), so finish with the same ammo/physics refresh.
+function skFinishPowerupBoardChange(){
+ if(typeof dropFloatingBubbles==='function')dropFloatingBubbles();
+ if(bubbles.length){
+   // Re-pick only colours that still exist on the grid.
+   updateAmmo();
+ }else{
+   // Preserve the last loaded colours for the WAIT / WIN overlay. The shot
+   // guard still blocks shooting while winPending, win or failure is active.
+   skFireballArmed=false; skRainbowArmed=false; skBombArmed=false;
+   refreshFavicon();
+   updateBubblesRemainingRing();
+   if(!gameOver&&!gameWin){
+     winPending=true; // update() waits for falling, flight and landing animations
+     campaignTimerAcc=0;
+   }
+ }
+ if(typeof updateProgressBar==='function')updateProgressBar();
+ if(typeof updateUI==='function')updateUI();
+ if(typeof checkProgressAchievements==='function')checkProgressAchievements();
+ saveStats();
+}
+function skRainbowImpact(p,hit){
+ const seen=new Set([hit]),queue=[hit];
+ while(queue.length){
+  const cur=queue.shift();
+  for(const nb of getNeighbors(cur))if(!seen.has(nb)){seen.add(nb);queue.push(nb);}
+ }
+ const targets=[...seen];
+ skPowerUseAnimation('rainbow',targets);
+ bubbles=bubbles.filter(b=>!seen.has(b));
+ for(const b of targets){spawnPopParticles(b.x,b.y,b.color||'#f5f5f5');skAddCoins(1,skCoinOrigin(b));}
+ score+=targets.length*10;stats.bubblesPopped+=targets.length;
+ sounds.play('pop');
+ skFinishPowerupBoardChange();
+ skPowerMessage(`🌈 Rainbow matched ${targets.length} connected bubbles!`);
+}
+
+// Each powerup uses a different, temporary visual, without changing the board physics.
+// Effects are rendered above the active 2D/3D canvas and do not intercept input.
+function skPowerBoardRect(){
+ const candidates=(typeof sk3DEnabled!=='undefined'&&sk3DEnabled)
+  ? ['canvas.sk3d-world-canvas','canvas.sk3d-board-canvas','#gameCanvas']
+  : ['#gameCanvas'];
+ for(const sel of candidates){
+  const el=document.querySelector(sel);if(!el)continue;
+  const r=el.getBoundingClientRect();
+  if(r.width>100&&r.height>100&&getComputedStyle(el).display!=='none')return r;
+ }
+ return {left:innerWidth*.25,top:innerHeight*.15,width:innerWidth*.5,height:innerHeight*.7};
+}
+function skPowerTargetRect(id){
+ if(id==='ammo'){
+  // The ammo number is painted onto the moving cannon grip, NOT the bubbles-left ring.
+  const el=document.getElementById('gameCanvas');
+  if(el){const r=el.getBoundingClientRect();if(r.width&&r.height){
+   const cx=canvas.width/2,cy=canvas.height-80;
+   const pose=typeof skCannonRecoilPose==='function'?skCannonRecoilPose():{kick:0,pump:0};
+   const localY=-40+pose.pump*19+10+pose.kick*12;
+   const a=angle+Math.PI/2;
+   const x=cx-Math.sin(a)*localY,y=cy+Math.cos(a)*localY;
+   return {x:r.left+x/canvas.width*r.width,y:r.top+y/canvas.height*r.height,el:null};
+  }}
+ }
+ const ids=id==='life'?['#livesContainer','#livesDisplay']:['#skPowerHUD'];
+ for(const selector of ids){const e=document.querySelector(selector);if(e){const r=e.getBoundingClientRect();if(r.width&&r.height)return {x:r.left+r.width/2,y:r.top+r.height/2,el:e};}}
+ const r=skPowerBoardRect();return {x:r.left+r.width/2,y:r.top+r.height*.82,el:null};
+}
+function skPowerSprite(icon,x,y,tx,ty,color='#ffffff',duration=1000,delay=0){
+ const root=document.getElementById('skPowerAnimationLayer');if(!root)return;
+ const node=document.createElement('span');node.className='skPowerVisualSprite';node.textContent=icon;node.style.color=color;
+ node.style.left=x+'px';node.style.top=y+'px';root.appendChild(node);
+ if(!node.animate){setTimeout(()=>node.remove(),duration+delay);return;}
+ const dx=tx-x,dy=ty-y;
+ const animation=node.animate([
+  {transform:'translate(-50%,-50%) scale(.3) rotate(-20deg)',opacity:0,offset:0},
+  {transform:`translate(calc(-50% + ${dx*.4}px),calc(-50% + ${dy*.4-55}px)) scale(1.6) rotate(60deg)`,opacity:1,offset:.45},
+  {transform:`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(.25) rotate(260deg)`,opacity:0,offset:1}
+ ],{duration,delay,easing:'ease-in-out',fill:'forwards'});
+ animation.onfinish=()=>node.remove();
+}
+function skPowerCanvasFX(id,targets=[]){
+ const root=document.getElementById('skPowerAnimationLayer');if(!root)return;
+ const rect=skPowerBoardRect();
+ const board=document.createElement('canvas');board.width=Math.max(1,Math.round(Math.min(rect.width,1400)));
+ board.height=Math.max(1,Math.round(Math.min(rect.height,900)));
+ Object.assign(board.style,{position:'fixed',left:rect.left+'px',top:rect.top+'px',width:rect.width+'px',height:rect.height+'px',pointerEvents:'none',border:'0',borderRadius:'0',background:'transparent',boxShadow:'none',display:'block'});
+ root.appendChild(board);
+ const ctx=board.getContext('2d'),w=board.width,h=board.height;
+ const colors={nova:'#f8e7a6',vortex:'#7a7cff',meteor:'#ffb04d',bomb:'#ff5e34',laser:'#75faff',colourless:'#eeeeff',rainbow:'#fe60d9',fireball:'#ff6a12'};
+ const color=colors[id]||'#ffffff';
+ const points=targets.slice(0,90).map(b=>({x:b.x/440*w,y:b.y/640*h}));
+ const center={x:w*.5,y:h*.45};
+ const count=id==='meteor'?32:id==='nova'?70:id==='vortex'?65:40;
+ const bits=Array.from({length:count},(_,i)=>({a:Math.random()*Math.PI*2,r:20+Math.random()*Math.max(w,h)*.58,z:2+Math.random()*5,p:Math.random(),i}));
+ let elapsed=0,last=0;
+ const life=id==='nova'?1650:id==='vortex'?1400:id==='meteor'?1750:950;
+ function frame(now){
+  if(!board.isConnected)return;
+  if(!last)last=now;
+  const dt=Math.min(60,Math.max(0,now-last));last=now;
+  // Pause-safe, time-based animation at different FPS.
+  if(typeof isPaused!=='undefined'&&isPaused){requestAnimationFrame(frame);return;}
+  elapsed+=dt;
+  const time=Math.min(1,elapsed/life);ctx.clearRect(0,0,w,h);
+  const fade=Math.min(1,time*7, (1-time)*5);ctx.save();ctx.globalAlpha=Math.max(0,fade);
+  ctx.lineCap='round';
+  if(id==='nova'){
+   // Galaxy/starburst, luminous cross and orbiting constellations on the canvas.
+   ctx.globalCompositeOperation='lighter';
+   for(const b of bits){const a=b.a+time*3,r=b.r*(.2+time*.95),x=center.x+Math.cos(a)*r,y=center.y+Math.sin(a)*r;
+    ctx.fillStyle=b.i%3===0?'#a7caff':'#fff0a0';ctx.shadowColor=color;ctx.shadowBlur=12;ctx.beginPath();ctx.arc(x,y,b.z*(1-time*.4),0,Math.PI*2);ctx.fill();}
+   ctx.shadowBlur=25;ctx.strokeStyle='#fff0a0';ctx.lineWidth=4+16*Math.sin(time*Math.PI);ctx.beginPath();ctx.moveTo(0,center.y);ctx.lineTo(w,center.y);ctx.moveTo(center.x,0);ctx.lineTo(center.x,h);ctx.stroke();
+   ctx.strokeStyle='#8facff';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(center.x,center.y,w*.36*(.4+time),h*.17*(.4+time),time*1.5,0,Math.PI*2);ctx.stroke();
+  }else if(id==='vortex'){
+   ctx.globalCompositeOperation='lighter';ctx.strokeStyle=color;
+   for(let ring=0;ring<4;ring++){ctx.lineWidth=2+ring;ctx.beginPath();ctx.ellipse(center.x,center.y+time*h*.1,(w*.06+ring*w*.055)*(1-time*.6),(h*.025+ring*h*.03)*(1-time*.6),time*8,0,Math.PI*2);ctx.stroke();}
+   for(const b of bits){const a=b.a+time*12,rad=b.r*(1-time*.9);ctx.fillStyle=b.i%2?'#82d5ff':'#db9cff';ctx.beginPath();ctx.arc(center.x+Math.cos(a)*rad,center.y+Math.sin(a)*rad*.52,b.z,0,Math.PI*2);ctx.fill();}
+  }else if(id==='meteor'){
+   for(const b of bits){const t=(time*1.45+b.p*.45)%1,x=w*(1.25-b.p*.8)-t*w*.85,y=-h*.2+b.p*h*.8+t*h*.75;
+    ctx.strokeStyle=b.i%3?'#ffb343':'#fff2a3';ctx.lineWidth=b.z;ctx.shadowColor='#ff6e10';ctx.shadowBlur=12;ctx.beginPath();ctx.moveTo(x+45,y-68);ctx.lineTo(x,y);ctx.stroke();ctx.fillStyle='#fff8d0';ctx.beginPath();ctx.arc(x,y,b.z*.85,0,Math.PI*2);ctx.fill();}
+  }else if(id==='laser'){
+   const y=points[0]?.y||center.y;ctx.globalCompositeOperation='lighter';ctx.shadowColor=color;ctx.shadowBlur=32;ctx.fillStyle='#70ffff';ctx.fillRect(0,y-10,w,20);ctx.fillStyle='#ffffff';ctx.fillRect(0,y-3,w,6);
+  }else if(id==='bomb'){
+   const r=Math.max(w,h)*time*.75;ctx.strokeStyle='#ffb24c';ctx.shadowColor=color;ctx.shadowBlur=36;ctx.lineWidth=(1-time)*28+3;ctx.beginPath();ctx.arc(center.x,center.y,r,0,Math.PI*2);ctx.stroke();
+   for(const b of bits){ctx.fillStyle=b.i%2?'#ffda75':'#ff6530';ctx.beginPath();ctx.arc(center.x+Math.cos(b.a)*r*(.2+b.p),center.y+Math.sin(b.a)*r*(.2+b.p),b.z,0,Math.PI*2);ctx.fill();}
+  }else if(id==='colourless'){
+   for(const b of bits){const x=center.x+Math.cos(b.a)*b.r,y=center.y+Math.sin(b.a)*b.r;
+    ctx.strokeStyle=b.i%2?'#ffffff':'#899cb9';ctx.shadowColor='#ffffff';ctx.shadowBlur=15;ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,Math.max(1,b.z*3*(1-time)),0,Math.PI*2);ctx.stroke();}
+  }else if(id==='rainbow'){
+   for(const b of bits){const r=b.r*time;ctx.fillStyle=`hsl(${(b.a*180/Math.PI+time*360)%360},100%,65%)`;ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=12;ctx.beginPath();ctx.arc(center.x+Math.cos(b.a)*r,center.y+Math.sin(b.a)*r,b.z,0,Math.PI*2);ctx.fill();}
+  }else if(id==='fireball'){
+   for(const b of bits){const r=b.r*time*.8;ctx.fillStyle=b.i%2?'#ffde68':'#ff5619';ctx.shadowColor='#ff5310';ctx.shadowBlur=14;ctx.beginPath();ctx.arc(center.x+Math.cos(b.a)*r,center.y+Math.sin(b.a)*r,b.z*(1-time*.75),0,Math.PI*2);ctx.fill();}
+  }
+  ctx.restore();if(time<1)requestAnimationFrame(frame);else board.remove();
+ }
+ requestAnimationFrame(frame);
+}
+function skPowerUseAnimation(id,targets=[]){
+ if(id==='life'||id==='ammo'){
+  const dest=skPowerTargetRect(id),r=skPowerBoardRect();
+  const x=r.left+r.width*.5,y=r.top+r.height*.62;
+  for(let i=0;i<(id==='ammo'?5:7);i++)skPowerSprite(id==='life'?'❤️':'🎯',x+(Math.random()-.5)*80,y+(Math.random()-.5)*55,dest.x,dest.y,id==='life'?'#ff658e':'#80ffff',800+i*65,i*60);
+  if(dest.el){setTimeout(()=>{dest.el.classList.remove('skPowerDisplayPulse');void dest.el.offsetWidth;dest.el.classList.add('skPowerDisplayPulse');},900);}
+  return;
+ }
+ skPowerCanvasFX(id,targets);
+}
+
+function skUsePower(id){
+ if(!SK_POWERUPS[id]||!skShop.inventory[id]||!gameRunning||gameOver||gameWin||isPaused||isLoading||winPending||chainPopActive||conversionQueue.length||projectiles.length||isPlaytesting||isCustomMode)return;
+ if(skPowerCooldownSeconds(id)){
+   skPowerMessage(`⏳ ${SK_POWERUPS[id].name} is cooling down (${skPowerCooldownText(id)}).`);
+   return;
+ }
+ if(id==='fireball'){
+   skRainbowArmed=false; skBombArmed=false;
+   skFireballArmed=!skFireballArmed;
+   skPowerMessage(skFireballArmed?'🔥 Fireball ready! Aim and shoot to burn 10 bubbles.':'Fireball cancelled.');
+   skRefreshShop();return;
+ }
+ if (id === 'life' && isCampaignMode)
+ {
+    alert("This powerup cannot be used in campaign mode.")
+    return;
+ }
+ else if (id === 'life' && isDailyPuzzle)
+ {
+    alert("This powerup cannot be used in daily puzzle mode.")
+    return;
+ }
+ if(id==='rainbow'){
+   skFireballArmed=false; skBombArmed=false;
+   skRainbowArmed=!skRainbowArmed;
+   skPowerMessage(skRainbowArmed?'🌈 Rainbow loaded! Aim and shoot to clear a connected group of ANY colours.':'Rainbow cancelled.');
+   skRefreshShop();return;
+ }
+ if(id==='bomb'){
+   skFireballArmed=false; skRainbowArmed=false;
+   skBombArmed=!skBombArmed;
+   skPowerMessage(skBombArmed?'💣 Bomb loaded! Aim and shoot to explode on impact or at the ceiling.':'Bomb cancelled.');
+   skRefreshShop();return;
+ }
+ let targets=[];
+ if(id==='colourless')targets=bubbles.filter(b=>b.color==null);
+ else if(id==='laser'){const counts=new Map();for(const b of bubbles)counts.set(b.row,(counts.get(b.row)||0)+1);const row=[...counts].sort((a,b)=>b[1]-a[1])[0]?.[0];targets=bubbles.filter(b=>b.row===row);}
+ else if(id==='nova'){
+   const counts=new Map(),columns=new Map();
+   for(const b of bubbles){counts.set(b.row,(counts.get(b.row)||0)+1);columns.set(b.col,(columns.get(b.col)||0)+1);}
+   const r=[...counts].sort((a,b)=>b[1]-a[1])[0]?.[0],c=[...columns].sort((a,b)=>b[1]-a[1])[0]?.[0];
+   targets=bubbles.filter(b=>b.row===r||b.col===c);
+ }else if(id==='vortex'){
+   const bottom=Math.max(...bubbles.map(b=>b.row));targets=bubbles.filter(b=>b.row===bottom);
+ }else if(id==='meteor'){
+   targets=[...bubbles].sort(()=>Math.random()-.5).slice(0,12);
+ }else if(id==='life'){
+   if(typeof lives==='undefined'||lives>=MAX_LIVES){skPowerMessage('Your lives are already full.');return;}
+   lives=Math.min(MAX_LIVES,lives+1);
+   stats.livesGained=(stats.livesGained||0)+1;
+   updateLivesUI();
+   saveStats();
+ }else if(id==='ammo'){
+   if(!Number.isFinite(ammo)){skPowerMessage('Unlimited ammo is already enabled.');return;}
+   ammo+=5;updateAmmo();
+ }
+ if(id!=='ammo'&&id!=='life'&&!targets.length){skPowerMessage('There are no valid bubbles for this powerup.');return;}
+ skShop.inventory[id]--;skStartPowerCooldown(id);
+ skPowerUseAnimation(id,targets);
+ if(targets.length){
+  const toRemove=new Set(targets);
+  bubbles=bubbles.filter(b=>!toRemove.has(b));
+  for(const b of targets){spawnPopParticles(b.x,b.y,b.color||'#ffffff');floatingScores.push({x:b.x,y:b.y,text:'+10',life:1});}
+  score+=targets.length*10;stats.bubblesPopped+=targets.length;skAddCoins(targets.length,skCoinOrigin(targets[0]));
+  sounds.play('pop');
+  skFinishPowerupBoardChange();
+ }
+ skPowerMessage(`${SK_POWERUPS[id].icon} ${SK_POWERUPS[id].name} activated!`);skRefreshShop();
+}
+window.addEventListener('DOMContentLoaded',()=>skRefreshShop());
+
 let mode = 'puzzle', score = 0, level = 1, angle = 0, mouseInside = false;
 let bubbles = [], fallingBubbles = [], projectiles = [], particles = [], floatingScores = [], confetti = [];
 let containerAbsorbParticles = [];
@@ -4926,6 +5512,7 @@ function popContainerCluster(index) {
         spawnContainerEffect(b.x,b.y,b.color,"pop",containerRadius(b));
         score+=10*containerBubbleUnits(b);
     });
+    skAddCoins(visited.size,skCoinOrigin(source,'containerCanvas'));
     stats.containerBubblesPopped = (Number(stats.containerBubblesPopped)||0) + visited.size;
     checkProgressAchievements(); saveStats();
     sounds.play('pop');
@@ -5397,6 +5984,7 @@ function openDebug() {
     document.getElementById('debugConsole').style.display = 'block';
     document.getElementById('debugInput').value = '';
     document.getElementById('debugInput').focus();
+    skRenderCommandHistory();
     setPause(true);
 }
 
@@ -5419,11 +6007,38 @@ window.addEventListener('keydown', e => {
     }
 });
 
+const SK_COMMAND_HISTORY_KEY='skDebugRecentCommands_v1';
+let skCommandHistory=[];
+try{const stored=JSON.parse(localStorage.getItem(SK_COMMAND_HISTORY_KEY)||'[]');if(Array.isArray(stored))skCommandHistory=stored.filter(x=>typeof x==='string').slice(0,10);}catch(e){}
+let skHistoryIndex=-1;
+function skRenderCommandHistory(){
+ const el=document.getElementById('skRecentCommands');if(!el)return;
+ el.replaceChildren();
+ if(!skCommandHistory.length){el.textContent='No recently used commands yet.';return;}
+ const label=document.createElement('div');label.textContent='RECENT COMMANDS · CLICK TO REUSE';label.className='skHistoryLabel';el.appendChild(label);
+ for(const command of skCommandHistory){
+   const button=document.createElement('button');button.type='button';button.textContent=command;button.title='Fill command bar';
+   button.addEventListener('click',()=>{const input=document.getElementById('debugInput');input.value=command;input.focus();});el.appendChild(button);
+ }
+}
+function skRememberCommand(command){
+ if(!command.startsWith('!'))return;
+ skCommandHistory=[command,...skCommandHistory.filter(c=>c!==command)].slice(0,10);
+ try{localStorage.setItem(SK_COMMAND_HISTORY_KEY,JSON.stringify(skCommandHistory));}catch(e){}
+ skHistoryIndex=-1;skRenderCommandHistory();
+}
 document.getElementById('debugInput').addEventListener('keydown', async (e) => {
+    if(e.key==='ArrowUp'||e.key==='ArrowDown'){
+      if(!skCommandHistory.length)return;
+      e.preventDefault();
+      skHistoryIndex=e.key==='ArrowUp'?Math.min(skHistoryIndex+1,skCommandHistory.length-1):Math.max(-1,skHistoryIndex-1);
+      e.target.value=skHistoryIndex<0?'':skCommandHistory[skHistoryIndex];return;
+    }
     if (e.key === 'Enter') {
 	stats.debugCommandsUsed++;
     saveStats();
         const rawInput = e.target.value.trim();
+        skRememberCommand(rawInput);
         const args = rawInput.split(' ');
         const cmd = args[0].toLowerCase();
         const arg = args[1];
@@ -5592,7 +6207,19 @@ document.getElementById('debugInput').addEventListener('keydown', async (e) => {
             alert("Commands must start with \"!\".")
             return;
         }
-        if (cmd === '!lockdebug') {
+        if(cmd==='!addcoins'){
+          const amount=Number(arg);
+          if(!Number.isSafeInteger(amount)||amount<1){logInfo('Usage: !addcoins <positive integer>');}
+          else{skShop.coins+=amount;skSaveShop();logInfo(`Added ${amount} coins.`);}
+        }
+        else if(cmd==='!addpowerup'){
+          const quantity=Number(args[args.length-1]);
+          const requested=args.slice(1,-1).join(' ').toLowerCase().replace(/[^a-z0-9]/g,'');
+          const id=Object.keys(SK_POWERUPS).find(k=>k===requested||SK_POWERUPS[k].name.toLowerCase().replace(/[^a-z0-9]/g,'')===requested);
+          if(!id||!Number.isSafeInteger(quantity)||quantity<1)logInfo('Usage: !addpowerup <powerup name> <positive integer> (e.g. !addpowerup fireball 5)');
+          else{skShop.inventory[id]+=quantity;skSaveShop();logInfo(`Added ${quantity} × ${SK_POWERUPS[id].name}.`);}
+        }
+        else if (cmd === '!lockdebug') {
             debugLocked = true;
             localStorage.setItem('debugLocked', 'true');
             updateDebugButton();
@@ -5890,7 +6517,7 @@ else if (cmd === '!showfps') {
 else if (cmd === '!resetgame')
 {
    if (confirm("Are you sure you want to reset the game?\nOK = Yes\nCancel = No"))
-   showSecretText("Restting the game...", 2500)
+   showSecretText("Resetting the game...", 2500)
    fadeTransition(() => {
    startMode("puzzle")
    perfectStreak = 0;
@@ -6649,7 +7276,33 @@ if (dragBubblesEnabled && draggedBubble) return;
     lastShotBubbleCount = bubbles.length;
     hurryWarningActive = false;
     hurryWarningSeconds = null;
-    if (projectiles.length > 0 || ammo <= 0) return;
+    if (projectiles.length > 0 || (ammo <= 0 && !skFireballArmed && !skRainbowArmed && !skBombArmed)) return;
+    if(skRainbowArmed){
+      skRainbowArmed=false;
+      if(skShop.inventory.rainbow>0&&!skPowerCooldownSeconds('rainbow')){
+        skShop.inventory.rainbow--;skStartPowerCooldown('rainbow');
+        projectiles.push({x:canvas.width/2,y:canvas.height-80,dx:Math.cos(angle)*12,dy:Math.sin(angle)*12,color:'#e56cff',skRainbow:true,powerupKind:'rainbow'});
+        sounds.play('shoot');skCannonFireAnimation();skSaveShop();skPowerMessage('🌈 RAINBOW FIRED!');return;
+      }
+    }
+    if(skFireballArmed){
+      skFireballArmed=false;
+      if(skShop.inventory.fireball>0&&!skPowerCooldownSeconds('fireball')){
+        skShop.inventory.fireball--;skStartPowerCooldown('fireball');
+        projectiles.push({x:canvas.width/2,y:canvas.height-80,dx:Math.cos(angle)*12,dy:Math.sin(angle)*12,color:'#FF6010',skFireball:true,skFireHits:0,skFireSeen:new Set(),powerupKind:'fireball'});
+        sounds.play('shoot');skCannonFireAnimation();skSaveShop();skPowerMessage('🔥 FIREBALL FIRED!');
+        return;
+      }
+    }
+    if(skBombArmed){
+      skBombArmed=false;
+      if(skShop.inventory.bomb>0&&!skPowerCooldownSeconds('bomb')){
+        skShop.inventory.bomb--;skStartPowerCooldown('bomb');
+        projectiles.push({x:canvas.width/2,y:canvas.height-80,dx:Math.cos(angle)*12,dy:Math.sin(angle)*12,color:'#b81212',skBomb:true,powerupKind:'bomb'});
+        sounds.play('shoot');skCannonFireAnimation();skSaveShop();skPowerMessage('💣 BOMB FIRED!');
+        return;
+      }
+    }
     sounds.play('shoot');
 
     projectiles.push({
@@ -7050,6 +7703,7 @@ function popBubbles(m, startBubble = null) {
         if (containerMode && !gameOver && !gameWin && !containerFinishing) {
             queueContainerFlight(b, b.y);
         }
+        skAddCoins(1,skCoinOrigin(b));
         // ✅ Award the chain total in small slices, one slice per popped bubble.
         // The streak counter/multiplier still only increments once for the whole chain.
         score += scorePerPop;
@@ -7257,6 +7911,15 @@ function beginContainerRetry() {
         
 }
 function triggerWin() {
+    // A cleared grid does not mean the level is settled: drops may still be
+    // crossing the red line, flying into the container or landing there.
+    if(!bubbles.length && (fallingBubbles.length || projectiles.length ||
+      (containerMode && (containerFlights.length || container_bubbles.some(b=>b.isFalling) ||
+      document.querySelector('#containerFlightLayer .container-flight-poof'))))){
+      winPending=true;
+      return;
+    }
+    skRefreshShop();
     if (containerMode && (containerFlights.length || document.querySelector("#containerFlightLayer .container-flight-poof"))) { winPending = true; return; }
     if(containerMode && container_bubbles.length && !containerBonusPending) {
         containerBonusPending=true;
@@ -7295,6 +7958,7 @@ updateLivesUI();
 
                 campaignFinished = true;
                 gameWin = true;
+            skAwardWinCoins();
      	        stats.campaignWins++;
                 saveStats();
 
@@ -7310,6 +7974,7 @@ updateLivesUI();
 
             // Normal campaign level clear
             gameWin = true;
+            skAwardWinCoins();
             sounds.play('win');
             triggerConfetti();
             refreshFavicon();
@@ -7373,6 +8038,7 @@ updateAmmo();
 }
 saveStats();
         gameWin = true;
+            skAwardWinCoins();
         sounds.play('win');
         triggerConfetti();
         refreshFavicon();
@@ -7550,7 +8216,10 @@ function arcadeCard(title, subtitle, accent, lines, progress, translucent = fals
     ctx.font='bold 15px Storopia, sans-serif';ctx.fillStyle='#e7f9ff';
     if(subtitle)ctx.fillText(subtitle,w/2,y+101,cw-30);
     ctx.font='14px Storopia, sans-serif';ctx.fillStyle='#b7d5e7';
-    (lines||[]).filter(Boolean).slice(0,3).forEach((line,i)=>ctx.fillText(String(line),w/2,y+138+i*25,cw-32));
+    (lines||[]).filter(Boolean).slice(0,4).forEach((line,i)=>{
+      ctx.font=`${i>=2?12:14}px Storopia, sans-serif`;
+      ctx.fillText(String(line),w/2,y+132+i*23,cw-32);
+    });
     if(progress!==undefined){
       const bx=x+35,by=y+ch-37,bw=cw-70;
       ctx.fillStyle='#07101f';ctx.beginPath();ctx.roundRect(bx,by,bw,12,6);ctx.fill();
@@ -7742,6 +8411,8 @@ const FADE_SPEED = 3; // lower = slower fade
 const canvasEl = canvas; // already have it
 if (
     winPending &&
+    bubbles.length === 0 &&
+    conversionQueue.length === 0 && !chainPopActive &&
     fallingBubbles.length === 0 &&
     projectiles.length === 0 &&
     // Container Mode: wait until every collected bubble has landed.
@@ -7883,6 +8554,7 @@ else if (!gameOver)
     triggerFail("One of the falling bubbles hit the red line!")
 }   // 💥 particles exactly where it hits
     spawnPopParticles(b.x, DEADLINE, b.color);
+    if(!gameOver&&!gameWin)skAddCoins(1,skCoinOrigin({x:b.x,y:DEADLINE}));
 
     // 🧲 absorb logic
     if (absorbFallingBubbles && !isPlaytesting) {
@@ -8083,6 +8755,61 @@ spawnWallBounceParticles(
     -1, // normal facing left
     p.color
 );sounds.play('bounce'); }
+if(p.skRainbow){
+   let hit=null;
+   for(const b of bubbles){if(Math.hypot(p.x-b.x,p.y-b.y)<RADIUS*RADIUS_OFFSET){hit=b;break;}}
+   if(hit||p.y<=RADIUS){
+     projectiles.splice(i,1);
+     if(hit)skRainbowImpact(p,hit);
+     else{spawnPopParticles(p.x,Math.max(RADIUS,p.y),'#e56cff');skPowerMessage('🌈 Rainbow missed the bubbles.');}
+   }
+   return;
+ }
+if(p.skBomb){
+   let hit=null;
+   for(const b of bubbles){if(Math.hypot(p.x-b.x,p.y-b.y)<RADIUS*RADIUS_OFFSET){hit=b;break;}}
+   if(hit||p.y<=RADIUS){
+     const cx=hit?hit.x:p.x, cy=hit?hit.y:Math.max(RADIUS,p.y);
+     const targets=bubbles.filter(b=>Math.hypot(b.x-cx,b.y-cy)<RADIUS*4.7);
+     projectiles.splice(i,1);
+     skPowerUseAnimation('bomb',targets);
+     if(targets.length){
+       const toRemove=new Set(targets);
+       bubbles=bubbles.filter(b=>!toRemove.has(b));
+       for(const b of targets){spawnPopParticles(b.x,b.y,b.color||'#ff8a4d');floatingScores.push({x:b.x,y:b.y,text:'+10',life:1});}
+       score+=targets.length*10;stats.bubblesPopped+=targets.length;skAddCoins(targets.length,skCoinOrigin({x:cx,y:cy}));
+       sounds.play('pop');
+       skFinishPowerupBoardChange();
+     }else{
+       spawnPopParticles(cx,cy,'#ff5e34');
+     }
+     skPowerMessage(hit?`💣 Bomb exploded through ${targets.length} bubble${targets.length===1?'':'s'}!`:'💣 Bomb burst at the ceiling!');
+   }
+   return;
+ }
+if(p.skFireball){
+   // Burn contacted bubbles without snapping or changing the cannon ammo.
+   for(const b of [...bubbles]){
+     if(p.skFireHits>=10)break;
+     if(Math.hypot(p.x-b.x,p.y-b.y)<=RADIUS*1.6 && !p.skFireSeen.has(b)){
+       p.skFireSeen.add(b);
+       const at=bubbles.indexOf(b);if(at>=0){
+         bubbles.splice(at,1);p.skFireHits++;
+         spawnPopParticles(b.x,b.y,'#ff7817');
+         score+=10;stats.bubblesPopped++;skAddCoins(1,skCoinOrigin(b));sounds.play('pop');
+         // The fireball has changed the grid; never leave a stale cannon colour.
+         if(bubbles.length)updateAmmo();
+       }
+     }
+   }
+   if(p.skFireHits>=10||p.y<=RADIUS){
+     spawnPopParticles(p.x,Math.max(RADIUS,p.y),'#ff4c00');
+     skPowerUseAnimation('fireball');
+     projectiles.splice(i,1);
+     skFinishPowerupBoardChange();
+   }
+   return;
+ }
 if (p.y < RADIUS) {
     snapToGrid(p);
     projectiles.splice(i, 1); }
@@ -8718,24 +9445,24 @@ if (panicMode) {
         // Confetti is drawn on a separate overlay above the entire game canvas.
         ctx.restore();
         projectiles.forEach(p => {
-    // Render colourless projectiles as hollow white outlines, matching the grid.
-    drawAmmoBubble(ctx, p.x, p.y, RADIUS - 2, p.color);
+    const powerKind = p.skFireball ? 'fireball' : p.skRainbow ? 'rainbow' : p.skBomb ? 'bomb' : null;
+    skDrawAmmoOrPowerBubble(ctx, p.x, p.y, RADIUS - 2, p.color, false, powerKind);
 
-    // colorblind emoji overlay
+    // colorblind / powerup icon overlay
     if (colorblindMode) {
         ctx.save();
         ctx.fillStyle = "black";
         ctx.font = "16px Storopia";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(COLOR_EMOJIS[p.color] || "❔", p.x, p.y);
+        ctx.fillText(skSpecialBubbleIcon(powerKind, p.color), p.x, p.y);
         ctx.restore();
     }
 });
 
         drawAimVisualizer(); // ✅ TOP LAYER — now visible
 
-        if (ammo > 0) {
+        if ((ammo > 0 && (bubbles.length>0 || skGetArmedPowerup())) || gameWin || gameOver || winPending) {
 
             // ---- CURRENT BALL ----
 const cx = canvas.width / 2;
@@ -8743,10 +9470,16 @@ const cy = canvas.height - 80;
 // Cannon is drawn behind the loaded ball; recoil never changes projectile physics.
 skDraw2DCannonRecoil(ctx,cx,cy);
 // Current bubble (including colourless) with aiming glow.
-drawAmmoBubble(ctx, cx, cy, RADIUS, currentBall, isAiming);
+const skArmedPower = skGetArmedPowerup();
+const displayCurrent = currentBall ?? skPreviousCannonCurrent ?? ALL_COLORS[0];
+const displayNext = nextBall ?? skPreviousCannonNext ?? ALL_COLORS[1] ?? ALL_COLORS[0];
+if(currentBall!=null)skPreviousCannonCurrent=currentBall;
+if(nextBall!=null)skPreviousCannonNext=nextBall;
+skDrawAmmoOrPowerBubble(ctx, cx, cy, RADIUS, displayCurrent, isAiming, skArmedPower);
 if (isAiming) {
     ctx.save();
-    ctx.strokeStyle = currentBall || "#ffffff";
+    const outlineColor = skArmedPower==='fireball' ? '#ff8b2a' : skArmedPower==='rainbow' ? skInterpolatedRainbowColor(0.9) : skArmedPower==='bomb' ? '#ff4242' : (currentBall || '#ffffff');
+    ctx.strokeStyle = outlineColor;
     ctx.lineWidth = 3;
     ctx.globalAlpha = 0.6;
     ctx.beginPath();
@@ -8762,15 +9495,15 @@ if (isAiming) {
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
                 ctx.fillText(
-                    COLOR_EMOJIS[currentBall] || '❔',
+                    skSpecialBubbleIcon(skArmedPower, displayCurrent),
                     canvas.width / 2,
                     canvas.height - 80
                 );
             }
 
             // ---- NEXT BALL ----
-            if (ammo > 1) {
-                drawAmmoBubble(ctx, canvas.width / 2 + 60, canvas.height - 80, RADIUS * 0.7, nextBall);
+            if (ammo > 1 || gameWin || gameOver || winPending) {
+                drawAmmoBubble(ctx, canvas.width / 2 + 60, canvas.height - 80, RADIUS * 0.7, displayNext);
 
                 if (colorblindMode) {
                     ctx.fillStyle = "black";
@@ -8778,7 +9511,7 @@ if (isAiming) {
                     ctx.textAlign = "center";
                     ctx.textBaseline = "middle";
                     ctx.fillText(
-                        COLOR_EMOJIS[nextBall] || '❔',
+                        COLOR_EMOJIS[displayNext] || '❔',
                         canvas.width / 2 + 60,
                         canvas.height - 80
                     );
@@ -8825,11 +9558,12 @@ if (isAiming) {
                     .18+.68*((Math.sin(performance.now()/650)+1)/2), true);
             } else if (campaignFinished) {
                 arcadeCard('CONGRATULATIONS!', '^_^', '#ffd34f',
-                    ["You've beaten Campaign Mode!", 'Double click to advance to Level 21']);
+                    ["You've beaten Campaign Mode!", ...skWinCoinLines(), 'Double click to advance to Level 21']);
             } else if (!gameOver && lastClearWasPerfect) {
                 arcadeCard('PERFECT!', 'Nice one!', '#ffd34f',
                     [isPlaytesting||isDailyPuzzle?'':isCampaignMode?'+50 BUBBLES!':'+1,000 SCORE  +150 BUBBLES  ❤️+10',
-                     isPlaytesting?'Click to continue':isDailyPuzzle?'':isCampaignMode?`Click to advance (${campaignLevelsLeft} ${sp} left)`:`Click to advance to Level ${fmt(level+1)}`]);
+                     ...skWinCoinLines(),
+                     isPlaytesting?'Click to continue':isDailyPuzzle?'':isCampaignMode?`Click to advance (${campaignLevelsLeft} ${sp} to go!)`:`Click to advance to Level ${fmt(level+1)}`]);
             } else if (gameOver) {
                 const label=lives<=0?'GAME OVER!':isPlaytesting?'CUSTOM LEVEL FAILED!':isDailyPuzzle?'DAILY PUZZLE FAILED!':`LEVEL ${fmt(level)} FAILED!`;
                 arcadeCard(label,':(', '#ff5c70',
@@ -8840,7 +9574,8 @@ if (isAiming) {
                 const label=isPlaytesting?'CUSTOM LEVEL COMPLETE!':isDailyPuzzle?'DAILY PUZZLE COMPLETE!':`LEVEL ${fmt(level)} COMPLETE!`;
                 arcadeCard(label,':)', '#5ff4d1',
                     [isPlaytesting||isDailyPuzzle?'':isCampaignMode?'+50 BUBBLES!':'+50 BUBBLES!  ❤️+1',
-                     isPlaytesting?'Click to continue':isDailyPuzzle?'Click to return to menu':isCampaignMode?`Click to advance (${campaignLevelsLeft} ${sp} left)`:`Click to advance to Level ${fmt(level+1)}`]);
+                     ...skWinCoinLines(),
+                     isPlaytesting?'Click to continue':isDailyPuzzle?'Click to return to menu':isCampaignMode?`Click to advance (${campaignLevelsLeft} ${sp} to go!)`:`Click to advance to Level ${fmt(level+1)}`]);
             }
             if (gameWin) {
                 ctx.save();
@@ -9175,6 +9910,8 @@ function gameLoop(now) {
     if (activeGameLoopRequest) cancelAnimationFrame(activeGameLoopRequest);
     activeGameLoopRequest = requestAnimationFrame(gameLoop);
 
+    // Keep the HUD visible from the first gameplay frame, before any pop/reward.
+    skSyncPowerHUDVisibility();
     if (!gameRunning) return;
     const delta = now - lastFrameTime;
 
@@ -9493,6 +10230,9 @@ function startMode(m, isLoad = false, isNextLevel = false) {
         lastTickSecond = null;
 		campaignFinished = false;
     }
+    skWinCoinsPaid=false;
+    skLevelCoinsEarned=0;
+    skLevelCoinSummary=null;
     lostProjectileReturnInProgress = false; gameRunning = true;
     if(typeof window.skSyncAccountCardVisibility==='function')window.skSyncAccountCardVisibility();
     gameOver = false; gameWin = false; isPaused = false; document.body.classList.remove('container-flight-paused'); isCustomMode = false; isPlaytesting = false;
@@ -9522,6 +10262,8 @@ function startMode(m, isLoad = false, isNextLevel = false) {
     document.getElementById('mainMenu').style.display = 'none';
     document.getElementById('customUI').style.display = 'none';
     document.getElementById('gameUI').style.display = 'block';
+    skRefreshShop(); // Refresh after the main menu is hidden so the HUD becomes visible.
+    requestAnimationFrame(skSyncPowerHUDVisibility);
 	// force valid mouse position so aim line can render immediately
 mouseX = canvas.width / 2;
 mouseY = canvas.height - 200;
@@ -9606,6 +10348,7 @@ mouseX = canvas.width / 2;
 mouseY = canvas.height - 200;
 
     document.getElementById('gameUI').style.display = 'none';
+    skRefreshShop();
     setSideRingsVisible(false);
     document.getElementById('mobileControls').style.display = 'none';
     document.getElementById('livesContainer').style.display = 'none';
@@ -9760,24 +10503,39 @@ function skPredictProjectileTrajectory(firingAngle=angle){
  if(bubbles.some(b=>b.row===row&&b.col===col)){row++;pos=getGridCoords(row,col);}
  return {path,impact:{x,y},landing:{x:pos.x,y:pos.y,row,col},angle:firingAngle};
 }
+// Keep the 2D line, ghost, and Three.js aim the same colour as an armed powerup.
+function skActiveAimColor(){
+ const kind=skGetArmedPowerup();
+ if(kind==='fireball')return '#ff7817';
+ if(kind==='rainbow')return skInterpolatedRainbowColor(0);
+ if(kind==='bomb')return '#ff3434';
+ return currentBall||'#ffffff';
+}
 function drawAimVisualizer(){
+ const armed=skGetArmedPowerup();
  if((!aimEnabled&&!showGhost)||isPaused||gameOver||gameWin||isCustomMode||
- projectiles.length>0||winPending||conversionQueue.length>0||chainPopActive||ammo<=0||mouseY >= DEADLINE||!isInGameCanvas)return;
+ projectiles.length>0||winPending||conversionQueue.length>0||chainPopActive||
+ (ammo<=0&&!armed)||mouseY>=DEADLINE||!isInGameCanvas)return;
  const result=skPredictProjectileTrajectory();if(!result)return;
  ctx.save();
  if(aimEnabled){
-  ctx.strokeStyle=currentBall||'#ffffff';ctx.globalAlpha=.54;ctx.lineWidth=2;ctx.setLineDash([]);
+  ctx.strokeStyle=skActiveAimColor();ctx.globalAlpha=.68;ctx.lineWidth=2;ctx.setLineDash([]);
+  if(armed==='fireball'){ctx.shadowColor='#ff6a12';ctx.shadowBlur=9;}
+  if(armed==='bomb'){ctx.shadowColor='#ff2222';ctx.shadowBlur=5+5*(1+Math.sin(performance.now()/180))/2;}
+  if(armed==='rainbow'){ctx.shadowColor=skActiveAimColor();ctx.shadowBlur=9;}
   ctx.beginPath();
   result.path.forEach((pt,i)=>{if(i===0)ctx.moveTo(pt.x,pt.y);else ctx.lineTo(pt.x,pt.y);});
   ctx.stroke();
  }
  if(showGhost){
   const {x,y}=result.landing;
-  ctx.globalAlpha=.42;drawAmmoBubble(ctx,x,y,RADIUS-2,currentBall);
+  ctx.globalAlpha=.48;
+  skDrawAmmoOrPowerBubble(ctx,x,y,RADIUS-2,currentBall,false,armed);
   if(colorblindMode){
-   ctx.globalAlpha=.85;ctx.font='16px Storopia';ctx.textAlign='center';ctx.textBaseline='middle';
+   ctx.globalAlpha=.9;ctx.font='16px Storopia';ctx.textAlign='center';ctx.textBaseline='middle';
    ctx.fillStyle='#fff';ctx.strokeStyle='#000';ctx.lineWidth=3;
-   const symbol=COLOR_EMOJIS[currentBall]||'❔';ctx.strokeText(symbol,x,y);ctx.fillText(symbol,x,y);
+   const symbol=skSpecialBubbleIcon(armed,currentBall);
+   ctx.strokeText(symbol,x,y);ctx.fillText(symbol,x,y);
   }
  }
  ctx.restore();
@@ -11057,7 +11815,8 @@ function closeCustomSavePopup() {
     "error_buzz",
     "container_drop",
     "container_combine",
-    "fly"
+    "fly",
+    "coin"
 ];
 
 const SFX_PAGE_SIZE = 6;
@@ -11080,7 +11839,7 @@ function renderSfxPage() {
         const btn = document.createElement('button');
         btn.className = 'sfx-tester-play';
         btn.textContent = '▶ PLAY';
-        btn.onclick = () => sounds.play(type);
+        btn.onclick = () => type==='coin' ? skCoinSound() : sounds.play(type);
         row.append(label, btn);
         list.appendChild(row);
     });
@@ -11174,6 +11933,9 @@ if (!skipExitSavePromptForSafety && !autosaveEnabled && gameRunning && !gameOver
     console.clear();
     setBrowserTitle("⭐ SK's Bubble Shooter");
     gameRunning = false;
+    // Hide the powerup panel explicitly as soon as gameplay ends.
+    const powerHUD=document.getElementById('skPowerHUD');
+    if(powerHUD)powerHUD.style.display='none';
     // Restore the actual menu FIRST. A WebGL cleanup problem must never
     // prevent the rest of the exit-to-menu callback from finishing.
     const restoredMenu = document.getElementById('mainMenu');
@@ -11634,6 +12396,7 @@ window.bubbleResumeCloudSync=()=>safeAction(async()=>{
  if(activeUser?.uid!==uid)return;
  $('bubbleResumeCloudButton').style.display='none';
  progressReadyUid=null;themeReadyUid=null;
+ await syncShopOnSignIn(uid);
  await synchronizeAchievements(uid);
  await syncTheme();
  await syncVisualPreferences(true);
@@ -11750,6 +12513,52 @@ window.bubbleSyncAchievements=()=>{
  if(progressSyncTimer){clearTimeout(progressSyncTimer);progressSyncTimer=null;}
  void synchronizeAchievements(activeUser.uid,true);
 };
+// Inventory/coins use a separate document, with cloud-reset protection.
+// A remote wallet is authoritative at sign-in so repeated logins cannot double grants.
+let shopSyncTimer=null,shopReadyUid=null,shopSyncBusy=false,shopSyncAgain=false;
+function scheduleShopSync(){
+ const uid=activeUser?.uid;
+ if(!uid||uid!==shopReadyUid||cloudDeleteInProgress)return;
+ if(shopSyncTimer)clearTimeout(shopSyncTimer);
+ shopSyncTimer=setTimeout(()=>{shopSyncTimer=null;void uploadShop(uid);},850);
+}
+window.bubbleCloudShopChanged=scheduleShopSync;
+async function uploadShop(uid){
+ if(!uid||!db||uid!==activeUser?.uid||cloudDeleteInProgress||shopReadyUid!==uid)return;
+ if(shopSyncBusy){shopSyncAgain=true;return;}
+ shopSyncBusy=true;
+ try{
+  if(!await cloudWriteAllowed(uid))return;
+  const snapshot=window.skShopGetData();
+  await setDoc(doc(db,'bubbleUsers',uid,'progress','shop'),{...snapshot,updatedAt:Date.now()},{merge:true});
+ }catch(err){console.warn('Coin/powerup cloud save failed:',err);cloudStatus('⚠️ Coins and powerups saved locally; cloud sync failed.');}
+ finally{
+  shopSyncBusy=false;
+  if(shopSyncAgain){shopSyncAgain=false;scheduleShopSync();}
+ }
+}
+async function syncShopOnSignIn(uid){
+ if(!uid||activeUser?.uid!==uid||!db)return;
+ shopReadyUid=null;
+ // Do not import a wallet until the cloud reset marker has been checked.
+ if(!await cloudWriteAllowed(uid))return;
+ try{
+  const ref=doc(db,'bubbleUsers',uid,'progress','shop');
+  const remote=await getDoc(ref);
+  if(activeUser?.uid!==uid||cloudDeleteInProgress)return;
+  if(remote.exists())window.skShopSetAccount(uid,remote.data());
+  else{
+   let cached=null;try{cached=JSON.parse(localStorage.getItem(`${SK_SHOP_KEY}_account_${uid}`)||'null');}catch(e){}
+   window.skShopSetAccount(uid,cached||window.skShopGuestData());
+  }
+  shopReadyUid=uid;
+  // Only create an initial wallet when the account doesn't have one already.
+  if(!remote.exists())scheduleShopSync();
+ }catch(err){
+  console.warn('Coin/powerup cloud load failed:',err);
+  cloudStatus('⚠️ Coin/powerup cloud load failed. Existing wallet kept locally.');
+ }
+}
 // Colour Studio colours sync to Firestore; custom images sync to separate preference documents.
 let themeSyncTimer=null, themeReadyUid=null, themeSyncBusy=false;
 const themeKeys=['menu','game','pop','back','wall','alert','warn','loading'];
@@ -12123,7 +12932,8 @@ window.bubbleDeleteAllCloudData = async () => {
             ['checkpoints', 'puzzle_checkpoint'],
             ['checkpoints', 'container_checkpoint'],
             ['preferences', 'colourStudio'],
-            ['preferences', 'visualSettings']
+            ['preferences', 'visualSettings'],
+            ['progress', 'shop']
         ];
 
         for (const [group, key] of paths) {
@@ -12298,6 +13108,8 @@ if(configured){
    if(progressSyncTimer){clearTimeout(progressSyncTimer);progressSyncTimer=null;}
    progressReadyUid=null;
    themeReadyUid=null;
+   shopReadyUid=null;
+   if(shopSyncTimer){clearTimeout(shopSyncTimer);shopSyncTimer=null;}
    if(themeSyncTimer){clearTimeout(themeSyncTimer);themeSyncTimer=null;}
    if(prior !== user?.uid)pendingCloudCategoryResets.clear();
    activeUser=user;
@@ -12309,13 +13121,16 @@ if(configured){
     void (async()=>{
       const reset=await refreshCloudResetStatus(user.uid);
       if(activeUser?.uid!==user.uid || reset)return;
+      await syncShopOnSignIn(user.uid);
       await uploadCheckpointOnSignIn();
       void synchronizeAchievements(user.uid);
       void syncTheme();
       void syncVisualPreferences();
       void (async()=>{for(const key of ['back','loading','scenefloor','scenewall','sceneback','scenewallleft','scenewallright','sceneceiling'])await syncThemeImage(key);})();
     })();
-   } else if(!user){if($('bubbleResumeCloudButton'))$('bubbleResumeCloudButton').style.display='none';showAchievementCloudStatus('🏆 Achievements saved locally. Log in to sync.');themeStatus('🎨 Colour settings saved locally.');}
+   } else if(!user){
+    window.skShopSetAccount(null,window.skShopGuestData());
+    if($('bubbleResumeCloudButton'))$('bubbleResumeCloudButton').style.display='none';showAchievementCloudStatus('🏆 Achievements saved locally. Log in to sync.');themeStatus('🎨 Colour settings saved locally.');}
   });
   getRedirectResult(auth).catch(err=>{console.warn(err);cloudStatus('Google log in: '+err.message);});
  }catch(err){console.warn(err);cloudStatus('Firebase setup error: '+err.message);}
@@ -12773,15 +13588,15 @@ function updateSK3DHUD(stage,container){
  const g=stage.hudCtx;
  const renderIcon=(b,radius)=>{
   const p=sk3DProject(stage,b.x,b.y,Number(b.z)||0);
-  if(p.visible)sk3DText(g,b.color==null?'❔':(COLOR_EMOJIS[b.color]||'❔'),p.x,p.y,radius);
+  if(p.visible)sk3DText(g,skSpecialBubbleIcon(b.skPowerKind||null,b.color),p.x,p.y,radius);
  };
  if(container){for(const b of container_bubbles)renderIcon(b,Math.max(12,Math.min(24,containerRadius(b)*.72)));}
  else{
   for(const b of bubbles)renderIcon(b,16);
   for(const b of fallingBubbles)renderIcon(b,16);
-  for(const b of projectiles)renderIcon(b,16);
+  for(const b of projectiles)renderIcon({...b,color:b.color,skPowerKind:b.powerupKind||(b.skFireball?'fireball':b.skRainbow?'rainbow':b.skBomb?'bomb':null)},16);
   const w=stage.source.width,h=stage.source.height;
-  if(ammo>0)renderIcon({x:w/2,y:h-80,z:57,color:currentBall},18);
+  if(ammo>0||gameWin||gameOver||winPending||skGetArmedPowerup())renderIcon({x:w/2,y:h-80,z:57,color:currentBall??skPreviousCannonCurrent??ALL_COLORS[0],skPowerKind:skGetArmedPowerup()},18);
   if(ammo>1)renderIcon({x:w/2+60,y:h-80,z:57,color:nextBall},14);
  }
 }
@@ -12789,7 +13604,7 @@ function sk3DAim(stage){
  const T=window.THREE;
  if(stage.aimLine){stage.aimLine.parent?.remove(stage.aimLine);stage.aimLine.geometry.dispose();stage.aimLine.material.dispose();stage.aimLine=null;}
  if(stage.ghost)stage.ghost.visible=false;
- if(isPaused||gameWin||gameOver||isCustomMode||winPending||ammo<=0||projectiles.length||(!aimEnabled&&!showGhost)||mouseY >= DEADLINE||conversionQueue.length > 0)return;
+ if(isPaused||gameWin||gameOver||isCustomMode||winPending||(ammo<=0&&!skGetArmedPowerup())||projectiles.length||(!aimEnabled&&!showGhost)||mouseY >= DEADLINE||conversionQueue.length > 0)return;
  const prediction=skPredictProjectileTrajectory();if(!prediction)return;
  // The landing slot is computed using exactly the same row/col and
  // occupied-slot fallback as snapToGrid(), not an arbitrary impact location.
@@ -12801,13 +13616,15 @@ function sk3DAim(stage){
  const parent=sk3DScenes?.sharedWorld?.puzzle||stage.scene;
  const point=p=>new T.Vector3(p.x-stage.source.width/2,stage.source.height/2-p.y,48);
  if(aimEnabled){
-  stage.aimLine=new T.Line(new T.BufferGeometry().setFromPoints(prediction.path.map(point)),new T.LineBasicMaterial({color:currentBall||0xffffff,transparent:true,opacity:.85}));
+  stage.aimLine=new T.Line(new T.BufferGeometry().setFromPoints(prediction.path.map(point)),new T.LineBasicMaterial({color:skActiveAimColor(),transparent:true,opacity:.85}));
   parent.add(stage.aimLine);
  }
  if(showGhost){
   if(!stage.ghost){stage.ghost=new T.Mesh(stage.geometry,new T.MeshPhysicalMaterial({color:0xffffff,transparent:true,opacity:.42,roughness:.18,clearcoat:1,depthWrite:false}));}
   if(stage.ghost.parent!==parent)parent.add(stage.ghost);
-  stage.ghost.visible=true;stage.ghost.position.copy(point(prediction.landing));stage.ghost.scale.setScalar(RADIUS-2);stage.ghost.material.color.set(currentBall||'#ffffff');
+  stage.ghost.visible=true;stage.ghost.position.copy(point(prediction.landing));stage.ghost.scale.setScalar(RADIUS-2);stage.ghost.material.color.set(skActiveAimColor());
+  stage.ghost.material.emissive?.set(skGetArmedPowerup()==='fireball'?'#6b2000':skGetArmedPowerup()==='bomb'?'#570000':skGetArmedPowerup()==='rainbow'?skActiveAimColor():'#000000');
+  if(stage.ghost.material.emissiveIntensity!==undefined)stage.ghost.material.emissiveIntensity=skGetArmedPowerup()?0.4:0;
  }
 }
 
@@ -12892,7 +13709,7 @@ function renderSK3D(){
      gameObjects.push({b:{x:px,y:py,z:pz,color:f.color||'#ffffff'},radius:7+(1-t)*5,opacity:.9});
    }
  }
- if(!isCustomMode&&ammo>0){gameObjects.push({b:{x:canvas.width/2,y:canvas.height-80,z:57,color:currentBall},radius:RADIUS});if(ammo>1)gameObjects.push({b:{x:canvas.width/2+60,y:canvas.height-80,z:57,color:nextBall},radius:RADIUS*.72});}
+ if(!isCustomMode&&(ammo>0||gameWin||gameOver||winPending)){gameObjects.push({b:{x:canvas.width/2,y:canvas.height-80,z:57,color:currentBall??skPreviousCannonCurrent??ALL_COLORS[0]},radius:RADIUS});if(ammo>1||gameWin||gameOver||winPending)gameObjects.push({b:{x:canvas.width/2+60,y:canvas.height-80,z:57,color:nextBall??skPreviousCannonNext??ALL_COLORS[1]??ALL_COLORS[0]},radius:RADIUS*.72});}
  syncSK3DSpheres(game,gameObjects);
  game.cannonGroup.visible=!isCustomMode&&!isPaused;
  game.cannonGroup.rotation.z=-angle-Math.PI/2;
