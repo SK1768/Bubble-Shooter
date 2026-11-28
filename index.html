@@ -1751,6 +1751,48 @@ input:not([type=range]):not([type=checkbox]),select,textarea {
     color: #ffd866;
     text-shadow: 0 0 12px #e5a82d88;
 }
+#skVaultPanel {
+    margin: 16px 0;
+    padding: 14px;
+    border: 1px solid #ffd86688;
+    border-radius: 16px;
+    background: linear-gradient(145deg,#303047,#142238);
+}
+#skVaultPanel h3 {
+    margin: 0 0 8px;
+    color: #ffd866;
+    letter-spacing: .08em;
+}
+#skShopCoins, #skVaultCoins {
+    display: inline-block;
+}
+#skVaultCoins {
+    font-size: 22px;
+}
+#skVaultPanel button {
+    min-width: 110px;
+    border-color: #ffd86666;
+}
+#skVaultPanel button:disabled {
+    opacity: .55;
+    cursor: wait;
+}
+.skVaultFlyingValue {
+    position: fixed;
+    z-index: 10030;
+    pointer-events: none;
+    white-space: nowrap;
+    color: #ffe38a;
+    font-size: 22px;
+    font-weight: bold;
+    text-shadow: 0 0 8px #ffbb22, 0 0 22px #ffb000, 0 2px 3px #000;
+    will-change: transform, opacity;
+}
+#skVaultMessage {
+    min-height: 1.4em;
+    font-size: 12px;
+    color: #bcd5e5;
+}
 #skShopGrid {
     display: grid;
     grid-template-columns: repeat(auto-fit,minmax(180px,1fr));
@@ -2939,6 +2981,13 @@ body.sk3d-ui-active #bubbleAccountCard.account-menu-visible {
 <div class="skCoinBalance">🪙 Your coins: <span id="skShopCoins">0</span>
 </div>
 <p style="font-size:12px;color:#bcd5e5">Earn 1 coin per popped grid bubble and 50 coins per level completed. Purchased powerups are single-use and saved on this device.</p>
+<section id="skVaultPanel" aria-labelledby="skVaultTitle">
+    <h3 id="skVaultTitle">🔒 COIN VAULT</h3>
+    <div class="skCoinBalance">🪙 <span id="skVaultCoins">0</span></div>
+    <button onclick="skTransferVault(true)">DEPOSIT</button>
+    <button onclick="skTransferVault(false)">WITHDRAW</button>
+    <div id="skVaultMessage" role="status">Enter a coin amount or type "all".</div>
+</section>
 <div id="skShopGrid">
 </div>
 <button onclick="skCloseShop()" class="back-btn">⬅ BACK TO MENU</button>
@@ -5842,6 +5891,7 @@ catch (e) {
 let skShop = skReadShop();
 // Each signed-in account has its own local cache, separate from the guest wallet.
 let skShopAccountUid = null;
+let skVaultFlight = null;
 function skShopNormalise(data) {
     const inventory = {};
     for (const id of Object.keys(SK_POWERUPS))
@@ -5851,9 +5901,16 @@ function skShopNormalise(data) {
         const stamp = Number(data?.cooldowns?.[id]);
         cooldowns[id] = Number.isFinite(stamp) && stamp > Date.now() ? Math.floor(stamp) : 0;
     }
-    return { coins: Math.max(0, Math.floor(Number(data?.coins) || 0)), inventory, cooldowns };
+    const vault = Number(data?.vaultCoins);
+    return {
+        coins: Math.max(0, Math.floor(Number(data?.coins) || 0)),
+        vaultCoins: Number.isSafeInteger(vault) && vault >= 0 ? vault : 0,
+        inventory,
+        cooldowns
+    };
 }
 window.skShopSetAccount = (uid, data) => {
+    skFinishVaultFlight();
     skShopAccountUid = uid || null;
     const storageKey = uid ? `${SK_SHOP_KEY}_account_${uid}` : SK_SHOP_KEY;
     let saved = data;
@@ -6198,7 +6255,10 @@ function skUpdateCoinDisplays() {
         menu.textContent = skShop.coins.toLocaleString();
     const shop = document.getElementById('skShopCoins');
     if (shop)
-        shop.textContent = skShop.coins.toLocaleString();
+        shop.textContent = skVaultDisplayBalance('coins').toLocaleString();
+    const vault = document.getElementById('skVaultCoins');
+    if (vault)
+        vault.textContent = skVaultDisplayBalance('vaultCoins').toLocaleString();
     skUpdateMultiplierPreview();
 }
 function skPulsePot() {
@@ -6537,9 +6597,92 @@ function skRefreshShop() {
         skUpdatePowerCooldownButtons();
     }
 }
+function skVaultDisplayBalance(key) {
+    const flight = skVaultFlight;
+    return Math.max(0, skShop[key] - (flight && flight.shop === skShop && flight.target === key ? flight.amount : 0));
+}
+function skFinishVaultFlight(expected = skVaultFlight, pulse = false) {
+    if (!expected || skVaultFlight !== expected)
+        return;
+    skVaultFlight = null;
+    expected.animation?.cancel();
+    expected.node.remove();
+    document.querySelectorAll('#skVaultPanel button').forEach(button => button.disabled = false);
+    skUpdateCoinDisplays();
+    if (pulse && expected.destination.animate) {
+        expected.destination.animate([
+            { transform: 'scale(1)', filter: 'brightness(1)' },
+            { transform: 'scale(1.4)', filter: 'brightness(1.8)', offset: .35 },
+            { transform: 'scale(1)', filter: 'brightness(1)' }
+        ], { duration: 420, easing: 'ease-out' });
+    }
+}
+function skStartVaultFlight(deposit, amount, target) {
+    const source = document.getElementById(deposit ? 'skShopCoins' : 'skVaultCoins');
+    const destination = document.getElementById(deposit ? 'skVaultCoins' : 'skShopCoins');
+    if (!source || !destination || !source.animate || matchMedia('(prefers-reduced-motion: reduce)').matches)
+        return;
+    const a = source.getBoundingClientRect();
+    const b = destination.getBoundingClientRect();
+    if (!a.width || !b.width)
+        return;
+    const x = a.left + a.width / 2;
+    const y = a.top + a.height / 2;
+    const dx = b.left + b.width / 2 - x;
+    const dy = b.top + b.height / 2 - y;
+    const node = document.createElement('span');
+    node.className = 'skVaultFlyingValue';
+    node.textContent = '🪙 +' + amount.toLocaleString();
+    node.style.left = x + 'px';
+    node.style.top = y + 'px';
+    node.setAttribute('aria-hidden', 'true');
+    document.getElementById('skShopPanel').appendChild(node);
+    const flight = { shop: skShop, target, amount, node, destination, animation: null };
+    skVaultFlight = flight;
+    document.querySelectorAll('#skVaultPanel button').forEach(button => button.disabled = true);
+    flight.animation = node.animate([
+        { transform: 'translate(-50%, -50%) scale(.8)', opacity: 0 },
+        { transform: `translate(calc(-50% + 32px), calc(-50% + ${dy * .2}px)) scale(1.2)`, opacity: 1, offset: .22 },
+        { transform: `translate(calc(-50% + ${dx * .8 + 36}px), calc(-50% + ${dy * .8}px)) scale(1)`, opacity: 1, offset: .78 },
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(.45)`, opacity: 0 }
+    ], { duration: 750, easing: 'ease-in-out', fill: 'both' });
+    flight.animation.finished.then(() => skFinishVaultFlight(flight, true), () => skFinishVaultFlight(flight));
+}
+function skTransferVault(deposit) {
+    if (skVaultFlight)
+        return;
+    const input = prompt(deposit
+        ? 'How much coins do you want to deposit to the vault?'
+        : 'How much coins do you want to withdraw from the vault?');
+    if (input === null)
+        return;
+    const message = document.getElementById('skVaultMessage');
+    const source = deposit ? 'coins' : 'vaultCoins';
+    const target = deposit ? 'vaultCoins' : 'coins';
+    const text = input.trim().toLowerCase();
+    const amount = text === 'all' ? skShop[source] : /^\d+$/.test(text) ? Number(text) : NaN;
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+        message.textContent = text === 'all' ? 'There are no coins to transfer.' : 'Enter a positive whole number or "all".';
+        return;
+    }
+    if (amount > skShop[source]) {
+        message.textContent = deposit ? 'Not enough coins in your wallet!' : 'Not enough coins in the vault!';
+        return;
+    }
+    if (!Number.isSafeInteger(skShop[target] + amount)) {
+        message.textContent = 'The destination balance would be too large.';
+        return;
+    }
+    skStartVaultFlight(deposit, amount, target);
+    skShop[source] -= amount;
+    skShop[target] += amount;
+    skSaveShop();
+    message.textContent = `${amount.toLocaleString()} coins ${deposit ? 'deposited into' : 'withdrawn from'} the vault!`;
+    sounds.play('coin');
+}
 function skOpenShop() { document.getElementById('skShopPanel').style.display = 'flex'; skRefreshShop(); }
-function skCloseShop() { document.getElementById('skShopPanel').style.display = 'none'; }
-function skBuyPower(id) { const item = SK_POWERUPS[id]; if (!item || skShop.coins < item.cost)
+function skCloseShop() { skFinishVaultFlight(); document.getElementById('skShopPanel').style.display = 'none'; }
+function skBuyPower(id) { if (skVaultFlight) return; const item = SK_POWERUPS[id]; if (!item || skShop.coins < item.cost)
     return; skShop.coins -= item.cost; skShop.inventory[id]++; skSaveShop(); sounds.play('powerup_buy'); }
 function skPowerMessage(t) { const el = document.getElementById('skPowerMessage'); if (el)
     el.textContent = t; }
